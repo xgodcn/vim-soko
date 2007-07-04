@@ -1,0 +1,26 @@
+
+@import aaplib
+
+autofmt_distfiles = autofmt/doc/autofmt.txt
+                    autofmt/autoload/unicode.vim
+                    autofmt/autoload/autofmt/compat.vim
+                    autofmt/autoload/autofmt/uax14.vim
+                    autofmt/autoload/autofmt/japanese.vim
+
+spre_distfiles = spre/readme.txt
+                 spre/plugin/spre.vim
+                 spre/syntax/spre.vim
+
+all: autofmt.zip spre.zip
+    :pass
+
+autofmt.zip: $autofmt_distfiles
+    :zip autofmt.zip $autofmt_distfiles
+
+spre.zip: $spre_distfiles
+    :zip spre.zip $spre_distfiles
+
+clean:
+    :del {f} *.pyc
+    :del {f} *.zip
+
