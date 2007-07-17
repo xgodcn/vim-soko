@@ -1,5 +1,6 @@
 
 command! -bar -range=% SPHtml call s:SPHtml(<line1>, <line2>)
+command! -bar -range=% -nargs=? SPToHtml call s:SPToHtml(<line1>, <line2>, <f-args>)
 
 function! s:SPHtml(line1, line2)
   let lines = getline(a:line1, a:line2)
@@ -13,6 +14,13 @@ function! s:SPHtml(line1, line2)
   folddoopen if getline('.') =~ '^[#!]\{2}' | delete _ | endif
   " convert spre text
   folddoclosed call s:DoConvert()
+endfunction
+
+function! s:SPToHtml(line1, line2, ...)
+  let colorscheme = get(a:000, 0, "")
+  let lines = s:ToHtml(getline(a:line1, a:line2), "pre", &ft, colorscheme)
+  new
+  call append(1, lines)
 endfunction
 
 function! s:DoConvert()
