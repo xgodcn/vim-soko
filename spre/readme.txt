@@ -9,10 +9,15 @@ Installing:
 
 Usage:
   To use spre syntax
-  :set ft=spre
+    :set ft=spre
 
   To convert spre file to HTML
-  :SPHtml
+    :SPHtml
+
+  To convert non spre (normal) file to HTML
+    :SPToHtml
+  This is same as TOHtml but <html> header is removed and <font> is
+  replaced with <style>.
 
 Spre Syntax:
 
