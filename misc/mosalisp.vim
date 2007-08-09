@@ -1,4 +1,4 @@
-" mosalisp.vim - lisp-like language interpreter
+" mosalisp.vim - lisp interpreter
 " Maintainer:   Yukihiro Nakadaira <yukihiro.nakadaira@gmail.com>
 " License:      This file is placed in the public domain.
 " Last Change:  2007-08-09
