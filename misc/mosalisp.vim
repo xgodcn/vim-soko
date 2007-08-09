@@ -1,45 +1,83 @@
+" mosalisp.vim - lisp-like language interpreter
 " Maintainer:   Yukihiro Nakadaira <yukihiro.nakadaira@gmail.com>
 " License:      This file is placed in the public domain.
-" Last Change:  2006-12-09
+" Last Change:  2007-08-09
 "
 " Usage:
-"   :source lisp.vim
-"   :call lisp.repl()   " type CTRL-C to exit
+"   :source mosalisp.vim
+"   :call mosalisp.repl()   " type (exit) or CTRL-C to exit
+"
+" Example:
+"   :call mosalisp.repl()
+"   > (define func (lambda () (display "hello, world")))
+"   => ()
+"   > (func)
+"   hello, world
+"   => ()
+"   > (:call "append" 0 '("line1" "line2"))
+"   => 0
+"   > (:execute "new file.txt")
+"   "file.txt" [New File]
+"   => ()
+"   > (let loop ((i 0))
+"   >   (when (< i 3)
+"   >     (printf "%d" i)
+"   >     (loop (+ i 1))))
+"   0
+"   1
+"   2
+"   => ()
+"
+"   See mosalisp.init() function and trailing script for more
+"   information.
 
 let s:sfile = expand("<sfile>:p")
 
-let lisp = {}
+let s:lib = {}
+let mosalisp = s:lib
 
-function lisp.repl()
+function s:lib.repl()
+  let save_more = &more
+  set nomore
   let self.inbuf = []
   let self.getchar = self.getchar_input
   let self.env = [self.top_env]
   let self.stack = [["op_loop", 1, self.NIL]]
   while self.stack[0][0] != "op_exit"
-    let [op; self.stack] = self.stack
+    let op = remove(self.stack, 0)
     call self[op[0]](op)
   endwhile
+  let &more = save_more
 endfunction
 
-function lisp.load_str(str, ...)
+function s:lib.load_str(str, ...)
   let self.inbuf = split(a:str, '\zs')
   let self.getchar = self.getchar_str
   let self.env = [self.top_env]
   let self.stack = [["op_loop", 0, self.NIL]]
   while self.stack[0][0] != "op_exit"
-    let [op; self.stack] = self.stack
+    let op = remove(self.stack, 0)
     call self[op[0]](op)
   endwhile
   let res = self.stack[0][1]
   return get(a:000, 0, 0) ? res : self.to_vimobj(res)
 endfunction
 
-function lisp.load(fname, ...)
+function s:lib.load(fname, ...)
   return self.load_str(join(readfile(a:fname), "\n"), get(a:000, 0, 0))
 endfunction
 
+function s:lib.dump_env()
+  for env in self.env
+    for name in sort(keys(env))
+      let item = env[name]
+      echo printf("%s [%s]", name, item.type)
+    endfor
+  endfor
+endfunction
+
 " {{{ read
-function lisp.read()
+function s:lib.read()
   call self.skip_blank()
   let c = self.peekchar()
   if c == "eof"
@@ -61,7 +99,7 @@ function lisp.read()
   endif
 endfunction
 
-function lisp.read_list()
+function s:lib.read_list()
   let res = []
   call self.getchar()
   call self.skip_blank()
@@ -92,7 +130,7 @@ function lisp.read_list()
   return self.mk_list(res)
 endfunction
 
-function lisp.read_string()
+function s:lib.read_string()
   let res = self.getchar()
   while self.peekchar() != '"'
     if self.peekchar() == "eof"
@@ -107,7 +145,7 @@ function lisp.read_string()
   return self.mk_string(eval(res))
 endfunction
 
-function lisp.read_number()
+function s:lib.read_number()
   let res = self.getchar()
   while self.peekchar() !~ 'eof\|[() \t\n]'
     let res .= self.getchar()
@@ -115,7 +153,7 @@ function lisp.read_number()
   return self.mk_number(eval(res))
 endfunction
 
-function lisp.read_const()
+function s:lib.read_const()
   call self.getchar()
   let c = self.getchar()
   if c == 'f'
@@ -143,7 +181,7 @@ function lisp.read_const()
   endif
 endfunction
 
-function lisp.read_symbol()
+function s:lib.read_symbol()
   let res = ""
   while self.peekchar() !~ 'eof\|[() \t\n]'
     let res .= self.getchar()
@@ -151,13 +189,13 @@ function lisp.read_symbol()
   return self.mk_symbol(res)
 endfunction
 
-function lisp.read_quote()
+function s:lib.read_quote()
   let res = [self.mk_symbol(self.getchar() == "'" ? 'quote' : 'quasiquote')]
   call add(res, self.read())
   return self.mk_list(res)
 endfunction
 
-function lisp.read_unquote()
+function s:lib.read_unquote()
   call self.getchar()
   if self.peekchar() == '@'
     call self.getchar()
@@ -169,13 +207,13 @@ function lisp.read_unquote()
   return self.mk_list(res)
 endfunction
 
-function lisp.skip_comment()
+function s:lib.skip_comment()
   while self.getchar() !~ 'eof\|\n'
     " pass
   endwhile
 endfunction
 
-function lisp.skip_blank()
+function s:lib.skip_blank()
   while self.peekchar() =~ '\_s'
     call self.getchar()
   endwhile
@@ -185,7 +223,7 @@ function lisp.skip_blank()
   endif
 endfunction
 
-function lisp.peekchar()
+function s:lib.peekchar()
   if empty(self.inbuf)
     let c = self.getchar()
     call self.putchar(c)
@@ -195,7 +233,7 @@ function lisp.peekchar()
   return c
 endfunction
 
-function lisp.getchar_input()
+function s:lib.getchar_input()
   if self.inbuf == []
     try
       let str = input("> ")
@@ -210,22 +248,17 @@ function lisp.getchar_input()
   if self.inbuf[0] == "eof"
     return "eof"
   endif
-  let [c; self.inbuf] = self.inbuf
-  return c
+  return remove(self.inbuf, 0)
 endfunction
 
-function lisp.getchar_str()
+function s:lib.getchar_str()
   if self.inbuf == []
     return "eof"
   endif
-  " this is slow
-  " let [c; self.inbuf] = self.inbuf
-  let c = self.inbuf[0]
-  unlet self.inbuf[0]
-  return c
+  return remove(self.inbuf, 0)
 endfunction
 
-function lisp.putchar(c)
+function s:lib.putchar(c)
   if a:c != "eof"
     call insert(self.inbuf, a:c)
   endif
@@ -234,22 +267,30 @@ endfunction
 
 " {{{ eval
 
-function lisp.mk_symbol(str)
+function s:lib.mk_symbol(str)
   if !has_key(self.symbol_table, a:str)
     let self.symbol_table[a:str] = {"type":"symbol", "val":a:str}
   endif
   return self.symbol_table[a:str]
 endfunction
 
-function lisp.mk_number(num)
+function s:lib.mk_number(num)
   return {"type":"number", "val":a:num}
 endfunction
 
-function lisp.mk_string(str)
+function s:lib.mk_string(str)
   return {"type":"string", "val":a:str}
 endfunction
 
-function lisp.mk_list(lst)
+function s:lib.mk_hash(hash)
+  return {"type":"hash", "val":a:hash}
+endfunction
+
+function s:lib.mk_vim_function(func)
+  return {"type":"procedure", "val":"f_vim_function", "func":a:func}
+endfunction
+
+function s:lib.mk_list(lst)
   let p = self.NIL
   for item in a:lst
     let p = self.cons(item, p)
@@ -257,7 +298,7 @@ function lisp.mk_list(lst)
   return self.reverse(p)
 endfunction
 
-function lisp.mk_closure(code)
+function s:lib.mk_closure(code)
   return {
         \ "type": "closure",
         \ "val": "f_closure",
@@ -266,7 +307,7 @@ function lisp.mk_closure(code)
         \ }
 endfunction
 
-function lisp.mk_macro(code)
+function s:lib.mk_macro(code)
   return {
         \ "type": "macro",
         \ "val": "s_macro_eval",
@@ -275,11 +316,11 @@ function lisp.mk_macro(code)
         \ }
 endfunction
 
-function lisp.cons(car, cdr)
+function s:lib.cons(car, cdr)
   return {"type":"pair", "car":a:car, "cdr":a:cdr}
 endfunction
 
-function lisp.reverse(cell)
+function s:lib.reverse(cell)
   let p = self.NIL
   let x = a:cell
   while x.type == "pair"
@@ -289,11 +330,11 @@ function lisp.reverse(cell)
   return p
 endfunction
 
-function lisp.op_read(op)
+function s:lib.op_read(op)
   call add(self.stack[0], self.read())
 endfunction
 
-function lisp.op_eval(op)
+function s:lib.op_eval(op)
   let code = a:op[1]
   if code.type == "symbol"
     for env in self.env
@@ -311,12 +352,12 @@ function lisp.op_eval(op)
   endif
 endfunction
 
-function lisp.op_print(op)
-  echo self.to_str(a:op[1])
+function s:lib.op_print(op)
+  echo "=>" self.to_str(a:op[1])
   call add(self.stack[0], a:op[1])
 endfunction
 
-function lisp.op_loop(op)
+function s:lib.op_loop(op)
   let [do_print, ret] = a:op[1:]
   if self.peekchar() == "eof"
     call insert(self.stack, ["op_exit", ret])
@@ -330,7 +371,7 @@ function lisp.op_loop(op)
   call insert(self.stack, ["op_read"])
 endfunction
 
-function lisp.op_error(op)
+function s:lib.op_error(op)
   let args = a:op[1]
   echohl Error
   echo args.car.val
@@ -338,7 +379,7 @@ function lisp.op_error(op)
   call insert(self.stack, ["op_exit", self.NIL])
 endfunction
 
-function lisp.op_call(op)
+function s:lib.op_call(op)
   let [code, func] = a:op[1:]
   if func.type == "syntax" || func.type == "macro"
     call insert(self.stack, ["op_apply", func, code])
@@ -353,7 +394,7 @@ function lisp.op_call(op)
   endif
 endfunction
 
-function lisp.op_args(op)
+function s:lib.op_args(op)
   let [code, args, arg] = a:op[1:]
   let args = self.cons(arg, args)
   if code == self.NIL
@@ -364,22 +405,22 @@ function lisp.op_args(op)
   endif
 endfunction
 
-function lisp.op_apply(op)
+function s:lib.op_apply(op)
   let [func, args] = a:op[1:]
   call self[func.val](func, args)
 endfunction
 
-function lisp.op_return(op)
+function s:lib.op_return(op)
   let self.env = a:op[1]
   call add(self.stack[0], a:op[2])
 endfunction
 
-function lisp.op_define(op)
+function s:lib.op_define(op)
   call self.define(a:op[1].val, a:op[2])
   call add(self.stack[0], self.NIL)
 endfunction
 
-function lisp.op_set(op)
+function s:lib.op_set(op)
   let [name, value] = a:op[1:]
   for env in self.env
     if has_key(env, name.val)
@@ -391,12 +432,12 @@ function lisp.op_set(op)
   throw printf("Unbounded Variable: %s", name.val)
 endfunction
 
-function lisp.op_if(op)
+function s:lib.op_if(op)
   let [t, f, cond] = a:op[1:]
   call insert(self.stack, ["op_eval", (cond != self.False) ? t : f])
 endfunction
 
-function lisp.op_cond(op)
+function s:lib.op_cond(op)
   let [code, expr, cond] = a:op[1:]
   if cond != self.False
     call self.begin(expr)
@@ -412,7 +453,7 @@ function lisp.op_cond(op)
   endif
 endfunction
 
-function lisp.op_or(op)
+function s:lib.op_or(op)
   let [code, cond] = a:op[1:]
   if cond != self.False
     call add(self.stack[0], cond)
@@ -424,9 +465,9 @@ function lisp.op_or(op)
   endif
 endfunction
 
-function lisp.op_and(op)
+function s:lib.op_and(op)
   let [code, cond] = a:op[1:]
-  if !(cond != self.False)    " cond == self.False
+  if !(cond != self.False)    " (not cond)
     call add(self.stack[0], cond)
   elseif code == self.NIL
     call add(self.stack[0], cond)
@@ -436,11 +477,11 @@ function lisp.op_and(op)
   endif
 endfunction
 
-function lisp.define(name, obj)
+function s:lib.define(name, obj)
   let self.env[0][a:name] = a:obj
 endfunction
 
-function lisp.begin(code)
+function s:lib.begin(code)
   let p = self.reverse(a:code)
   while p.type == "pair"
     call insert(self.stack, ["op_eval", p.car])
@@ -448,24 +489,24 @@ function lisp.begin(code)
   endwhile
 endfunction
 
-function lisp.s_lambda(func, code)
+function s:lib.s_lambda(this, code)
   call add(self.stack[0], self.mk_closure(a:code))
 endfunction
 
-function lisp.s_macro(func, code)
+function s:lib.s_macro(this, code)
   call add(self.stack[0], self.mk_macro(a:code))
 endfunction
 
-function lisp.s_quote(func, code)
+function s:lib.s_quote(this, code)
   call add(self.stack[0], a:code.car)
 endfunction
 
-function lisp.s_macro_eval(func, code)
-  let [func, code] = [a:func, a:code]
+function s:lib.s_macro_eval(this, code)
+  let [this, code] = [a:this, a:code]
   call insert(self.stack, ["op_eval"])
   call insert(self.stack, ["op_return", self.env])
-  let self.env = [{}] + func.env
-  let p = func.code.car
+  let self.env = [{}] + this.env
+  let p = this.code.car
   while p.type == "pair"
     call self.define(p.car.val, code.car)
     let [p, code] = [p.cdr, code.cdr]
@@ -473,10 +514,10 @@ function lisp.s_macro_eval(func, code)
   if p != self.NIL
     call self.define(p.val, code)
   endif
-  call self.begin(func.code.cdr)
+  call self.begin(this.code.cdr)
 endfunction
 
-function lisp.s_define(func, code)
+function s:lib.s_define(this, code)
   let code = a:code
   if code.car.type == "pair"
     call insert(self.stack, ["op_define", code.car.car,
@@ -487,22 +528,22 @@ function lisp.s_define(func, code)
   endif
 endfunction
 
-function lisp.s_set(func, code)
+function s:lib.s_set(this, code)
   call insert(self.stack, ["op_set", a:code.car])
   call insert(self.stack, ["op_eval", a:code.cdr.car])
 endfunction
 
-function lisp.s_if(func, code)
+function s:lib.s_if(this, code)
   call insert(self.stack, ["op_if", a:code.cdr.car,
         \ get(a:code.cdr.cdr, "car", self.NIL)])
   call insert(self.stack, ["op_eval", a:code.car])
 endfunction
 
-function lisp.s_cond(func, code)
+function s:lib.s_cond(this, code)
   call insert(self.stack, ["op_cond", a:code, self.NIL, self.False])
 endfunction
 
-function lisp.s_begin(func, code)
+function s:lib.s_begin(this, code)
   if a:code == self.NIL
     call add(self.stack[0], self.NIL)
   else
@@ -510,20 +551,20 @@ function lisp.s_begin(func, code)
   endif
 endfunction
 
-function lisp.s_or(func, code)
+function s:lib.s_or(this, code)
   call insert(self.stack, ["op_or", a:code, self.False])
 endfunction
 
-function lisp.s_and(func, code)
+function s:lib.s_and(this, code)
   call insert(self.stack, ["op_and", a:code, self.True])
 endfunction
 
-function lisp.f_error(func, args)
+function s:lib.f_error(this, args)
   " (error "message" obj ...)
   call insert(self.stack, ["op_error", a:args])
 endfunction
 
-function lisp.f_exit(func, args)
+function s:lib.f_exit(this, args)
   if a:args == self.NIL
     call insert(self.stack, ["op_exit", self.NIL])
   else
@@ -531,23 +572,23 @@ function lisp.f_exit(func, args)
   endif
 endfunction
 
-function lisp.f_load(func, args)
+function s:lib.f_load(this, args)
   let save = [self.inbuf, self.getchar, self.stack]
   call add(self.stack[0], self.load(self.to_vimobj(a:args.car), 1))
   let [self.inbuf, self.getchar, self.stack] = save
 endfunction
 
-function lisp.f_eval(func, args)
+function s:lib.f_eval(this, args)
   call insert(self.stack, ["op_eval", a:args.car])
 endfunction
 
-function lisp.f_closure(func, args)
-  let [func, args] = [a:func, a:args]
+function s:lib.f_closure(this, args)
+  let [this, args] = [a:this, a:args]
   if self.stack[0][0] != "op_return"
     call insert(self.stack, ["op_return", self.env])
   endif
-  let self.env = [{}] + func.env
-  let p = func.code.car
+  let self.env = [{}] + this.env
+  let p = this.code.car
   while p.type == "pair"
     call self.define(p.car.val, args.car)
     let [p, args] = [p.cdr, args.cdr]
@@ -555,10 +596,10 @@ function lisp.f_closure(func, args)
   if p != self.NIL
     call self.define(p.val, args)
   endif
-  call self.begin(func.code.cdr)
+  call self.begin(this.code.cdr)
 endfunction
 
-function lisp.f_call_cc(func, args)
+function s:lib.f_call_cc(this, args)
   let cont = {
         \ "type": "continuation",
         \ "val": "f_continue",
@@ -568,35 +609,35 @@ function lisp.f_call_cc(func, args)
   call insert(self.stack, ["op_apply", a:args.car, self.cons(cont, self.NIL)])
 endfunction
 
-function lisp.f_cons(func, args)
+function s:lib.f_cons(this, args)
   call add(self.stack[0], self.cons(a:args.car, a:args.cdr.car))
 endfunction
 
-function lisp.f_car(func, args)
+function s:lib.f_car(this, args)
   call add(self.stack[0], a:args.car.car)
 endfunction
 
-function lisp.f_cdr(func, args)
+function s:lib.f_cdr(this, args)
   call add(self.stack[0], a:args.car.cdr)
 endfunction
 
-function lisp.f_set_car(func, args)
+function s:lib.f_set_car(this, args)
   let a:args.car.car = a:args.cdr.car
   call add(self.stack[0], self.NIL)
 endfunction
 
-function lisp.f_set_cdr(func, args)
+function s:lib.f_set_cdr(this, args)
   let a:args.car.cdr = a:args.cdr.car
   call add(self.stack[0], self.NIL)
 endfunction
 
-function lisp.f_continue(func, args)
-  let self.stack = map(copy(a:func.stack), 'copy(v:val)')
-  let self.env = copy(a:func.env)
+function s:lib.f_continue(this, args)
+  let self.stack = map(copy(a:this.stack), 'copy(v:val)')
+  let self.env = copy(a:this.env)
   call add(self.stack[0], (a:args == self.NIL) ? self.NIL : a:args.car)
 endfunction
 
-function lisp.f_not(func, args)
+function s:lib.f_not(this, args)
   if a:args.car != self.False
     call add(self.stack[0], self.False)
   else
@@ -604,8 +645,8 @@ function lisp.f_not(func, args)
   endif
 endfunction
 
-function lisp.f_cmp_T(func, args)
-  let cmp = printf("let b = (lhs %s rhs)", a:func.op)
+function s:lib.f_cmp_T(this, args)
+  let cmp = printf("let b = (lhs %s rhs)", a:this.op)
   let lhs = self.to_vimobj(a:args.car)
   let p = a:args.cdr
   while p.type == "pair"
@@ -621,8 +662,8 @@ function lisp.f_cmp_T(func, args)
   call add(self.stack[0], self.True)
 endfunction
 
-function lisp.f_cmp_ins_T(func, args)
-  let cmp = printf("let b = (lhs %s rhs)", a:func.op)
+function s:lib.f_cmp_ins_T(this, args)
+  let cmp = printf("let b = (lhs %s rhs)", a:this.op)
   let lhs = a:args.car
   let p = a:args.cdr
   while p.type == "pair"
@@ -638,11 +679,11 @@ function lisp.f_cmp_ins_T(func, args)
   call add(self.stack[0], self.True)
 endfunction
 
-function lisp.f_sum_T(func, args)
-  let cmd = printf("let sum = sum %s val", a:func.op)
-  if a:func.op == "-" && a:args.cdr == self.NIL
+function s:lib.f_sum_T(this, args)
+  let cmd = printf("let sum = sum %s val", a:this.op)
+  if a:this.op == "-" && a:args.cdr == self.NIL
     let [sum, p] = [-self.to_vimobj(a:args.car), a:args.cdr]
-  elseif a:func.op == "/" && a:args.cdr == self.NIL
+  elseif a:this.op == "/" && a:args.cdr == self.NIL
     let [sum, p] = [1, a:args]
   else
     let [sum, p] = [self.to_vimobj(a:args.car), a:args.cdr]
@@ -655,7 +696,7 @@ function lisp.f_sum_T(func, args)
   call add(self.stack[0], self.mk_number(sum))
 endfunction
 
-function lisp.f_printf(func, args)
+function s:lib.f_printf(this, args)
   let args = []
   let p = a:args
   while p.type == "pair"
@@ -674,21 +715,51 @@ function lisp.f_printf(func, args)
   call add(self.stack[0], self.NIL)
 endfunction
 
-function lisp.f_type(func, args)
+function s:lib.f_type(this, args)
   call add(self.stack[0], self.mk_string(a:args.car.type))
 endfunction
 
-function lisp.f_vim_call(func, args)
+function s:lib.f_vim_call(this, args)
+  " (:call func . args)
   let [func; args] = self.to_vimobj(a:args)
   call add(self.stack[0], self.to_lispobj(call(func, args)))
 endfunction
 
-function lisp.to_str(obj)
+function s:lib.f_vim_execute(this, args)
+  " (:execute expr)
+  let [expr] = self.to_vimobj(a:args)
+  execute expr
+  call add(self.stack[0], self.NIL)
+endfunction
+
+function s:lib.f_vim_function(this, args)
+  " vim function wrapper
+  let args = self.to_vimobj(a:args)
+  let res = call(a:this.func, args)
+  call add(self.stack[0], self.to_lispobj(res))
+endfunction
+
+function s:lib.f_hash_table_ref(this, args)
+  " (hash-table-ref hash key)
+  let [hash, key] = self.to_vimobj(a:args)
+  let value = hash[key]
+  call add(self.stack[0], self.to_lispobj(value))
+endfunction
+
+function s:lib.f_hash_table_set(this, args)
+  " (hash-table-set! hash key value)
+  let [hash, key, value] = self.to_vimobj(a:args)
+  let hash[key] = value
+  call add(self.stack[0], self.NIL)
+endfunction
+
+function s:lib.to_str(obj)
   if a:obj.type == "NIL"             | return "()"
   elseif a:obj.type == "boolean"     | return (a:obj.val ? "#t" : "#f")
   elseif a:obj.type == "number"      | return string(a:obj.val)
   elseif a:obj.type == "string"      | return string(a:obj.val)
   elseif a:obj.type == "symbol"      | return a:obj.val
+  elseif a:obj.type == "hash"        | return string(a:obj.val)
   elseif a:obj.type == "pair"        | return string(self.to_vimobj(a:obj))
   elseif a:obj.type == "closure"     | return "#<closure>"
   elseif a:obj.type == "continuation"| return "#<continuation>"
@@ -698,12 +769,13 @@ function lisp.to_str(obj)
   endif
 endfunction
 
-function lisp.to_vimobj(obj)
+function s:lib.to_vimobj(obj)
   if a:obj.type == "NIL"             | return a:obj.val
   elseif a:obj.type == "boolean"     | return a:obj.val
   elseif a:obj.type == "number"      | return a:obj.val
   elseif a:obj.type == "string"      | return a:obj.val
   elseif a:obj.type == "symbol"      | return a:obj.val
+  elseif a:obj.type == "hash"        | return a:obj.val
   elseif a:obj.type == "pair"
     let res = []
     let p = a:obj
@@ -723,19 +795,19 @@ function lisp.to_vimobj(obj)
   endif
 endfunction
 
-function lisp.to_lispobj(obj)
+function s:lib.to_lispobj(obj)
   if type(a:obj) == type(0)          | return self.mk_number(a:obj)
   elseif type(a:obj) == type("")     | return self.mk_string(a:obj)
-  elseif type(a:obj) == type(function("tr")) | return self.NIL
+  elseif type(a:obj) == type({})     | return self.mk_hash(a:obj)
   elseif type(a:obj) == type([])
     return self.mk_list(map(copy(a:obj), 'self.to_lispobj(v:val)'))
-  elseif type(a:obj) == type({})     | return self.NIL
+  elseif type(a:obj) == type(function("tr")) | return self.mk_vim_function(a:obj)
   endif
 endfunction
 
 " }}}
 
-function lisp.init()
+function s:lib.init()
   let self.inbuf = []
   let self.symbol_table = {}
   let self.top_env = {}
@@ -808,7 +880,11 @@ function lisp.init()
   call self.define("display", {"type":"procedure", "val":"f_printf"})
 
   call self.define("%type" , {"type":"procedure", "val":"f_type"})
-  call self.define("vim-call", {"type":"procedure", "val":"f_vim_call"})
+  call self.define(":call" , {"type":"procedure", "val":"f_vim_call"})
+  call self.define(":execute", {"type":"procedure", "val":"f_vim_execute"})
+
+  call self.define("hash-table-ref", {"type":"procedure", "val":"f_hash_table_ref"})
+  call self.define("hash-table-set!", {"type":"procedure", "val":"f_hash_table_set"})
 
   " load init script
   echo "loading init script ..."
@@ -819,11 +895,12 @@ function lisp.init()
   echo "done"
 endfunction
 
-call lisp.init()
+call s:lib.init()
 
 finish
-" init script
 mzscheme <<EOF
+;; init script
+;; "mzscheme <<EOF" is only used for highlighting.
 
 (define (procedure? x) (=~ (%type x) "procedure\\|closure"))
 (define (syntax? x)    (= (%type x) "syntax"))
@@ -834,6 +911,7 @@ mzscheme <<EOF
 (define (boolean? x)   (= (%type x) "boolean"))
 (define (number? x)    (= (%type x) "number"))
 (define (string? x)    (= (%type x) "string"))
+(define (hash? x)      (= (%type x) "hash"))
 (define (list? x)      (if (pair? x) (list? (cdr x)) (null? x)))
 (define (zero? x)      (= x 0))
 (define (positive? x)  (> x 0))
@@ -919,30 +997,17 @@ mzscheme <<EOF
         p))
   (loop lst '()))
 
-(define (test1)
-  (define (endless n) (printf "%d" n) (endless (+ n 1)))
-  (endless 0))
+(define when
+  (macro code
+    `(if ,(car code)
+       (begin
+         ,@(cdr code)))))
 
-(define (test2)
-  (define (x n) (printf "x: %d" n) (y (+ n 1)))
-  (define (y n) (printf "y: %d" n) (z (+ n 1)))
-  (define (z n) (printf "z: %d" n) (x (+ n 1)))
-  (x 0))
-
-(define (test3)
-  (define cc #f)
-  (define n (call/cc (lambda (k) (set! cc k) 0)))
-  (if (< n 10) (begin (printf "%d" n) (cc (+ n 1)))))
-
-(define (fact n)
-  (if (<= n 1)
-      1
-      (* n (fact (- n 1)))))
-
-(define (fib n)
-  (if (<= n 1)
-      n
-      (+ (fib (- n 1)) (fib (- n 2)))))
+(define unless
+  (macro code
+    `(if (not ,(car code))
+       (begin
+         ,@(cdr code)))))
 
 ;;;;; === copy from init.scm in minischeme ===
 (define (caar x) (car (car x)))
@@ -1085,6 +1150,32 @@ mzscheme <<EOF
                       '()))
                `,vars))))))
 ;;;;; === end ===
+
+;;;;; === test ===
+(define (test1)
+  (define (endless n) (printf "%d" n) (endless (+ n 1)))
+  (endless 0))
+
+(define (test2)
+  (define (x n) (printf "x: %d" n) (y (+ n 1)))
+  (define (y n) (printf "y: %d" n) (z (+ n 1)))
+  (define (z n) (printf "z: %d" n) (x (+ n 1)))
+  (x 0))
+
+(define (test3)
+  (define cc #f)
+  (define n (call/cc (lambda (k) (set! cc k) 0)))
+  (if (< n 10) (begin (printf "%d" n) (cc (+ n 1)))))
+
+(define (fact n)
+  (if (<= n 1)
+      1
+      (* n (fact (- n 1)))))
+
+(define (fib n)
+  (if (<= n 1)
+      n
+      (+ (fib (- n 1)) (fib (- n 2)))))
 
 EOF
 
