@@ -732,6 +732,13 @@ function s:lib.f_vim_execute(this, args)
   call add(self.stack[0], self.NIL)
 endfunction
 
+function s:lib.f_vim_let(this, args)
+  " (:let name value)
+  let [name, value] = self.to_vimobj(a:args)
+  execute printf("let %s = value", name)
+  call add(self.stack[0], self.NIL)
+endfunction
+
 function s:lib.f_vim_function(this, args)
   " vim function wrapper
   let args = self.to_vimobj(a:args)
@@ -882,6 +889,7 @@ function s:lib.init()
   call self.define("%type" , {"type":"procedure", "val":"f_type"})
   call self.define(":call" , {"type":"procedure", "val":"f_vim_call"})
   call self.define(":execute", {"type":"procedure", "val":"f_vim_execute"})
+  call self.define(":let", {"type":"procedure", "val":"f_vim_let"})
 
   call self.define("hash-table-ref", {"type":"procedure", "val":"f_hash_table_ref"})
   call self.define("hash-table-set!", {"type":"procedure", "val":"f_hash_table_set"})
