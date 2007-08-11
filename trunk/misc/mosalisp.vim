@@ -715,7 +715,11 @@ function s:lib.f_printf(this, args)
   let args = []
   let p = a:args
   while p.type == "pair"
-    call add(args, self.to_str(p.car))
+    if p.car.type == "string"
+      call add(args, p.car.val)
+    else
+      call add(args, self.to_str(p.car))
+    endif
     let p = p.cdr
   endwhile
   if len(args) == 1
