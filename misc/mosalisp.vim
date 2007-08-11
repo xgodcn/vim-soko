@@ -355,7 +355,7 @@ function s:lib.op_eval(op)
         return
       endif
     endfor
-    call insert(self.stack, ["op_error", printf("Unbounded Variable: %s", name.val)])
+    call self.error(printf("Unbounded Variable: %s", code.val))
   elseif code.type == "pair"
     call insert(self.stack, ["op_call", code.cdr])
     call insert(self.stack, ["op_eval", code.car])
@@ -444,7 +444,7 @@ function s:lib.op_set(op)
       return
     endif
   endfor
-  call insert(self.stack, ["op_error", printf("Unbounded Variable: %s", name.val)])
+  call self.error(printf("Unbounded Variable: %s", name.val))
 endfunction
 
 function s:lib.op_if(op)
@@ -490,6 +490,11 @@ function s:lib.op_and(op)
     call insert(self.stack, ["op_and", code.cdr])
     call insert(self.stack, ["op_eval", code.car])
   endif
+endfunction
+
+function s:lib.error(msg)
+  let args = self.mk_list([self.mk_string(a:msg)])
+  call insert(self.stack, ["op_error", args])
 endfunction
 
 function s:lib.define(name, obj)
