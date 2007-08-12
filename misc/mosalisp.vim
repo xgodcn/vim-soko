@@ -1251,6 +1251,19 @@ mzscheme <<EOF
       n
       (+ (fib (- n 1)) (fib (- n 2)))))
 
+(define (str->hex str)
+  (define format
+    (macro args
+      `(:call "printf" ,@args)))
+  (define (str-len str) (:call "strlen" str))
+  (define (str-ref str n) (:call "strpart" str n 1))
+  (define (str-ref-hex str n)
+    (format "%02X" (:call "char2nr" (str-ref str n))))
+  (let loop ((i 0) (res '()))
+    (if (>= i (str-len str))
+      (:call "join" (reverse res) "")
+      (loop (+ i 1) (cons (str-ref-hex str i) res)))))
+
 EOF
 
 " vim:set foldmethod=marker:
