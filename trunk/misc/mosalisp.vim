@@ -338,9 +338,18 @@ endfunction
 function s:lib.mk_macro(code)
   return {
         \ "type": "macro",
-        \ "val": "f_macro_eval",
+        \ "val": "f_closure",
         \ "scope": copy(self.scope),
         \ "code": copy(a:code)
+        \ }
+endfunction
+
+function s:lib.mk_continuation()
+  return {
+        \ "type": "continuation",
+        \ "val": "f_continue",
+        \ "scope": copy(self.scope),
+        \ "stack": map(copy(self.stack), 'copy(v:val)')
         \ }
 endfunction
 
@@ -452,6 +461,12 @@ function s:lib.op_macro_replace(op)
   endfor
   call extend(orig, code)
   call add(self.stack[0], code)
+endfunction
+
+function s:lib.op_macro_eval(op)
+  let lst = a:op[1]
+  let [macro, args] = [lst.car, lst.cdr]
+  call self[macro.val](macro, args)
 endfunction
 
 function s:lib.op_return(op)
@@ -598,6 +613,7 @@ function s:lib.f_error(this, args)
 endfunction
 
 function s:lib.f_exit(this, args)
+  " (exit [exitcode])
   if a:args == self.NIL
     call insert(self.stack, ["op_exit", self.NIL])
   else
@@ -606,28 +622,23 @@ function s:lib.f_exit(this, args)
 endfunction
 
 function s:lib.f_load(this, args)
+  " (load filename)
   let save = [self.inbuf, self.getchar, self.stack]
   call add(self.stack[0], self.load(self.to_vimobj(a:args.car), 1))
   let [self.inbuf, self.getchar, self.stack] = save
 endfunction
 
 function s:lib.f_eval(this, args)
+  " (eval '(proc a b c))
   call insert(self.stack, ["op_eval", a:args.car])
 endfunction
 
 function s:lib.f_macro_eval(this, args)
-  let [this, args] = [a:this, a:args]
-  call insert(self.stack, ["op_return", self.scope])
-  let self.scope = [{}] + this.scope
-  let p = this.code.car
-  while p.type == "pair"
-    call self.define(p.car.val, args.car)
-    let [p, args] = [p.cdr, args.cdr]
-  endwhile
-  if p != self.NIL
-    call self.define(p.val, args)
-  endif
-  call self.begin(this.code.cdr)
+  " (macro-eval '(macro a b c))
+  let code = a:args.car
+  call insert(self.stack, ["op_macro_eval"])
+  call insert(self.stack, ["op_args", code.cdr, self.NIL])
+  call insert(self.stack, ["op_eval", code.car])
 endfunction
 
 function s:lib.f_closure(this, args)
@@ -648,12 +659,7 @@ function s:lib.f_closure(this, args)
 endfunction
 
 function s:lib.f_call_cc(this, args)
-  let cont = {
-        \ "type": "continuation",
-        \ "val": "f_continue",
-        \ "scope": copy(self.scope),
-        \ "stack": map(copy(self.stack), 'copy(v:val)')
-        \ }
+  let cont = self.mk_continuation()
   call insert(self.stack, ["op_apply", a:args.car, self.cons(cont, self.NIL)])
 endfunction
 
@@ -900,6 +906,7 @@ function s:lib.init()
   call self.define("exit"  , {"type":"procedure", "val":"f_exit"})
   call self.define("load"  , {"type":"procedure", "val":"f_load"})
   call self.define("eval"  , {"type":"procedure", "val":"f_eval"})
+  call self.define("macro-eval", {"type":"procedure", "val":"f_macro_eval"})
   call self.define("call-with-current-continuation", {"type":"procedure", "val":"f_call_cc"})
   call self.define("cons"  , {"type":"procedure", "val":"f_cons"})
   call self.define("car"   , {"type":"procedure", "val":"f_car"})
