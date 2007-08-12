@@ -88,6 +88,17 @@ function s:lib.dump_env()
   endfor
 endfunction
 
+function s:lib.get_funcname(number)
+  for name in keys(self)
+    if type(self[name]) == type(function("tr"))
+      let s = string(self[name])
+      if s =~ printf("'%d'", a:number)
+        return name
+      endif
+    endif
+  endfor
+endfunction
+
 " {{{ read
 function s:lib.read()
   call self.skip_blank()
@@ -322,7 +333,7 @@ endfunction
 function s:lib.mk_macro(code)
   return {
         \ "type": "macro",
-        \ "val": "s_macro_eval",
+        \ "val": "f_macro_eval",
         \ "scope": copy(self.scope),
         \ "code": copy(a:code)
         \ }
@@ -357,7 +368,7 @@ function s:lib.op_eval(op)
     endfor
     call self.error(printf("Unbounded Variable: %s", code.val))
   elseif code.type == "pair"
-    call insert(self.stack, ["op_call", code.cdr])
+    call insert(self.stack, ["op_call", code, code.cdr])
     call insert(self.stack, ["op_eval", code.car])
   else
     call add(self.stack[0], code)
@@ -395,8 +406,12 @@ function s:lib.op_error(op)
 endfunction
 
 function s:lib.op_call(op)
-  let [code, func] = a:op[1:]
-  if func.type == "syntax" || func.type == "macro"
+  let [orig, code, func] = a:op[1:]
+  if func.type == "macro"
+    call insert(self.stack, ["op_eval"])
+    call insert(self.stack, ["op_macro_replace", orig])
+    call insert(self.stack, ["op_apply", func, code])
+  elseif func.type == "syntax"
     call insert(self.stack, ["op_apply", func, code])
   else
     if code == self.NIL
@@ -423,6 +438,15 @@ endfunction
 function s:lib.op_apply(op)
   let [func, args] = a:op[1:]
   call self[func.val](func, args)
+endfunction
+
+function s:lib.op_macro_replace(op)
+  let [orig, code] = a:op[1:]
+  for key in keys(orig)
+    unlet orig[key]
+  endfor
+  call extend(orig, code)
+  call add(self.stack[0], code)
 endfunction
 
 function s:lib.op_return(op)
@@ -521,22 +545,6 @@ function s:lib.s_quote(this, code)
   call add(self.stack[0], a:code.car)
 endfunction
 
-function s:lib.s_macro_eval(this, code)
-  let [this, code] = [a:this, a:code]
-  call insert(self.stack, ["op_eval"])
-  call insert(self.stack, ["op_return", self.scope])
-  let self.scope = [{}] + this.scope
-  let p = this.code.car
-  while p.type == "pair"
-    call self.define(p.car.val, code.car)
-    let [p, code] = [p.cdr, code.cdr]
-  endwhile
-  if p != self.NIL
-    call self.define(p.val, code)
-  endif
-  call self.begin(this.code.cdr)
-endfunction
-
 function s:lib.s_define(this, code)
   let code = a:code
   if code.car.type == "pair"
@@ -600,6 +608,21 @@ endfunction
 
 function s:lib.f_eval(this, args)
   call insert(self.stack, ["op_eval", a:args.car])
+endfunction
+
+function s:lib.f_macro_eval(this, args)
+  let [this, args] = [a:this, a:args]
+  call insert(self.stack, ["op_return", self.scope])
+  let self.scope = [{}] + this.scope
+  let p = this.code.car
+  while p.type == "pair"
+    call self.define(p.car.val, args.car)
+    let [p, args] = [p.cdr, args.cdr]
+  endwhile
+  if p != self.NIL
+    call self.define(p.val, args)
+  endif
+  call self.begin(this.code.cdr)
 endfunction
 
 function s:lib.f_closure(this, args)
