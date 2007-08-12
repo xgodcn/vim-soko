@@ -1,7 +1,7 @@
 " mosalisp.vim - lisp interpreter
 " Maintainer:   Yukihiro Nakadaira <yukihiro.nakadaira@gmail.com>
 " License:      This file is placed in the public domain.
-" Last Change:  2007-08-12
+" Last Change:  2007-08-13
 "
 " Usage:
 "   :source mosalisp.vim
@@ -822,12 +822,13 @@ function s:lib.to_str(obj)
   elseif a:obj.type == "string"      | return string(a:obj.val)
   elseif a:obj.type == "symbol"      | return a:obj.val
   elseif a:obj.type == "hash"        | return string(a:obj.val)
-  elseif a:obj.type == "pair"        | return string(self.to_vimobj(a:obj))
+  elseif a:obj.type == "pair"        | return string(self.pair_to_vimlist(a:obj, "to_str"))
   elseif a:obj.type == "closure"     | return "#<closure>"
   elseif a:obj.type == "continuation"| return "#<continuation>"
   elseif a:obj.type == "procedure"   | return "#<procedure>"
   elseif a:obj.type == "syntax"      | return "#<syntax>"
   elseif a:obj.type == "macro"       | return "#<macro>"
+  elseif a:obj.type == "pair"
   endif
 endfunction
 
@@ -839,24 +840,27 @@ function s:lib.to_vimobj(obj)
   elseif a:obj.type == "string"      | return a:obj.val
   elseif a:obj.type == "symbol"      | return a:obj.val
   elseif a:obj.type == "hash"        | return a:obj.val
-  elseif a:obj.type == "pair"
-    let res = []
-    let p = a:obj
-    while p.type == "pair"
-      call add(res, self.to_vimobj(p.car))
-      let p = p.cdr
-    endwhile
-    " TODO: How to tell whether object is pair or list?
-    if p != self.NIL
-      call add(res, self.to_vimobj(p))
-    endif
-    return res
+  elseif a:obj.type == "pair"        | return self.pair_to_vimlist(a:obj, "to_vimobj")
   elseif a:obj.type == "closure"     | return a:obj
   elseif a:obj.type == "continuation"| return a:obj
   elseif a:obj.type == "procedure"   | return a:obj
   elseif a:obj.type == "syntax"      | return a:obj
   elseif a:obj.type == "macro"       | return a:obj
   endif
+endfunction
+
+function s:lib.pair_to_vimlist(obj, conv)
+  let res = []
+  let p = a:obj
+  while p.type == "pair"
+    call add(res, self[a:conv](p.car))
+    let p = p.cdr
+  endwhile
+  " TODO: How to tell whether object is pair or list?
+  if p != self.NIL
+    call add(res, self[a:conv](p))
+  endif
+  return res
 endfunction
 
 function s:lib.to_lispobj(obj)
