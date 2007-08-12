@@ -17,9 +17,9 @@
 "   > (:execute "new file.txt")
 "   "file.txt" [New File]
 "   > (let loop ((i 0))
-"   >   (when (< i 3)
-"   >     (printf "%d" i)
-"   >     (loop (+ i 1))))
+"   >> (when (< i 3)
+"   >>> (printf "%d" i)
+"   >>> (loop (+ i 1))))
 "   0
 "   1
 "   2
@@ -36,6 +36,7 @@ function s:lib.repl()
   let save_more = &more
   set nomore
   let self.inbuf = []
+  let self.read_nest = 1
   let self.getchar = self.getchar_input
   let self.scope = [self.top_env]
   let self.stack = [["op_loop", 1, self.NIL]]
@@ -106,7 +107,10 @@ function s:lib.read()
   if c == "eof"
     return self.Undefined
   elseif c == '('
-    return self.read_list()
+    let self.read_nest += 1
+    let res = self.read_list()
+    let self.read_nest -= 1
+    return res
   elseif c == '"'
     return self.read_string()
   elseif c =~ '\d' || c =~ '[-+]' && get(self.inbuf, 1, "") =~ '\d'
@@ -258,13 +262,14 @@ endfunction
 
 function s:lib.getchar_input()
   if self.inbuf == []
+    let prefix = repeat(">", self.read_nest) . " "
     try
-      let str = input("> ")
+      let str = input(prefix)
     catch /Vim:Interrupt/
       let self.inbuf = ["eof"]
       return "eof"
     endtry
-    echon printf("\r> %s", str)
+    echon printf("\r%s%s", prefix, str)
     let self.inbuf = split(str, '\zs') + ["\n"]
     return self.getchar_input()
   endif
@@ -862,6 +867,7 @@ endfunction
 
 function s:lib.init()
   let self.inbuf = []
+  let self.read_nest = 1
   let self.symbol_table = {}
   let self.top_env = {}
 
