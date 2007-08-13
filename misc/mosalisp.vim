@@ -46,7 +46,7 @@ function s:lib.repl()
       call self[op[0]](op)
     catch
       echohl Error
-      echo "Exception from" v:throwpoint
+      echo "Exception from" self.get_throwpoint()
       echo v:exception
       echohl None
       break
@@ -66,7 +66,7 @@ function s:lib.load_str(str, ...)
       call self[op[0]](op)
     catch
       echohl Error
-      echo "Exception from" v:throwpoint
+      echo "Exception from" self.get_throwpoint()
       echo v:exception
       echohl None
       break
@@ -98,6 +98,11 @@ function s:lib.get_funcname(number)
       endif
     endif
   endfor
+  return a:number
+endfunction
+
+function s:lib.get_throwpoint()
+  return substitute(v:throwpoint, '\d\+\ze\.\.\|\.\.\zs\d\+', '\=self.get_funcname(submatch(0))', 'g')
 endfunction
 
 " {{{ read
@@ -456,10 +461,7 @@ endfunction
 
 function s:lib.op_macro_replace(op)
   let [orig, code] = a:op[1:]
-  for key in keys(orig)
-    unlet orig[key]
-  endfor
-  call extend(orig, code)
+  call self.obj_replace(orig, code)
   call add(self.stack[0], code)
 endfunction
 
@@ -821,8 +823,8 @@ function s:lib.to_str(obj)
   elseif a:obj.type == "number"      | return string(a:obj.val)
   elseif a:obj.type == "string"      | return string(a:obj.val)
   elseif a:obj.type == "symbol"      | return a:obj.val
-  elseif a:obj.type == "hash"        | return string(a:obj.val)
-  elseif a:obj.type == "pair"        | return string(self.pair_to_vimlist(a:obj, "to_str"))
+  elseif a:obj.type == "hash"        | return "#<hash>"
+  elseif a:obj.type == "pair"        | return self.to_str_pair(a:obj, [])
   elseif a:obj.type == "closure"     | return "#<closure>"
   elseif a:obj.type == "continuation"| return "#<continuation>"
   elseif a:obj.type == "procedure"   | return "#<procedure>"
@@ -840,7 +842,7 @@ function s:lib.to_vimobj(obj)
   elseif a:obj.type == "string"      | return a:obj.val
   elseif a:obj.type == "symbol"      | return a:obj.val
   elseif a:obj.type == "hash"        | return a:obj.val
-  elseif a:obj.type == "pair"        | return self.pair_to_vimlist(a:obj, "to_vimobj")
+  elseif a:obj.type == "pair"        | return self.to_vimobj_pair(a:obj, [], [])
   elseif a:obj.type == "closure"     | return a:obj
   elseif a:obj.type == "continuation"| return a:obj
   elseif a:obj.type == "procedure"   | return a:obj
@@ -849,28 +851,111 @@ function s:lib.to_vimobj(obj)
   endif
 endfunction
 
-function s:lib.pair_to_vimlist(obj, conv)
-  let res = []
-  let p = a:obj
-  while p.type == "pair"
-    call add(res, self[a:conv](p.car))
-    let p = p.cdr
-  endwhile
-  " TODO: How to tell whether object is pair or list?
-  if p != self.NIL
-    call add(res, self[a:conv](p))
-  endif
-  return res
-endfunction
-
 function s:lib.to_lispobj(obj)
   if type(a:obj) == type(0)          | return self.mk_number(a:obj)
   elseif type(a:obj) == type("")     | return self.mk_string(a:obj)
   elseif type(a:obj) == type({})     | return self.mk_hash(a:obj)
-  elseif type(a:obj) == type([])
-    return self.mk_list(map(copy(a:obj), 'self.to_lispobj(v:val)'))
+  elseif type(a:obj) == type([])     | return self.to_lispobj_pair(a:obj, [], [])
   elseif type(a:obj) == type(function("tr")) | return self.mk_vim_function(a:obj)
   endif
+endfunction
+
+function s:lib.to_str_pair(obj, nest)
+  if self.obj_index(a:nest, a:obj) != -1
+    return "#(...)"
+  endif
+  let res = []
+  call add(a:nest, a:obj)
+  let p = a:obj
+  while p.type == "pair"
+    if p.car.type == "pair"
+      call add(res, self.to_str_pair(p.car, a:nest))
+    else
+      call add(res, self.to_str(p.car))
+    endif
+    let p = p.cdr
+    if self.obj_index(a:nest, p) != -1
+      break
+    endif
+  endwhile
+  if p != self.NIL
+    call add(res, ".")
+    if p.type == "pair"
+      call add(res, self.to_str_pair(p, a:nest))
+    else
+      call add(res, self.to_str(p))
+    endif
+  endif
+  return '(' . join(res) . ')'
+endfunction
+
+function s:lib.to_vimobj_pair(obj, nest, vimobj)
+  " TODO: How to tell whether object is pair or list?
+  if self.obj_index(a:nest, a:obj) != -1
+    let n = self.obj_index(a:nest, a:obj)
+    return a:vimobj[n]
+  endif
+  let res = []
+  call add(a:nest, a:obj)
+  call add(a:vimobj, res)
+  let p = a:obj
+  while p.type == "pair"
+    if p.car.type == "pair"
+      call add(res, self.to_vimobj_pair(p.car, a:nest, a:vimobj))
+    else
+      call add(res, self.to_vimobj(p.car))
+    endif
+    let p = p.cdr
+    if self.obj_index(a:nest, p) != -1
+      break
+    endif
+  endwhile
+  if p != self.NIL
+    if p.type == "pair"
+      call add(res, self.to_vimobj_pair(p, a:nest, a:vimobj))
+    else
+      call add(res, self.to_vimobj(p))
+    endif
+  endif
+  return res
+endfunction
+
+function s:lib.to_lispobj_pair(obj, nest, lispobj)
+  if self.obj_index(a:nest, a:obj) != -1
+    let n = self.obj_index(a:nest, a:obj)
+    return a:lispobj[n]
+  endif
+  let res = {}  " place holder
+  let r = self.NIL
+  call add(a:nest, a:obj)
+  call add(a:lispobj, res)
+  for p in a:obj
+    if type(p) == type([])
+      let r = self.cons(self.to_lispobj_pair(p, a:nest, a:lispobj), r)
+    else
+      let r = self.cons(self.to_lispobj(p), r)
+    endif
+    unlet p     " avoid "E706: Variable type mismatch for: p"
+  endfor
+  return self.obj_replace(res, self.reverse(r))
+endfunction
+
+function s:lib.obj_index(lst, obj)
+  let i = 0
+  for o in a:lst
+    if o is a:obj
+      return i
+    endif
+    let i += 1
+  endfor
+  return -1
+endfunction
+
+function s:lib.obj_replace(lhs, rhs)
+  for key in keys(a:lhs)
+    unlet a:lhs[key]
+  endfor
+  return extend(a:lhs, a:rhs)
 endfunction
 
 " }}}
