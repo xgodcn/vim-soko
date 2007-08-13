@@ -951,7 +951,7 @@ mzscheme <<EOF
     "let _res = self.mk_hash({})"))
 
 ;; Dictionary is not boxed automatically.
-;; Box it's value for each access for now.
+;; Box its value for each access for now.
 ;; type check is lazy.
 (define hash-table-ref
   (%proc (hash key)
