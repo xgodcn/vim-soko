@@ -862,7 +862,8 @@ endfunction
 
 function s:lib.to_str_pair(obj, nest)
   if self.obj_index(a:nest, a:obj) != -1
-    return "#(...)"
+    let n = self.obj_index(a:nest, a:obj)
+    return printf("#%d(...)", n)
   endif
   let res = []
   call add(a:nest, a:obj)
