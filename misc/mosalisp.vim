@@ -950,12 +950,19 @@ mzscheme <<EOF
   (%proc ()
     "let _res = self.mk_hash({})"))
 
+;; Dictionary is not boxed automatically.
+;; Box it's value for each access for now.
+;; type check is lazy.
 (define hash-table-ref
   (%proc (hash key)
     "unlet hash key
      let [hash, key] = self.to_vimobj(_args)
-     let value = hash[key]
-     let _res = value"))
+     let Value = hash[key]
+     if type(Value) == type({}) && get(Value, 'type', '') == 'hash'
+       let _res = Value
+     else
+       let _res = self.to_lispobj(Value)
+     endif"))
 
 (define hash-table-put!
   (%proc (hash key value)
