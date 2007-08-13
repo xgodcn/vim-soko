@@ -830,7 +830,6 @@ function s:lib.to_str(obj)
   elseif a:obj.type == "procedure"   | return "#<procedure>"
   elseif a:obj.type == "syntax"      | return "#<syntax>"
   elseif a:obj.type == "macro"       | return "#<macro>"
-  elseif a:obj.type == "pair"
   endif
 endfunction
 
