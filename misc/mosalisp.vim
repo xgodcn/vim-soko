@@ -9,7 +9,7 @@
 "
 " Example:
 "   :call mosalisp.repl()
-"   > (define func (lambda () (display "hello, world")))
+"   > (define func (lambda () (display "hello, world")(newline)))
 "   > (func)
 "   hello, world
 "   > (:call "append" 0 '("line1" "line2"))
@@ -18,7 +18,7 @@
 "   "file.txt" [New File]
 "   > (let loop ((i 0))
 "   >> (when (< i 3)
-"   >>> (printf "%d" i)
+"   >>> (printf "%d\n" i)
 "   >>> (loop (+ i 1))))
 "   0
 "   1
@@ -278,7 +278,7 @@ function s:lib.getchar_input()
       let self.inbuf = ["eof"]
       return "eof"
     endtry
-    echon printf("\r%s%s", prefix, str)
+    echon printf("\r%s%s\n", prefix, str)
     let self.inbuf = split(str, '\zs') + ["\n"]
     return self.getchar_input()
   endif
@@ -911,14 +911,17 @@ mzscheme <<EOF
 
 (define display
   (%proc (obj)
-    "echo (obj.type == 'string') ? obj.val : self.to_str(obj)
+    "echon (obj.type == 'string') ? obj.val : self.to_str(obj)
      let _res = self.Undefined"))
+
+(define (newline)
+  (display "\n"))
 
 (define printf
   (%proc (fmt . args)
     "unlet fmt args
      let args = self.to_vimobj(_args)
-     echo (len(args) == 1) ? args[0] : call('printf', args)
+     echon (len(args) == 1) ? args[0] : call('printf', args)
      let _res = self.Undefined"))
 
 (define format
@@ -1375,19 +1378,19 @@ mzscheme <<EOF
 
 ;;;;; === test ===
 (define (test1)
-  (define (endless n) (printf "%d" n) (endless (+ n 1)))
+  (define (endless n) (printf "%d\n" n) (endless (+ n 1)))
   (endless 0))
 
 (define (test2)
-  (define (x n) (printf "x: %d" n) (y (+ n 1)))
-  (define (y n) (printf "y: %d" n) (z (+ n 1)))
-  (define (z n) (printf "z: %d" n) (x (+ n 1)))
+  (define (x n) (printf "x: %d\n" n) (y (+ n 1)))
+  (define (y n) (printf "y: %d\n" n) (z (+ n 1)))
+  (define (z n) (printf "z: %d\n" n) (x (+ n 1)))
   (x 0))
 
 (define (test3)
   (define cc #f)
   (define n (call/cc (lambda (k) (set! cc k) 0)))
-  (if (< n 10) (begin (printf "%d" n) (cc (+ n 1)))))
+  (if (< n 10) (begin (printf "%d\n" n) (cc (+ n 1)))))
 
 (define (test4)
   ;; displaying nested list
@@ -1395,7 +1398,7 @@ mzscheme <<EOF
   (define y (list "y!" #f "x!" x))
   (set-cdr! x x)
   (set-car! (cdr y) y)
-  (display y))
+  (display y)(newline))
 
 (define (fact n)
   (if (<= n 1)
