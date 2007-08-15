@@ -392,7 +392,7 @@ function s:lib.clonepair(lst)
     return a:lst
   endif
   let lst = copy(a:lst)
-  let r = a:lst
+  let r = lst
   let r.car = self.clonepair(r.car)
   while r.cdr.type == 'pair'
     let r.cdr = copy(r.cdr)
