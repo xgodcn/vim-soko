@@ -387,6 +387,21 @@ function s:lib.reverse(cell)
   return p
 endfunction
 
+function s:lib.clonepair(lst)
+  if a:lst.type != 'pair'
+    return a:lst
+  endif
+  let lst = copy(a:lst)
+  let r = a:lst
+  let r.car = self.clonepair(r.car)
+  while r.cdr.type == 'pair'
+    let r.cdr = copy(r.cdr)
+    let r = r.cdr
+    let r.car = self.clonepair(r.car)
+  endwhile
+  return lst
+endfunction
+
 function s:lib.op_read(op)
   call add(self.stack[0], self.read())
 endfunction
@@ -587,7 +602,7 @@ function s:lib.s_procedure(this, code)
 endfunction
 
 function s:lib.s_quote(this, code)
-  call add(self.stack[0], a:code.car)
+  call add(self.stack[0], self.clonepair(a:code.car))
 endfunction
 
 function s:lib.s_define(this, code)
@@ -1399,6 +1414,20 @@ mzscheme <<EOF
   (set-cdr! x x)
   (set-car! (cdr y) y)
   (display y)(newline))
+
+(define (test5)
+  (define colors '("red" "green" "blue" "yellow" "magenta"))
+  (set-cdr! (last-pair colors) colors)
+  (for-each
+    (lambda (c)
+      (define color (car colors))
+      (set! colors (cdr colors))
+      (:execute "hi clear TempColor")
+      (:execute (format "hi TempColor guifg=%s ctermfg=%s" color color))
+      (:execute "echohl TempColor")
+      (display c)
+      (:execute "echohl None"))
+    (:call "split" "mosalisp!" "\\zs")))
 
 (define (fact n)
   (if (<= n 1)
