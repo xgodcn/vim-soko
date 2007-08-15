@@ -1167,7 +1167,7 @@ mzscheme <<EOF
     "if args == self.NIL
        let args = arg1
      else
-       let args = _args
+       let args = _args.cdr
        let p = args
        while p.cdr.cdr.type == 'pair'
          let p = p.cdr
