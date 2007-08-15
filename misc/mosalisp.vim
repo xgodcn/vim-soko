@@ -394,13 +394,12 @@ endfunction
 function s:lib.op_eval(op)
   let code = a:op[1]
   if code.type == "symbol"
-    for env in self.scope
-      if has_key(env, code.val)
-        call add(self.stack[0], env[code.val])
-        return
-      endif
-    endfor
-    call self.error(printf("Unbounded Variable: %s", code.val))
+    let env = self.findscope(code.val)
+    if env != {}
+      call add(self.stack[0], env[code.val])
+    else
+      call self.error(printf("Unbounded Variable: %s", code.val))
+    endif
   elseif code.type == "pair"
     call insert(self.stack, ["op_call", code, code.cdr])
     call insert(self.stack, ["op_eval", code.car])
@@ -480,12 +479,6 @@ function s:lib.op_macro_replace(op)
   call add(self.stack[0], code)
 endfunction
 
-function s:lib.op_macro_apply(op)
-  let lst = a:op[1]
-  let [macro, args] = [lst.car, lst.cdr]
-  call self[macro.val](macro, args)
-endfunction
-
 function s:lib.op_return(op)
   let self.scope = a:op[1]
   call add(self.stack[0], a:op[2])
@@ -498,14 +491,13 @@ endfunction
 
 function s:lib.op_set(op)
   let [name, value] = a:op[1:]
-  for env in self.scope
-    if has_key(env, name.val)
-      let env[name.val] = value
-      call add(self.stack[0], self.Undefined)
-      return
-    endif
-  endfor
-  call self.error(printf("Unbounded Variable: %s", name.val))
+  let env = self.findscope(name.val)
+  if env != {}
+    let env[name.val] = value
+    call add(self.stack[0], self.Undefined)
+  else
+    call self.error(printf("Unbounded Variable: %s", name.val))
+  endif
 endfunction
 
 function s:lib.op_if(op)
@@ -560,6 +552,15 @@ endfunction
 
 function s:lib.define(name, obj)
   let self.scope[0][a:name] = a:obj
+endfunction
+
+function s:lib.findscope(name)
+  for env in self.scope
+    if has_key(env, a:name)
+      return env
+    endif
+  endfor
+  return {}
 endfunction
 
 function s:lib.begin(code)
@@ -882,11 +883,12 @@ mzscheme <<EOF
   (%proc (lst)
     "call insert(self.stack, ['op_eval', lst])"))
 
-(define macro-eval
+(define macroexpand-1
   (%proc (lst)
-    "call insert(self.stack, ['op_macro_apply'])
-     call insert(self.stack, ['op_args', lst.cdr, self.NIL])
-     call insert(self.stack, ['op_eval', lst.car])"))
+    "let [symbol, code] = [lst.car, lst.cdr]
+     let env = self.findscope(symbol.val)
+     let macro = env[symbol.val]
+     call insert(self.stack, ['op_apply', macro, code])"))
 
 (define call-with-current-continuation
   (%proc (proc)
