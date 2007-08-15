@@ -1169,7 +1169,7 @@ mzscheme <<EOF
     "if args == self.NIL
        let args = arg1
      else
-       let args = self.cons(arg1, args)
+       let args = _args
        let p = args
        while p.cdr.cdr.type == 'pair'
          let p = p.cdr
@@ -1178,20 +1178,35 @@ mzscheme <<EOF
      endif
      call insert(self.stack, ['op_apply', proc, args])"))
 
-(define (length lst)
-  (let loop ((n 0) (p lst))
-    (if (pair? p)
-        (loop (+ n 1) (cdr p))
-        n)))
+(define length
+  (%proc (lst)
+    "let i = 0
+     while lst.type == 'pair'
+       let i += 1
+       let lst = lst.cdr
+     endwhile
+     let _res = self.to_lispobj(i)"))
 
-(define (append . lst)
-  (define (cat p q r)
-    (if (null? p)
-        (if (null? q)
-            (reverse r)
-            (cat (car q) (cdr q) r))
-        (cat (cdr p) q (cons (car p) r))))
-  (cat '() lst '()))
+(define append
+  (%proc (arg1 . rest)
+    "let _res = copy(arg1)
+     let r = _res
+     while r.cdr != self.NIL
+       let r.cdr = copy(r.cdr)
+       let r = r.cdr
+     endwhile
+     if rest != self.NIL
+       while rest.cdr != self.NIL
+         let r.cdr = copy(rest.car)
+         let r = r.cdr
+         while r.cdr != self.NIL
+           let r.cdr = copy(r.cdr)
+           let r = r.cdr
+         endwhile
+         let rest = rest.cdr
+       endwhile
+       let r.cdr = rest.car
+     endif"))
 
 (define reverse
   (%proc (lst)
@@ -1227,15 +1242,23 @@ mzscheme <<EOF
 
 (define (list . x) x)
 
-(define (map proc list)
-    (if (pair? list)
-        (cons (proc (car list)) (map proc (cdr list)))
-        '()))
+(define (map proc arg1 . rest)
+  (define (map1 proc lst res)
+    (if (null? lst)
+      (reverse res)
+      (map1 proc (cdr lst) (cons (proc (car lst)) res))))
+  (define (loop args res)
+    (if (null? (car args))
+      (reverse res)
+      (loop (map1 cdr args '())
+            (cons (apply proc (map1 car args '())) res))))
+  (if (null? rest)
+    (map1 proc arg1 '()) ;; for efficiency
+    (loop (cons arg1 rest) '())))
 
-(define (for-each proc list)
-    (if (pair? list)
-        (begin (proc (car list)) (for-each proc (cdr list)))
-        #t ))
+(define (for-each proc arg1 . rest)
+  (apply map proc arg1 rest)
+  (if #f #f)) ;; return #<undefined>
 
 (define (list-tail x k)
     (if (zero? k)
