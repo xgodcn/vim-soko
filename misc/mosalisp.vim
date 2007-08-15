@@ -602,7 +602,7 @@ function s:lib.s_procedure(this, code)
 endfunction
 
 function s:lib.s_quote(this, code)
-  call add(self.stack[0], self.clonepair(a:code.car))
+  call add(self.stack[0], a:code.car)
 endfunction
 
 function s:lib.s_define(this, code)
@@ -1409,14 +1409,14 @@ mzscheme <<EOF
 
 (define (test4)
   ;; displaying nested list
-  (define x '("x!"))
+  (define x (list "x!"))
   (define y (list "y!" #f "x!" x))
   (set-cdr! x x)
   (set-car! (cdr y) y)
   (display y)(newline))
 
 (define (test5)
-  (define colors '("red" "green" "blue" "yellow" "magenta"))
+  (define colors (list "red" "green" "blue" "yellow" "magenta"))
   (set-cdr! (last-pair colors) colors)
   (for-each
     (lambda (c)
