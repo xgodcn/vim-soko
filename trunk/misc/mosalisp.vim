@@ -1,7 +1,7 @@
 " mosalisp.vim - lisp interpreter
 " Maintainer:   Yukihiro Nakadaira <yukihiro.nakadaira@gmail.com>
 " License:      This file is placed in the public domain.
-" Last Change:  2007-08-14
+" Last Change:  2007-08-16
 "
 " Usage:
 "   :source mosalisp.vim
@@ -394,9 +394,9 @@ endfunction
 function s:lib.op_eval(op)
   let code = a:op[1]
   if code.type == "symbol"
-    let env = self.findscope(code.val)
+    let [env, val] = self.findscope(self.scope, code.val)
     if env != {}
-      call add(self.stack[0], env[code.val])
+      call add(self.stack[0], val)
     else
       call self.error(printf("Unbounded Variable: %s", code.val))
     endif
@@ -491,7 +491,7 @@ endfunction
 
 function s:lib.op_set(op)
   let [name, value] = a:op[1:]
-  let env = self.findscope(name.val)
+  let [env, val] = self.findscope(self.scope, name.val)
   if env != {}
     let env[name.val] = value
     call add(self.stack[0], self.Undefined)
@@ -554,13 +554,13 @@ function s:lib.define(name, obj)
   let self.scope[0][a:name] = a:obj
 endfunction
 
-function s:lib.findscope(name)
-  for env in self.scope
+function s:lib.findscope(scope, name)
+  for env in a:scope
     if has_key(env, a:name)
-      return env
+      return [env, env[a:name]]
     endif
   endfor
-  return {}
+  return [{}, {}]
 endfunction
 
 function s:lib.begin(code)
@@ -886,8 +886,7 @@ mzscheme <<EOF
 (define macroexpand-1
   (%proc (lst)
     "let [symbol, code] = [lst.car, lst.cdr]
-     let env = self.findscope(symbol.val)
-     let macro = env[symbol.val]
+     let macro = self.findscope(self.scope, symbol.val)[1]
      call insert(self.stack, ['op_apply', macro, code])"))
 
 (define call-with-current-continuation
@@ -1006,7 +1005,7 @@ mzscheme <<EOF
 (define (%make-cmp op)
   (%proc (lhs rhs . rest)
     "unlet lhs rhs rest
-     let op = self.to_vimobj(_this.scope[0]['op'])
+     let op = self.to_vimobj(self.findscope(_this.scope, 'op')[1])
      let [lhs, rhs; rest] = self.to_vimobj(_args)
      let expr = 'lhs ' . op . ' rhs'
      let _res = self.False
@@ -1024,7 +1023,7 @@ mzscheme <<EOF
 
 (define (%make-cmp-ins op)
   (%proc (lhs rhs . rest)
-    "let op = self.to_vimobj(_this.scope[0]['op'])
+    "let op = self.to_vimobj(self.findscope(_this.scope, 'op')[1])
      let expr = 'lhs ' . op . ' rhs'
      let _res = self.False
      if eval(expr)
@@ -1044,8 +1043,8 @@ mzscheme <<EOF
 (define (%make-sum op value-for-unary)
   (%proc (num . rest)
     "unlet num rest
-     let op = self.to_vimobj(_this.scope[0]['op'])
-     let unary = self.to_vimobj(_this.scope[0]['value-for-unary'])
+     let op = self.to_vimobj(self.findscope(_this.scope, 'op')[1])
+     let unary = self.to_vimobj(self.findscope(_this.scope, 'value-for-unary')[1])
      let [num; rest] = self.to_vimobj(_args)
      if rest == []
        let sum = unary
