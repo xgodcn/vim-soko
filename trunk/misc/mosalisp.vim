@@ -26,6 +26,13 @@
 "
 "   See mosalisp.init() function and trailing script for more
 "   information.
+"
+"
+" TODO:
+"
+"   - error handling mechanism
+"   - use capital name for variable
+"     "E704: Funcref variable name must start with a capital: foo"
 
 let s:sfile = expand("<sfile>:p")
 
@@ -1158,8 +1165,11 @@ mzscheme <<EOF
             ,(cons (car code) (map cadr (cadr code))))))))
 
 (define apply
-  (%proc (proc . args)
-    "if args != self.NIL && args.cdr != self.NIL
+  (%proc (proc arg1 . args)
+    "if args == self.NIL
+       let args = arg1
+     else
+       let args = self.cons(arg1, args)
        let p = args
        while p.cdr.cdr.type == 'pair'
          let p = p.cdr
