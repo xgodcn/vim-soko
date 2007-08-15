@@ -29,10 +29,7 @@
 "
 "
 " TODO:
-"
 "   - error handling mechanism
-"   - use capital name for variable
-"     "E704: Funcref variable name must start with a capital: foo"
 
 let s:sfile = expand("<sfile>:p")
 
@@ -685,8 +682,8 @@ endfunction
 function s:lib.f_vim_function(this, args)
   " vim function wrapper
   let args = self.to_vimobj(a:args)
-  let res = call(a:this.func, args)
-  call add(self.stack[0], self.to_lispobj(res))
+  let VimObj = call(a:this.func, args)
+  call add(self.stack[0], self.to_lispobj(VimObj))
 endfunction
 
 function s:lib.to_str(obj)
@@ -938,8 +935,8 @@ mzscheme <<EOF
   (%proc (func . args)
     "unlet func args
      let [func; args] = self.to_vimobj(_args)
-     let r = call(func, args)
-     let _res = self.to_lispobj(r)"))
+     let VimObj = call(func, args)
+     let _res = self.to_lispobj(VimObj)"))
 
 (define :execute
   (%proc (expr)
@@ -949,8 +946,8 @@ mzscheme <<EOF
 (define :let
   (%proc (name value)
     "unlet name value
-     let [name, value] = self.to_vimobj(_args)
-     execute printf('let %s = value', name)
+     let [name, VimObj] = self.to_vimobj(_args)
+     execute printf('let %s = VimObj', name)
      let _res = self.Undefined"))
 
 (define make-hash-table
