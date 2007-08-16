@@ -1242,7 +1242,7 @@ mzscheme <<EOF
      else
        let [_res, r] = self.copylist(arg1, 0, [], [])
        while rest.cdr != self.NIL
-         let [_, r] = self.copylist(rest.car, 0, [], [])
+         let [r.cdr, r] = self.copylist(rest.car, 0, [], [])
          let rest = rest.cdr
        endwhile
        let r.cdr = rest.car
