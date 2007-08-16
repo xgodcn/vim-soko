@@ -966,16 +966,32 @@ mzscheme <<EOF
 
 (define printf
   (%proc (fmt . args)
-    "unlet fmt args
-     let args = self.to_vimobj(_args)
-     echon (len(args) == 1) ? args[0] : call('printf', args)
+    "let lst = [self.to_vimobj(fmt)]
+     let p = args
+     while p.type == 'pair'
+       if p.car.type == 'number' || p.car.type == 'string'
+         call add(lst, self.to_vimobj(p.car))
+       else
+         call add(lst, self.to_str(p.car))
+       endif
+       let p = p.cdr
+     endwhile
+     echon (len(args) == 1) ? args[0] : call('printf', lst)
      let _res = self.Undefined"))
 
 (define format
   (%proc (fmt . args)
-    "unlet fmt args
-     let args = self.to_vimobj(_args)
-     let str = (len(args) == 1) ? args[0] : call('printf', args)
+    "let lst = [self.to_vimobj(fmt)]
+     let p = args
+     while p.type == 'pair'
+       if p.car.type == 'number' || p.car.type == 'string'
+         call add(lst, self.to_vimobj(p.car))
+       else
+         call add(lst, self.to_str(p.car))
+       endif
+       let p = p.cdr
+     endwhile
+     let str = (len(args) == 1) ? args[0] : call('printf', lst)
      let _res = self.to_lispobj(str)"))
 
 (define %type
