@@ -1052,6 +1052,8 @@ mzscheme <<EOF
 (define (not value)
   (if value #f #t))
 
+(define (undefined) (if #f #f)) ;; return #<undefined>
+
 (define (%make-cmp op)
   (%proc (lhs rhs . rest)
     "unlet lhs rhs rest
@@ -1298,7 +1300,7 @@ mzscheme <<EOF
 
 (define (for-each proc arg1 . rest)
   (apply map proc arg1 rest)
-  (if #f #f)) ;; return #<undefined>
+  (undefined))
 
 (define (list-tail x k)
     (if (zero? k)
@@ -1432,7 +1434,7 @@ mzscheme <<EOF
   (if (< n 10) (begin (printf "%d\n" n) (cc (+ n 1)))))
 
 (define (test4)
-  ;; displaying nested list
+  ;; recursive list -> string
   (define x (list "x!"))
   (define y (list "y!" #f "x!" x))
   (set-cdr! x x)
