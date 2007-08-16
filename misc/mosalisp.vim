@@ -1,7 +1,7 @@
 " mosalisp.vim - lisp interpreter
 " Maintainer:   Yukihiro Nakadaira <yukihiro.nakadaira@gmail.com>
 " License:      This file is placed in the public domain.
-" Last Change:  2007-08-16
+" Last Change:  2007-08-17
 "
 " Usage:
 "   :source mosalisp.vim
@@ -335,32 +335,43 @@ function s:lib.mk_list(lst)
   return self.reverse(p)
 endfunction
 
-function s:lib.mk_closure(code)
+function s:lib.mk_closure(args, code)
   return {
         \ "type": "closure",
         \ "val": "f_closure",
         \ "scope": copy(self.scope),
-        \ "code": copy(a:code)
+        \ "args": a:args,
+        \ "code": a:code
         \ }
 endfunction
 
-function s:lib.mk_macro(code)
+function s:lib.mk_macro(args, code)
   return {
         \ "type": "macro",
         \ "val": "f_closure",
         \ "scope": copy(self.scope),
-        \ "code": copy(a:code)
+        \ "args": a:args,
+        \ "code": a:code
         \ }
 endfunction
 
-function s:lib.mk_procedure(code)
-  let expr = self.to_vimobj(a:code.cdr.car)
+function s:lib.mk_procedure(args, expr)
   return {
         \ "type": "procedure",
         \ "val": "f_procedure",
         \ "scope": copy(self.scope),
-        \ "code": copy(a:code),
-        \ "expr": expr
+        \ "args": a:args,
+        \ "expr": a:expr
+        \ }
+endfunction
+
+function s:lib.mk_syntax(args, expr)
+  return {
+        \ "type": "syntax",
+        \ "val": "f_procedure",
+        \ "scope": copy(self.scope),
+        \ "args": a:args,
+        \ "expr": a:expr
         \ }
 endfunction
 
@@ -610,65 +621,6 @@ function s:lib.begin(code)
   endwhile
 endfunction
 
-function s:lib.s_lambda(this, code)
-  call add(self.stack[0], self.mk_closure(a:code))
-endfunction
-
-function s:lib.s_macro(this, code)
-  call add(self.stack[0], self.mk_macro(a:code))
-endfunction
-
-function s:lib.s_procedure(this, code)
-  " (%proc (args) expr)
-  call add(self.stack[0], self.mk_procedure(a:code))
-endfunction
-
-function s:lib.s_quote(this, code)
-  call add(self.stack[0], a:code.car)
-endfunction
-
-function s:lib.s_define(this, code)
-  let code = a:code
-  if code.car.type == "pair"
-    call insert(self.stack, ["op_define", code.car.car,
-          \ self.mk_closure(self.cons(code.car.cdr, code.cdr))])
-  else
-    call insert(self.stack, ["op_define", code.car])
-    call insert(self.stack, ["op_eval", code.cdr.car])
-  endif
-endfunction
-
-function s:lib.s_set(this, code)
-  call insert(self.stack, ["op_set", a:code.car])
-  call insert(self.stack, ["op_eval", a:code.cdr.car])
-endfunction
-
-function s:lib.s_if(this, code)
-  call insert(self.stack, ["op_if", a:code.cdr.car,
-        \ get(a:code.cdr.cdr, "car", self.Undefined)])
-  call insert(self.stack, ["op_eval", a:code.car])
-endfunction
-
-function s:lib.s_cond(this, code)
-  call insert(self.stack, ["op_cond", a:code, self.NIL, self.False])
-endfunction
-
-function s:lib.s_begin(this, code)
-  if a:code == self.NIL
-    call add(self.stack[0], self.Undefined)
-  else
-    call self.begin(a:code)
-  endif
-endfunction
-
-function s:lib.s_or(this, code)
-  call insert(self.stack, ["op_or", a:code, self.False])
-endfunction
-
-function s:lib.s_and(this, code)
-  call insert(self.stack, ["op_and", a:code, self.True])
-endfunction
-
 function s:lib.f_closure(this, args)
   let [this, args] = [a:this, a:args]
   if self.stack[0][0] != "op_return"
@@ -677,7 +629,7 @@ function s:lib.f_closure(this, args)
   let self.scope = [{}] + this.scope
 
   " expand arguments
-  let p = this.code.car
+  let p = this.args
   while p.type == "pair"
     call self.define(p.car.val, args.car)
     let [p, args] = [p.cdr, args.cdr]
@@ -686,13 +638,7 @@ function s:lib.f_closure(this, args)
     call self.define(p.val, args)
   endif
 
-  call self.begin(this.code.cdr)
-endfunction
-
-function s:lib.f_continue(this, args)
-  let self.stack = map(copy(a:this.stack), 'copy(v:val)')
-  let self.scope = copy(a:this.scope)
-  call add(self.stack[0], (a:args == self.NIL) ? self.NIL : a:args.car)
+  call self.begin(this.code)
 endfunction
 
 function s:lib.f_procedure(this, args)
@@ -700,7 +646,7 @@ function s:lib.f_procedure(this, args)
   let _expr = _this.expr
 
   " expand arguments
-  let _p = _this.code.car
+  let _p = _this.args
   let _a = _args
   while _p.type == "pair"
     execute printf("let %s = _a.car", _p.car.val)
@@ -715,6 +661,12 @@ function s:lib.f_procedure(this, args)
   if exists("_res")
     call add(self.stack[0], _res)
   endif
+endfunction
+
+function s:lib.f_continue(this, args)
+  let self.stack = map(copy(a:this.stack), 'copy(v:val)')
+  let self.scope = copy(a:this.scope)
+  call add(self.stack[0], (a:args == self.NIL) ? self.NIL : a:args.car)
 endfunction
 
 function s:lib.f_vim_function(this, args)
@@ -898,17 +850,18 @@ function s:lib.init()
   let self.scope = [self.top_env]
   let self.stack = []
 
-  call self.define("lambda", {"type":"syntax", "val":"s_lambda"})
-  call self.define("macro" , {"type":"syntax", "val":"s_macro"})
-  call self.define("quote" , {"type":"syntax", "val":"s_quote"})
-  call self.define("define", {"type":"syntax", "val":"s_define"})
-  call self.define("set!"  , {"type":"syntax", "val":"s_set"})
-  call self.define("if"    , {"type":"syntax", "val":"s_if"})
-  call self.define("cond"  , {"type":"syntax", "val":"s_cond"})
-  call self.define("begin" , {"type":"syntax", "val":"s_begin"})
-  call self.define("or"    , {"type":"syntax", "val":"s_or"})
-  call self.define("and"   , {"type":"syntax", "val":"s_and"})
-  call self.define("%proc" , {"type":"syntax", "val":"s_procedure"})
+  let args = self.cons(self.mk_symbol("var"), self.mk_symbol("expr"))
+  let expr = "if var.type == 'pair'\n"
+        \  . "  call insert(self.stack, ['op_define', var.car, self.mk_closure(var.cdr, expr)])\n"
+        \  . "else\n"
+        \  . "  call insert(self.stack, ['op_define', var])\n"
+        \  . "  call insert(self.stack, ['op_eval', expr.car])\n"
+        \  . "endif\n"
+  call self.define("define", self.mk_syntax(args, expr))
+
+  let args = self.mk_list([self.mk_symbol("args"), self.mk_symbol("expr")])
+  let expr = "let _res = self.mk_syntax(args, self.to_vimobj(expr))\n"
+  call self.define("%syntax", self.mk_syntax(args, expr))
 
   " load init script
   echo "loading init script ..."
@@ -925,6 +878,53 @@ finish
 mzscheme <<EOF
 ;; init script
 ;; "mzscheme <<EOF" is only used for highlighting.
+
+(define %proc
+  (%syntax (args expr)
+    "let _res = self.mk_procedure(args, self.to_vimobj(expr))"))
+
+(define lambda
+  (%syntax (args . code)
+    "let _res = self.mk_closure(args, code)"))
+
+(define macro
+  (%syntax (args . code)
+    "let _res = self.mk_macro(args, code)"))
+
+(define quote
+  (%syntax (obj)
+    "let _res = obj"))
+
+(define set!
+  (%syntax (name value)
+    "call insert(self.stack, ['op_set', name])
+     call insert(self.stack, ['op_eval', value])"))
+
+(define if
+  (%syntax (cond t . rest)
+    "let f = (rest == self.NIL) ? self.Undefined : rest.car
+     call insert(self.stack, ['op_if', t, f])
+     call insert(self.stack, ['op_eval', cond])"))
+
+(define cond
+  (%syntax code
+    "call insert(self.stack, ['op_cond', code, self.False, self.False])"))
+
+(define begin
+  (%syntax code
+    "if code == self.NIL
+       let _res = self.Undefined
+     else
+       call self.begin(code)
+     endif"))
+
+(define or
+  (%syntax code
+    "call insert(self.stack, ['op_or', code, self.False])"))
+
+(define and
+  (%syntax code
+    "call insert(self.stack, ['op_and', code, self.True])"))
 
 (define eval
   (%proc (lst)
