@@ -387,23 +387,41 @@ function s:lib.reverse(cell)
   return p
 endfunction
 
-function s:lib.copylist(lst, noref)
-  if a:lst.type != 'pair'
-    return [a:lst, {}]
+function s:lib.copylist(obj, noref, nest, newobj)
+  if a:obj.type != 'pair'
+    return [a:obj, {}]
+  elseif self.obj_index(a:nest, a:obj) != -1
+    let n = self.obj_index(a:nest, a:obj)
+    return [a:newobj[n], {}]
   endif
-  let lst = copy(a:lst)
-  let r = lst
-  if a:noref && r.car.type == 'pair'
-    let r.car = self.copylist(r.car)[0]
-  endif
-  while r.cdr.type == 'pair'
-    let r.cdr = copy(r.cdr)
-    let r = r.cdr
-    if a:noref && r.car.type == 'pair'
-      let r.car = self.copylist(r.car)[0]
-    endif
+  let res = copy(a:obj)
+  call add(a:nest, a:obj)
+  call add(a:newobj, res)
+  let p = res
+  while p.cdr.type == "pair" && self.obj_index(a:nest, p.cdr) == -1
+    call add(a:nest, p.cdr)
+    let p.cdr = copy(p.cdr)
+    call add(a:newobj, p.cdr)
+    let p = p.cdr
   endwhile
-  return [lst, r]
+  if p.cdr.type == "pair"   " means self.obj_index(a:nest, p.cdr) != -1
+    let n = self.obj_index(a:nest, p.cdr)
+    let p.cdr = a:newobj[n]
+  endif
+  let lastcell = p
+  if a:noref
+    let p = res
+    while p isnot lastcell
+      if p.car.type == "pair"
+        let p.car = self.copylist(p.car, a:noref, a:nest, a:newobj)[0]
+      endif
+      let p = p.cdr
+    endwhile
+    if p.cdr.type == "pair"
+      let p.cdr = self.copylist(p.cdr, a:noref, a:nest, a:newobj)[0]
+    endif
+  endif
+  return [res, lastcell]
 endfunction
 
 function s:lib.op_read(op)
@@ -754,21 +772,23 @@ function s:lib.to_str_pair(obj, nest)
     let n = self.obj_index(a:nest, a:obj)
     return printf("#%d(...)", n)
   endif
-  let res = []
-  call add(a:nest, a:obj)
   let p = a:obj
-  while p.type == "pair"
+  while p.type == "pair" && self.obj_index(a:nest, p) == -1
+    call add(a:nest, p)
+    let p = p.cdr
+  endwhile
+  let tail = p
+  let res = []
+  let p = a:obj
+  while p isnot tail
     if p.car.type == "pair"
       call add(res, self.to_str_pair(p.car, a:nest))
     else
       call add(res, self.to_str(p.car))
     endif
     let p = p.cdr
-    if self.obj_index(a:nest, p) != -1
-      break
-    endif
   endwhile
-  if p != self.NIL
+  if p != self.NIL    " improper list
     call add(res, ".")
     if p.type == "pair"
       call add(res, self.to_str_pair(p, a:nest))
@@ -780,7 +800,11 @@ function s:lib.to_str_pair(obj, nest)
 endfunction
 
 function s:lib.to_vimobj_pair(obj, nest, vimobj)
-  " TODO: How to tell whether object is pair or list?
+  " Improper list is converted to proper list because Vim does not
+  " support it.
+  " Vim does not support List like this
+  " (define x (list 1 2 3 4 5))
+  " (set-car! x (cdr x))
   if self.obj_index(a:nest, a:obj) != -1
     let n = self.obj_index(a:nest, a:obj)
     return a:vimobj[n]
@@ -789,18 +813,22 @@ function s:lib.to_vimobj_pair(obj, nest, vimobj)
   call add(a:nest, a:obj)
   call add(a:vimobj, res)
   let p = a:obj
-  while p.type == "pair"
+  while p.cdr.type == "pair" && self.obj_index(a:nest, p.cdr) == -1
+    call add(a:nest, p.cdr)
+    call add(a:vimobj, [])  " can't link non-top cons cell
+    let p = p.cdr
+  endwhile
+  let tail = p.cdr
+  let p = a:obj
+  while p isnot tail
     if p.car.type == "pair"
       call add(res, self.to_vimobj_pair(p.car, a:nest, a:vimobj))
     else
       call add(res, self.to_vimobj(p.car))
     endif
     let p = p.cdr
-    if self.obj_index(a:nest, p) != -1
-      break
-    endif
   endwhile
-  if p != self.NIL
+  if p != self.NIL    " improper list
     if p.type == "pair"
       call add(res, self.to_vimobj_pair(p, a:nest, a:vimobj))
     else
@@ -1212,9 +1240,9 @@ mzscheme <<EOF
     "if rest == self.NIL
        let _res = arg1
      else
-       let [_res, r] = self.copylist(arg1, 0)
+       let [_res, r] = self.copylist(arg1, 0, [], [])
        while rest.cdr != self.NIL
-         let [_, r] = self.copylist(rest.car, 0)
+         let [_, r] = self.copylist(rest.car, 0, [], [])
          let rest = rest.cdr
        endwhile
        let r.cdr = rest.car
