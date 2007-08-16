@@ -533,18 +533,18 @@ function s:lib.op_return(op)
 endfunction
 
 function s:lib.op_define(op)
-  call self.define(a:op[1].val, a:op[2])
+  call self.define(a:op[1], a:op[2])
   call add(self.stack[0], self.Undefined)
 endfunction
 
 function s:lib.op_set(op)
   let [name, value] = a:op[1:]
-  let [env, val] = self.findscope(self.scope, name.val)
+  let [env, val] = self.findscope(self.scope, name)
   if env != {}
-    let env[name.val] = value
+    let env[name] = value
     call add(self.stack[0], self.Undefined)
   else
-    call self.error(printf("Unbounded Variable: %s", name.val))
+    call self.error(printf("Unbounded Variable: %s", name))
   endif
 endfunction
 
@@ -852,9 +852,9 @@ function s:lib.init()
 
   let args = self.cons(self.mk_symbol("var"), self.mk_symbol("expr"))
   let expr = "if var.type == 'pair'\n"
-        \  . "  call insert(self.stack, ['op_define', var.car, self.mk_closure(var.cdr, expr)])\n"
+        \  . "  call insert(self.stack, ['op_define', self.to_vimobj(var.car), self.mk_closure(var.cdr, expr)])\n"
         \  . "else\n"
-        \  . "  call insert(self.stack, ['op_define', var])\n"
+        \  . "  call insert(self.stack, ['op_define', self.to_vimobj(var)])\n"
         \  . "  call insert(self.stack, ['op_eval', expr.car])\n"
         \  . "endif\n"
   call self.define("define", self.mk_syntax(args, expr))
@@ -897,7 +897,7 @@ mzscheme <<EOF
 
 (define set!
   (%syntax (name value)
-    "call insert(self.stack, ['op_set', name])
+    "call insert(self.stack, ['op_set', self.to_vimobj(name)])
      call insert(self.stack, ['op_eval', value])"))
 
 (define if
