@@ -387,19 +387,23 @@ function s:lib.reverse(cell)
   return p
 endfunction
 
-function s:lib.clonepair(lst)
+function s:lib.copylist(lst, noref)
   if a:lst.type != 'pair'
-    return a:lst
+    return [a:lst, {}]
   endif
   let lst = copy(a:lst)
   let r = lst
-  let r.car = self.clonepair(r.car)
+  if a:noref && r.car.type == 'pair'
+    let r.car = self.copylist(r.car)[0]
+  endif
   while r.cdr.type == 'pair'
     let r.cdr = copy(r.cdr)
     let r = r.cdr
-    let r.car = self.clonepair(r.car)
+    if a:noref && r.car.type == 'pair'
+      let r.car = self.copylist(r.car)[0]
+    endif
   endwhile
-  return lst
+  return [lst, r]
 endfunction
 
 function s:lib.op_read(op)
@@ -1205,20 +1209,12 @@ mzscheme <<EOF
 
 (define append
   (%proc (arg1 . rest)
-    "let _res = copy(arg1)
-     let r = _res
-     while r.cdr != self.NIL
-       let r.cdr = copy(r.cdr)
-       let r = r.cdr
-     endwhile
-     if rest != self.NIL
+    "if rest == self.NIL
+       let _res = arg1
+     else
+       let [_res, r] = self.copylist(arg1, 0)
        while rest.cdr != self.NIL
-         let r.cdr = copy(rest.car)
-         let r = r.cdr
-         while r.cdr != self.NIL
-           let r.cdr = copy(r.cdr)
-           let r = r.cdr
-         endwhile
+         let [_, r] = self.copylist(rest.car, 0)
          let rest = rest.cdr
        endwhile
        let r.cdr = rest.car
