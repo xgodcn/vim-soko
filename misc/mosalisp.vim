@@ -984,14 +984,19 @@ mzscheme <<EOF
     "let _res = args"))
 
 (define (values . args)
-  (cond ((null? args) (undefined))
-        ((null? (cdr args)) (car args))
-        (else (%set-attr args "is-values" #t) args)))
+  (if (and (pair? args) (null? (cdr args)))
+    (car args)
+    (begin
+      ;; (or (null? args) (> 1 (length args)))
+      ;; NIL is locked and can't be %set-attr.  use new cons cell;
+      (set! args (cons '() args))
+      (%set-attr args "is-values" #t)
+      args)))
 
 (define (call-with-values producer consumer)
   (define res (producer))
   (if (%get-attr res "is-values" #f)
-    (apply consumer res)
+    (apply consumer (cdr res))
     (consumer res)))
 
 ;;;;; === dynamic-wind ===
@@ -1594,6 +1599,8 @@ mzscheme <<EOF
 
 (define (test6)
   ;; values
+  (call-with-values (lambda () (values))
+                    (lambda () (display "null values\n")))
   (display (call-with-values (lambda () (values 4 5))
                              (lambda (a b) b))) ;; => 5
   (newline)
