@@ -979,14 +979,15 @@ mzscheme <<EOF
   (%proc (msg . args)
     "call insert(self.stack, ['op_error', self.cons(msg, args)])"))
 
+(define %values-id "values-id")
+
 (define (values . args)
-  (%set-attr args "is-values" #t)
-  args)
+  (cons %values-id args))
 
 (define (call-with-values producer consumer)
   (define res (producer))
-  (if (%get-attr res "is-values" #f)
-    (apply consumer res)
+  (if (and (pair? res) (is (car res) %values-id))
+    (apply consumer (cdr res))
     (consumer res)))
 
 (define list
