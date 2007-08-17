@@ -559,7 +559,17 @@ endfunction
 function s:lib.op_cond(op)
   let [code, expr, cond] = a:op[1:]
   if cond != self.False
-    call self.begin(expr)
+    if expr == self.NIL
+      " (test)
+      call add(self.stack[0], cond)
+    elseif expr.car.type == 'symbol' && expr.car.val == '=>'
+      " (test => proc)
+      let proc = expr.cdr.car
+      call insert(self.stack, ['op_eval', self.cons(proc, self.cons(cond, self.NIL))])
+    else
+      " (test expr ...)
+      call self.begin(expr)
+    endif
   else
     if code == self.NIL
       call add(self.stack[0], self.Undefined)
