@@ -1035,6 +1035,39 @@ mzscheme <<EOF
         (before)))))
 ;;;;; === end ===
 
+;;;;; === exception srfi-34 ===
+;; http://srfi.schemers.org/srfi-34/srfi-34.html
+
+(define *current-exception-handlers*
+  (list (lambda (condition)
+          (error "unhandled exception" condition))))
+
+(define (current-exception-handler) (car *current-exception-handlers*))
+
+(define (with-exception-handler handler thunk)
+  (with-exception-handlers (cons handler *current-exception-handlers*)
+                           thunk))
+
+(define (with-exception-handlers new-handlers thunk)
+  (let ((previous-handlers *current-exception-handlers*))
+    (dynamic-wind
+      (lambda ()
+        (set! *current-exception-handlers* new-handlers))
+      thunk
+      (lambda ()
+        (set! *current-exception-handlers* previous-handlers)))))
+
+(define (raise obj)
+  (let ((handlers *current-exception-handlers*))
+    (with-exception-handlers (cdr handlers)
+      (lambda ()
+        ((car handlers) obj)
+        (error "handler returned"
+               (car handlers)
+               obj)))))
+
+;;;;; === end ===
+
 (define %echon-port
   (%proc (obj)
     "echon (obj.type == 'string') ? obj.val : self.to_str(obj)
@@ -1049,7 +1082,7 @@ mzscheme <<EOF
 (define display
   (%proc (obj . rest)
     "let port = (rest == self.NIL) ? self.findscope(self.scope, '%current-output-port')[1] : rest.car
-     call insert(self.stack, ['op_eval', self.cons(port, self.cons(obj, self.NIL))])"))
+     call insert(self.stack, ['op_apply', port, self.cons(obj, self.NIL)])"))
 
 (define (newline . rest)
   (apply display "\n" rest))
@@ -1075,7 +1108,9 @@ mzscheme <<EOF
   ;; (format #f fmt . args) => (%format fmt args)
   ;; (format fmt . args)    => (%format fmt args)
   (if (string? port)
-    (set! args (cons #f args)))
+    (begin
+      (set! args (cons port args))
+      (set! port #f)))
   (cond ((output-port? port) (port (%format (car args) (cdr args))))
         (port ((current-output-port) (%format (car args) (cdr args))))
         (else (%format (car args) (cdr args)))))
@@ -1585,6 +1620,19 @@ mzscheme <<EOF
           (call/cc (lambda (c) (set! cont c) #t)))
         (lambda () (display "3: after\n")))
       (cont #f))
+  )
+
+(define (test8)
+  (display
+    (call-with-current-continuation
+      (lambda (k)
+        (with-exception-handler (lambda (x)
+                                (display "condition: ")
+                                (display x)
+                                (newline)
+                                (k 'exception))
+        (lambda ()
+          (+ 1 (raise 'an-error)))))))
   )
 
 (define (fact n)
