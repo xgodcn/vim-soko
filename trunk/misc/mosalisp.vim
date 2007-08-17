@@ -621,41 +621,55 @@ function s:lib.begin(code)
 endfunction
 
 function s:lib.f_closure(this, args)
-  let [this, args] = [a:this, a:args]
   if self.stack[0][0] != "op_return"
     call insert(self.stack, ["op_return", self.scope])
   endif
-  let self.scope = self.cons(self.mk_hash({}), this.scope)
+  let self.scope = self.cons(self.mk_hash({}), a:this.scope)
 
   " expand arguments
-  let p = this.args
+  let p = a:this.args
+  let a = a:args
   while p.type == "pair"
-    call self.define(p.car.val, args.car)
-    let [p, args] = [p.cdr, args.cdr]
+    if a == self.NIL
+      call self.error("Too few arguments")
+      return
+    endif
+    call self.define(p.car.val, a.car)
+    let [p, a] = [p.cdr, a.cdr]
   endwhile
   if p != self.NIL
-    call self.define(p.val, args)
+    call self.define(p.val, a)
+  elseif a != self.NIL
+    call self.error("Too many arguments")
+    return
   endif
 
-  call self.begin(this.code)
+  call self.begin(a:this.code)
 endfunction
 
 function s:lib.f_procedure(this, args)
+  " expand arguments
+  let p = a:this.args
+  let a = a:args
+  while p.type == "pair"
+    if a == self.NIL
+      call self.error("Too few arguments")
+      return
+    endif
+    execute printf("let %s = a.car", p.car.val)
+    let p = p.cdr
+    let a = a.cdr
+  endwhile
+  if p != self.NIL
+    execute printf("let %s = a", p.val)
+  elseif a != self.NIL
+    call self.error("Too many arguments")
+    return
+  endif
+  unlet p a
+
   let [_this, _args] = [a:this, a:args]
   let _expr = _this.expr
-
-  " expand arguments
-  let _p = _this.args
-  let _a = _args
-  while _p.type == "pair"
-    execute printf("let %s = _a.car", _p.car.val)
-    let _p = _p.cdr
-    let _a = _a.cdr
-  endwhile
-  if _p != self.NIL
-    execute printf("let %s = _a", _p.val)
-  endif
-
   execute _expr
   if exists("_res")
     call add(self.stack[0], _res)
