@@ -18,7 +18,7 @@
 "   "file.txt" [New File]
 "   > (let loop ((i 0))
 "   >> (when (< i 3)
-"   >>> (printf "%d\n" i)
+"   >>> (format #t "%d\n" i)
 "   >>> (loop (+ i 1))))
 "   0
 "   1
@@ -883,6 +883,20 @@ mzscheme <<EOF
   (%syntax (args expr)
     "let _res = self.mk_procedure(args, self.to_vimobj(expr))"))
 
+(define %set-attr
+  (%proc (obj name value)
+    "let obj[self.to_vimobj(name)] = value
+     let _res = self.Undefined"))
+
+(define %get-attr
+  (%proc (obj name . default)
+    "let default = (default == self.NIL) ? self.Undefined : default.car
+     let _res = get(obj, name, default)"))
+
+(define %get-type
+  (%proc (obj)
+    "let _res = self.mk_string(obj.type)"))
+
 (define lambda
   (%syntax (args . code)
     "let _res = self.mk_closure(args, code)"))
@@ -956,16 +970,31 @@ mzscheme <<EOF
   (%proc (msg . args)
     "call insert(self.stack, ['op_error', self.cons(msg, args)])"))
 
-(define display
+(define list
+  (%proc args
+    "let _res = args"))
+
+(define %echon-port
   (%proc (obj)
     "echon (obj.type == 'string') ? obj.val : self.to_str(obj)
      let _res = self.Undefined"))
+(%set-attr %echon-port "is-output-port" #t)
 
-(define (newline)
-  (display "\n"))
+(define %current-output-port %echon-port)
 
-(define printf
-  (%proc (fmt . args)
+(define (current-output-port)
+  %current-output-port)
+
+(define display
+  (%proc (obj . rest)
+    "let port = (rest == self.NIL) ? self.findscope(self.scope, '%current-output-port')[1] : rest.car
+     call insert(self.stack, ['op_eval', self.cons(port, self.cons(obj, self.NIL))])"))
+
+(define (newline . rest)
+  (apply display "\n" rest))
+
+(define %format
+  (%proc (fmt args)
     "let lst = [self.to_vimobj(fmt)]
      let p = args
      while p.type == 'pair'
@@ -976,27 +1005,19 @@ mzscheme <<EOF
        endif
        let p = p.cdr
      endwhile
-     echon (len(args) == 1) ? args[0] : call('printf', lst)
-     let _res = self.Undefined"))
-
-(define format
-  (%proc (fmt . args)
-    "let lst = [self.to_vimobj(fmt)]
-     let p = args
-     while p.type == 'pair'
-       if p.car.type == 'number' || p.car.type == 'string'
-         call add(lst, self.to_vimobj(p.car))
-       else
-         call add(lst, self.to_str(p.car))
-       endif
-       let p = p.cdr
-     endwhile
-     let str = (len(args) == 1) ? args[0] : call('printf', lst)
+     let str = (len(lst) == 1) ? lst[0] : call('printf', lst)
      let _res = self.to_lispobj(str)"))
 
-(define %type
-  (%proc (x)
-    "let _res = self.mk_string(x.type)"))
+(define (format port . args)
+  ;; (format port fmt . args)
+  ;; (format #t fmt . args) => (format (current-output-port) fmt . args)
+  ;; (format #f fmt . args) => (%format fmt args)
+  ;; (format fmt . args)    => (%format fmt args)
+  (if (string? port)
+    (set! args (cons #f args)))
+  (cond ((output-port? port) (port (%format (car args) (cdr args))))
+        (port ((current-output-port) (%format (car args) (cdr args))))
+        (else (%format (car args) (cdr args)))))
 
 (define :call
   (%proc (func . args)
@@ -1162,17 +1183,17 @@ mzscheme <<EOF
 (define /   (%make-sum "/" 1))
 (define %   (%make-sum "%" 1))
 
-(define (procedure? x) (=~ (%type x) "procedure\\|closure"))
-(define (syntax? x)    (= (%type x) "syntax"))
-(define (macro? x)     (= (%type x) "macro"))
-(define (null? x)      (= (%type x) "NIL"))
-(define (pair? x)      (= (%type x) "pair"))
-(define (symbol? x)    (= (%type x) "symbol"))
-(define (boolean? x)   (= (%type x) "boolean"))
-(define (number? x)    (= (%type x) "number"))
-(define (string? x)    (= (%type x) "string"))
-(define (hash? x)      (= (%type x) "hash"))
-(define (undefined? x) (= (%type x) "undefined"))
+(define (procedure? x) (=~ (%get-type x) "procedure\\|closure"))
+(define (syntax? x)    (= (%get-type x) "syntax"))
+(define (macro? x)     (= (%get-type x) "macro"))
+(define (null? x)      (= (%get-type x) "NIL"))
+(define (pair? x)      (= (%get-type x) "pair"))
+(define (symbol? x)    (= (%get-type x) "symbol"))
+(define (boolean? x)   (= (%get-type x) "boolean"))
+(define (number? x)    (= (%get-type x) "number"))
+(define (string? x)    (= (%get-type x) "string"))
+(define (hash? x)      (= (%get-type x) "hash"))
+(define (undefined? x) (= (%get-type x) "undefined"))
 (define (list? x)      (if (pair? x) (list? (cdr x)) (null? x)))
 (define (zero? x)      (= x 0))
 (define (positive? x)  (> x 0))
@@ -1186,6 +1207,9 @@ mzscheme <<EOF
            (or (number? y) (string? y)))
       (= x y)
       (eq? x y)))
+
+(define (output-port? port)
+  (%get-attr port "is-output-port" #f))
 
 (define let
   (macro code
@@ -1297,8 +1321,6 @@ mzscheme <<EOF
 (define (cdddr x) (cdr (cdr (cdr x))))
 
 (define call/cc call-with-current-continuation)
-
-(define (list . x) x)
 
 (define (map proc arg1 . rest)
   (define (map1 proc lst res)
@@ -1435,19 +1457,19 @@ mzscheme <<EOF
 
 ;;;;; === test ===
 (define (test1)
-  (define (endless n) (printf "%d\n" n) (endless (+ n 1)))
+  (define (endless n) (format #t "%d\n" n) (endless (+ n 1)))
   (endless 0))
 
 (define (test2)
-  (define (x n) (printf "x: %d\n" n) (y (+ n 1)))
-  (define (y n) (printf "y: %d\n" n) (z (+ n 1)))
-  (define (z n) (printf "z: %d\n" n) (x (+ n 1)))
+  (define (x n) (format #t "x: %d\n" n) (y (+ n 1)))
+  (define (y n) (format #t "y: %d\n" n) (z (+ n 1)))
+  (define (z n) (format #t "z: %d\n" n) (x (+ n 1)))
   (x 0))
 
 (define (test3)
   (define cc #f)
   (define n (call/cc (lambda (k) (set! cc k) 0)))
-  (if (< n 10) (begin (printf "%d\n" n) (cc (+ n 1)))))
+  (if (< n 10) (begin (format #t "%d\n" n) (cc (+ n 1)))))
 
 (define (test4)
   ;; recursive list -> string
