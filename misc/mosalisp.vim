@@ -898,7 +898,7 @@ mzscheme <<EOF
 (define %get-attr
   (%proc (obj name . default)
     "let default = (default == self.NIL) ? self.Undefined : default.car
-     let _res = get(obj, name, default)"))
+     let _res = get(obj, self.to_vimobj(name), default)"))
 
 (define %get-type
   (%proc (obj)
@@ -962,6 +962,8 @@ mzscheme <<EOF
     "let cont = self.mk_continuation()
      call insert(self.stack, ['op_apply', proc, self.cons(cont, self.NIL)])"))
 
+(define call/cc call-with-current-continuation)
+
 (define load
   (%proc (filename)
     "let save = [self.inbuf, self.getchar, self.stack]
@@ -976,6 +978,16 @@ mzscheme <<EOF
 (define error
   (%proc (msg . args)
     "call insert(self.stack, ['op_error', self.cons(msg, args)])"))
+
+(define (values . args)
+  (%set-attr args "is-values" #t)
+  args)
+
+(define (call-with-values producer consumer)
+  (define res (producer))
+  (if (%get-attr res "is-values" #f)
+    (apply consumer res)
+    (consumer res)))
 
 (define list
   (%proc args
@@ -1137,23 +1149,26 @@ mzscheme <<EOF
      endif"))
 
 (define (%make-sum op value-for-unary)
-  (%proc (num . rest)
-    "unlet num rest
-     let op = self.to_vimobj(self.findscope(_this.scope, 'op')[1])
+  (%proc args
+    "let op = self.to_vimobj(self.findscope(_this.scope, 'op')[1])
      let unary = self.to_vimobj(self.findscope(_this.scope, 'value-for-unary')[1])
-     let [num; rest] = self.to_vimobj(_args)
-     if rest == []
-       let sum = unary
-     else
-       let sum = num
-       let num = remove(rest, 0)
-     endif
      let expr = 'sum ' . op . ' num'
-     let sum = eval(expr)
-     for num in rest
+     if args == self.NIL
+       let _res = self.to_lispobj(unary)
+     else
+       let [num; rest] = self.to_vimobj(args)
+       if rest == []
+         let sum = unary
+       else
+         let sum = num
+         let num = remove(rest, 0)
+       endif
        let sum = eval(expr)
-     endfor
-     let _res = self.to_lispobj(sum)"))
+       for num in rest
+         let sum = eval(expr)
+       endfor
+       let _res = self.to_lispobj(sum)
+     endif"))
 
 (define =   (%make-cmp "=="))
 (define ==  (%make-cmp "=="))
@@ -1327,8 +1342,6 @@ mzscheme <<EOF
 (define (cddar x) (cdr (cdr (car x))))
 (define (cdddr x) (cdr (cdr (cdr x))))
 
-(define call/cc call-with-current-continuation)
-
 (define (map proc arg1 . rest)
   (define (map1 proc lst res)
     (if (null? lst)
@@ -1499,6 +1512,15 @@ mzscheme <<EOF
       (display c)
       (:execute "echohl None"))
     (:call "split" "mosalisp!" "\\zs")))
+
+(define (test6)
+  ;; values
+  (display (call-with-values (lambda () (values 4 5))
+                             (lambda (a b) b))) ;; => 5
+  (newline)
+  (display (call-with-values * -)) ;; => -1
+  (newline)
+  )
 
 (define (fact n)
   (if (<= n 1)
