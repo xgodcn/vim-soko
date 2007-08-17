@@ -42,7 +42,7 @@ function s:lib.repl()
   let self.inbuf = []
   let self.read_nest = 1
   let self.getchar = self.getchar_input
-  let self.scope = [self.top_env]
+  let self.scope = self.cons(self.top_env, self.NIL)
   let self.stack = [["op_loop", 1, self.NIL]]
   while self.stack[0][0] != "op_exit"
     let op = remove(self.stack, 0)
@@ -62,7 +62,7 @@ endfunction
 function s:lib.load_str(str, ...)
   let self.inbuf = split(a:str, '\zs')
   let self.getchar = self.getchar_str
-  let self.scope = [self.top_env]
+  let self.scope = self.cons(self.top_env, self.NIL)
   let self.stack = [["op_loop", 0, self.NIL]]
   while self.stack[0][0] != "op_exit"
     let op = remove(self.stack, 0)
@@ -85,12 +85,15 @@ function s:lib.load(fname, ...)
 endfunction
 
 function s:lib.dump_env()
-  for env in self.scope
-    for name in sort(keys(env))
-      let item = env[name]
+  let p = self.scope
+  while p.type == "pair"
+    let hash = p.car.val
+    for name in sort(keys(hash))
+      let item = hash[name]
       echo printf("%s [%s]", name, item.type)
     endfor
-  endfor
+    let p = p.cdr
+  endwhile
 endfunction
 
 function s:lib.get_funcname(number)
@@ -339,7 +342,7 @@ function s:lib.mk_closure(args, code)
   return {
         \ "type": "closure",
         \ "val": "f_closure",
-        \ "scope": copy(self.scope),
+        \ "scope": self.scope,
         \ "args": a:args,
         \ "code": a:code
         \ }
@@ -349,7 +352,7 @@ function s:lib.mk_macro(args, code)
   return {
         \ "type": "macro",
         \ "val": "f_closure",
-        \ "scope": copy(self.scope),
+        \ "scope": self.scope,
         \ "args": a:args,
         \ "code": a:code
         \ }
@@ -359,7 +362,7 @@ function s:lib.mk_procedure(args, expr)
   return {
         \ "type": "procedure",
         \ "val": "f_procedure",
-        \ "scope": copy(self.scope),
+        \ "scope": self.scope,
         \ "args": a:args,
         \ "expr": a:expr
         \ }
@@ -369,7 +372,7 @@ function s:lib.mk_syntax(args, expr)
   return {
         \ "type": "syntax",
         \ "val": "f_procedure",
-        \ "scope": copy(self.scope),
+        \ "scope": self.scope,
         \ "args": a:args,
         \ "expr": a:expr
         \ }
@@ -379,7 +382,7 @@ function s:lib.mk_continuation()
   return {
         \ "type": "continuation",
         \ "val": "f_continue",
-        \ "scope": copy(self.scope),
+        \ "scope": self.scope,
         \ "stack": map(copy(self.stack), 'copy(v:val)')
         \ }
 endfunction
@@ -599,15 +602,19 @@ function s:lib.error(msg)
 endfunction
 
 function s:lib.define(name, obj)
-  let self.scope[0][a:name] = a:obj
+  let hash = self.scope.car.val
+  let hash[a:name] = a:obj
 endfunction
 
 function s:lib.findscope(scope, name)
-  for env in a:scope
-    if has_key(env, a:name)
-      return [env, env[a:name]]
+  let p = a:scope
+  while p.type == "pair"
+    let hash = p.car.val
+    if has_key(hash, a:name)
+      return [hash, hash[a:name]]
     endif
-  endfor
+    let p = p.cdr
+  endwhile
   return [{}, {}]
 endfunction
 
@@ -626,7 +633,7 @@ function s:lib.f_closure(this, args)
   if self.stack[0][0] != "op_return"
     call insert(self.stack, ["op_return", self.scope])
   endif
-  let self.scope = [{}] + this.scope
+  let self.scope = self.cons(self.mk_hash({}), this.scope)
 
   " expand arguments
   let p = this.args
@@ -665,7 +672,7 @@ endfunction
 
 function s:lib.f_continue(this, args)
   let self.stack = map(copy(a:this.stack), 'copy(v:val)')
-  let self.scope = copy(a:this.scope)
+  let self.scope = a:this.scope
   call add(self.stack[0], (a:args == self.NIL) ? self.NIL : a:args.car)
 endfunction
 
@@ -834,7 +841,7 @@ function s:lib.init()
   let self.inbuf = []
   let self.read_nest = 1
   let self.symbol_table = {}
-  let self.top_env = {}
+  let self.top_env = self.mk_hash({})
 
   " constant
   let self.Undefined = {"type":"undefined", "val":["#<undefined>"]}
@@ -847,7 +854,7 @@ function s:lib.init()
   lockvar self.True
 
   " register
-  let self.scope = [self.top_env]
+  let self.scope = self.cons(self.top_env, self.NIL)
   let self.stack = []
 
   let args = self.cons(self.mk_symbol("var"), self.mk_symbol("expr"))
