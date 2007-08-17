@@ -979,20 +979,61 @@ mzscheme <<EOF
   (%proc (msg . args)
     "call insert(self.stack, ['op_error', self.cons(msg, args)])"))
 
-(define %values-id "values-id")
-
-(define (values . args)
-  (cons %values-id args))
-
-(define (call-with-values producer consumer)
-  (define res (producer))
-  (if (and (pair? res) (is (car res) %values-id))
-    (apply consumer (cdr res))
-    (consumer res)))
-
 (define list
   (%proc args
     "let _res = args"))
+
+(define (values . args)
+  (cond ((null? args) (undefined))
+        ((null? (cdr args)) (car args))
+        (else (%set-attr args "is-values" #t) args)))
+
+(define (call-with-values producer consumer)
+  (define res (producer))
+  (if (%get-attr res "is-values" #f)
+    (apply consumer res)
+    (consumer res)))
+
+;;;;; === dynamic-wind ===
+;; http://www.cs.hmc.edu/~fleck/envision/scheme48/meeting/node7.html
+
+(define *here* (list #f))
+
+(define original-cwcc call-with-current-continuation)
+
+(define (call-with-current-continuation proc)
+  (let ((here *here*))
+    (original-cwcc
+      (lambda (cont)
+        (proc
+          (lambda results
+            (reroot! here)
+            (apply cont results)))))))
+
+(define call/cc call-with-current-continuation)
+
+(define (dynamic-wind before during after)
+  (let ((here *here*))
+    (reroot! (cons (cons before after) here))
+    (call-with-values
+      during
+      (lambda results
+        (reroot! here)
+        (apply values results)))))
+
+(define (reroot! there)
+  (if (not (eq? *here* there))
+    (begin
+      (reroot! (cdr there))
+      (let ((before (caar there))
+            (after (cdar there)))
+        (set-car! *here* (cons after before))
+        (set-cdr! *here* there)
+        (set-car! there #f)
+        (set-cdr! there '())
+        (set! *here* there)
+        (before)))))
+;;;;; === end ===
 
 (define %echon-port
   (%proc (obj)
@@ -1109,7 +1150,9 @@ mzscheme <<EOF
 (define (not value)
   (if value #f #t))
 
-(define (undefined) (if #f #f)) ;; return #<undefined>
+(define undefined
+  (%proc ()
+    "let _res = self.Undefined"))
 
 (define (%make-cmp op)
   (%proc (lhs rhs . rest)
@@ -1521,6 +1564,27 @@ mzscheme <<EOF
   (newline)
   (display (call-with-values * -)) ;; => -1
   (newline)
+  )
+
+(define (test7)
+  ;; dynamic-wind
+  (define cont #f)
+  (dynamic-wind
+    (lambda () (display "1: before\n"))
+    (lambda () (display "1: thunk\n"))
+    (lambda () (display "1: after\n")))
+  (if (call/cc (lambda (c) (set! cont c) #t))
+    (dynamic-wind
+      (lambda () (display "2: before\n"))
+      (lambda () (display "2: thunk\n") (cont #f))
+      (lambda () (display "2: after\n"))))
+  (if (dynamic-wind
+        (lambda () (display "3: before\n"))
+        (lambda ()
+          (display "3: thunk\n")
+          (call/cc (lambda (c) (set! cont c) #t)))
+        (lambda () (display "3: after\n")))
+      (cont #f))
   )
 
 (define (fact n)
