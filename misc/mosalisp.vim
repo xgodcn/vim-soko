@@ -1,7 +1,7 @@
 " mosalisp.vim - lisp interpreter
 " Maintainer:   Yukihiro Nakadaira <yukihiro.nakadaira@gmail.com>
 " License:      This file is placed in the public domain.
-" Last Change:  2007-08-17
+" Last Change:  2007-08-18
 "
 " Usage:
 "   :source mosalisp.vim
@@ -338,9 +338,10 @@ function s:lib.mk_list(lst)
   return self.reverse(p)
 endfunction
 
-function s:lib.mk_closure(args, code)
+" lisp function
+function s:lib.mk_closure(type, args, code)
   return {
-        \ "type": "closure",
+        \ "type": a:type,
         \ "val": "f_closure",
         \ "scope": self.scope,
         \ "args": a:args,
@@ -348,29 +349,10 @@ function s:lib.mk_closure(args, code)
         \ }
 endfunction
 
-function s:lib.mk_macro(args, code)
+" embedded vim function
+function s:lib.mk_procedure(type, args, expr)
   return {
-        \ "type": "macro",
-        \ "val": "f_closure",
-        \ "scope": self.scope,
-        \ "args": a:args,
-        \ "code": a:code
-        \ }
-endfunction
-
-function s:lib.mk_procedure(args, expr)
-  return {
-        \ "type": "procedure",
-        \ "val": "f_procedure",
-        \ "scope": self.scope,
-        \ "args": a:args,
-        \ "expr": a:expr
-        \ }
-endfunction
-
-function s:lib.mk_syntax(args, expr)
-  return {
-        \ "type": "syntax",
+        \ "type": a:type,
         \ "val": "f_procedure",
         \ "scope": self.scope,
         \ "args": a:args,
@@ -869,16 +851,16 @@ function s:lib.init()
 
   let args = self.cons(self.mk_symbol("var"), self.mk_symbol("expr"))
   let expr = "if var.type == 'pair'\n"
-        \  . "  call insert(self.stack, ['op_define', self.to_vimobj(var.car), self.mk_closure(var.cdr, expr)])\n"
+        \  . "  call insert(self.stack, ['op_define', self.to_vimobj(var.car), self.mk_closure('closure', var.cdr, expr)])\n"
         \  . "else\n"
         \  . "  call insert(self.stack, ['op_define', self.to_vimobj(var)])\n"
         \  . "  call insert(self.stack, ['op_eval', expr.car])\n"
         \  . "endif\n"
-  call self.define("define", self.mk_syntax(args, expr))
+  call self.define("define", self.mk_procedure('syntax', args, expr))
 
   let args = self.mk_list([self.mk_symbol("args"), self.mk_symbol("expr")])
-  let expr = "let _res = self.mk_syntax(args, self.to_vimobj(expr))\n"
-  call self.define("%syntax", self.mk_syntax(args, expr))
+  let expr = "let _res = self.mk_procedure('syntax', args, self.to_vimobj(expr))\n"
+  call self.define("%vim-syntax", self.mk_procedure('syntax', args, expr))
 
   " load init script
   echo "loading init script ..."
@@ -896,53 +878,57 @@ mzscheme <<EOF
 ;; init script
 ;; "mzscheme <<EOF" is only used for highlighting.
 
-(define %proc
-  (%syntax (args expr)
-    "let _res = self.mk_procedure(args, self.to_vimobj(expr))"))
+(define %vim-proc
+  (%vim-syntax (args expr)
+    "let _res = self.mk_procedure('procedure', args, self.to_vimobj(expr))"))
 
 (define %set-attr
-  (%proc (obj name value)
+  (%vim-proc (obj name value)
     "let obj[self.to_vimobj(name)] = value
      let _res = self.Undefined"))
 
 (define %get-attr
-  (%proc (obj name . default)
+  (%vim-proc (obj name . default)
     "let default = (default == self.NIL) ? self.Undefined : default.car
      let _res = get(obj, self.to_vimobj(name), default)"))
 
 (define %get-type
-  (%proc (obj)
+  (%vim-proc (obj)
     "let _res = self.mk_string(obj.type)"))
 
 (define lambda
-  (%syntax (args . code)
-    "let _res = self.mk_closure(args, code)"))
+  (%vim-syntax (args . code)
+    "let _res = self.mk_closure('closure', args, code)"))
 
 (define macro
-  (%syntax (args . code)
-    "let _res = self.mk_macro(args, code)"))
+  (%vim-syntax (args . code)
+    "let _res = self.mk_closure('macro', args, code)"))
+
+(define %syntax
+  (%vim-syntax (args . code)
+    "let _res = self.mk_closure('syntax', args, code)"))
 
 (define quote
-  (%syntax (obj)
+  (%vim-syntax (obj)
     "let _res = obj"))
 
 (define set!
-  (%syntax (name value)
+  (%vim-syntax (name value)
     "call insert(self.stack, ['op_set', self.to_vimobj(name)])
      call insert(self.stack, ['op_eval', value])"))
 
 (define if
-  (%syntax (cond t . rest)
+  (%vim-syntax (cond t . rest)
     "let f = (rest == self.NIL) ? self.Undefined : rest.car
      call insert(self.stack, ['op_if', t, f])
      call insert(self.stack, ['op_eval', cond])"))
 
 (define cond
-  (%syntax code
+  (%vim-syntax code
     "call insert(self.stack, ['op_cond', code, self.False, self.False])"))
 
 (define begin
-  (%syntax code
+  (%vim-syntax code
     "if code == self.NIL
        let _res = self.Undefined
      else
@@ -950,47 +936,47 @@ mzscheme <<EOF
      endif"))
 
 (define or
-  (%syntax code
+  (%vim-syntax code
     "call insert(self.stack, ['op_or', code, self.False])"))
 
 (define and
-  (%syntax code
+  (%vim-syntax code
     "call insert(self.stack, ['op_and', code, self.True])"))
 
 (define eval
-  (%proc (lst)
+  (%vim-proc (lst)
     "call insert(self.stack, ['op_eval', lst])"))
 
 (define macroexpand-1
-  (%proc (lst)
+  (%vim-proc (lst)
     "let [symbol, code] = [lst.car, lst.cdr]
      let macro = self.findscope(self.scope, symbol.val)[1]
      call insert(self.stack, ['op_apply', macro, code])"))
 
 (define call-with-current-continuation
-  (%proc (proc)
+  (%vim-proc (proc)
     "let cont = self.mk_continuation()
      call insert(self.stack, ['op_apply', proc, self.cons(cont, self.NIL)])"))
 
 (define call/cc call-with-current-continuation)
 
 (define load
-  (%proc (filename)
+  (%vim-proc (filename)
     "let save = [self.inbuf, self.getchar, self.stack]
      let _res = self.load(self.to_vimobj(filename), 1)
      let [self.inbuf, self.getchar, self.stack] = save"))
 
 (define exit
-  (%proc args
+  (%vim-proc args
     "let exitcode = (args == self.NIL) ? self.NIL : args.car
      call insert(self.stack, ['op_exit', exitcode])"))
 
 (define error
-  (%proc (msg . args)
+  (%vim-proc (msg . args)
     "call insert(self.stack, ['op_error', self.cons(msg, args)])"))
 
 (define list
-  (%proc args
+  (%vim-proc args
     "let _res = args"))
 
 (define (values . args)
@@ -1084,7 +1070,7 @@ mzscheme <<EOF
 ;;;;; === end ===
 
 (define %echon-port
-  (%proc (obj)
+  (%vim-proc (obj)
     "echon (obj.type == 'string') ? obj.val : self.to_str(obj)
      let _res = self.Undefined"))
 (%set-attr %echon-port "is-output-port" #t)
@@ -1095,7 +1081,7 @@ mzscheme <<EOF
   %current-output-port)
 
 (define display
-  (%proc (obj . rest)
+  (%vim-proc (obj . rest)
     "let port = (rest == self.NIL) ? self.findscope(self.scope, '%current-output-port')[1] : rest.car
      call insert(self.stack, ['op_apply', port, self.cons(obj, self.NIL)])"))
 
@@ -1103,7 +1089,7 @@ mzscheme <<EOF
   (apply display "\n" rest))
 
 (define %format
-  (%proc (fmt args)
+  (%vim-proc (fmt args)
     "let lst = [self.to_vimobj(fmt)]
      let p = args
      while p.type == 'pair'
@@ -1131,33 +1117,33 @@ mzscheme <<EOF
         (else (%format (car args) (cdr args)))))
 
 (define :call
-  (%proc (func . args)
+  (%vim-proc (func . args)
     "unlet func args
      let [func; args] = self.to_vimobj(_args)
      let VimObj = call(func, args)
      let _res = self.to_lispobj(VimObj)"))
 
 (define :execute
-  (%proc (expr)
+  (%vim-proc (expr)
     "execute self.to_vimobj(expr)
      let _res = self.Undefined"))
 
 (define :let
-  (%proc (name value)
+  (%vim-proc (name value)
     "unlet name value
      let [name, VimObj] = self.to_vimobj(_args)
      execute printf('let %s = VimObj', name)
      let _res = self.Undefined"))
 
 (define make-hash-table
-  (%proc ()
+  (%vim-proc ()
     "let _res = self.mk_hash({})"))
 
 ;; Dictionary is not boxed automatically.
 ;; Box its value for each access for now.
 ;; type check is lazy.
 (define hash-table-ref
-  (%proc (hash key)
+  (%vim-proc (hash key)
     "unlet hash key
      let [hash, key] = self.to_vimobj(_args)
      let Value = hash[key]
@@ -1168,7 +1154,7 @@ mzscheme <<EOF
      endif"))
 
 (define hash-table-put!
-  (%proc (hash key value)
+  (%vim-proc (hash key value)
     "unlet hash key
      let hash = self.to_vimobj(_args.car)
      let key = self.to_vimobj(_args.cdr.car)
@@ -1176,24 +1162,24 @@ mzscheme <<EOF
      let _res = self.Undefined"))
 
 (define cons
-  (%proc (car cdr)
+  (%vim-proc (car cdr)
     "let _res = self.cons(car, cdr)"))
 
 (define car
-  (%proc (pair)
+  (%vim-proc (pair)
     "let _res = pair.car"))
 
 (define cdr
-  (%proc (pair)
+  (%vim-proc (pair)
     "let _res = pair.cdr"))
 
 (define set-car!
-  (%proc (pair value)
+  (%vim-proc (pair value)
     "let pair.car = value
      let _res = self.Undefined"))
 
 (define set-cdr!
-  (%proc (pair value)
+  (%vim-proc (pair value)
     "let pair.cdr = value
      let _res = self.Undefined"))
 
@@ -1201,11 +1187,11 @@ mzscheme <<EOF
   (if value #f #t))
 
 (define undefined
-  (%proc ()
+  (%vim-proc ()
     "let _res = self.Undefined"))
 
 (define (%make-cmp op)
-  (%proc (lhs rhs . rest)
+  (%vim-proc (lhs rhs . rest)
     "unlet lhs rhs rest
      let op = self.to_vimobj(self.findscope(_this.scope, 'op')[1])
      let [lhs, rhs; rest] = self.to_vimobj(_args)
@@ -1224,7 +1210,7 @@ mzscheme <<EOF
      endif"))
 
 (define (%make-cmp-ins op)
-  (%proc (lhs rhs . rest)
+  (%vim-proc (lhs rhs . rest)
     "let op = self.to_vimobj(self.findscope(_this.scope, 'op')[1])
      let expr = 'lhs ' . op . ' rhs'
      let _res = self.False
@@ -1243,7 +1229,7 @@ mzscheme <<EOF
      endif"))
 
 (define (%make-sum op value-for-unary)
-  (%proc args
+  (%vim-proc args
     "let op = self.to_vimobj(self.findscope(_this.scope, 'op')[1])
      let unary = self.to_vimobj(self.findscope(_this.scope, 'value-for-unary')[1])
      let expr = 'sum ' . op . ' num'
@@ -1371,7 +1357,7 @@ mzscheme <<EOF
             ,(cons (car code) (map cadr (cadr code))))))))
 
 (define apply
-  (%proc (proc arg1 . args)
+  (%vim-proc (proc arg1 . args)
     "if args == self.NIL
        let args = arg1
      else
@@ -1385,7 +1371,7 @@ mzscheme <<EOF
      call insert(self.stack, ['op_apply', proc, args])"))
 
 (define length
-  (%proc (lst)
+  (%vim-proc (lst)
     "let i = 0
      while lst.type == 'pair'
        let i += 1
@@ -1394,7 +1380,7 @@ mzscheme <<EOF
      let _res = self.to_lispobj(i)"))
 
 (define append
-  (%proc (arg1 . rest)
+  (%vim-proc (arg1 . rest)
     "if rest == self.NIL
        let _res = arg1
      else
@@ -1407,7 +1393,7 @@ mzscheme <<EOF
      endif"))
 
 (define reverse
-  (%proc (lst)
+  (%vim-proc (lst)
     "let _res = self.reverse(lst)"))
 
 (define when
