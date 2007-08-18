@@ -114,7 +114,7 @@ function s:lib.read()
   call self.skip_blank()
   let c = self.peekchar()
   if c == "eof"
-    return self.Undefined
+    return self.EOF
   elseif c == '('
     let self.read_nest += 1
     let res = self.read_list()
@@ -136,41 +136,40 @@ function s:lib.read()
 endfunction
 
 function s:lib.read_list()
-  let res = []
   call self.getchar()
   call self.skip_blank()
+  let res = self.cons(self.NIL, self.NIL)
+  let p = res
   while self.peekchar() != ')'
     if self.peekchar() == "eof"
-      throw "eof"
+      throw "read-error"
     elseif self.peekchar() == "."
+      if p is res
+        throw "read-error"
+      endif
       call self.getchar()
       call self.skip_blank()
-      call add(res, self.read())
+      let o = self.read()
       call self.skip_blank()
       call self.getchar()  " skip ')'
-      let lis = self.mk_list(res)
-      let p = lis
-      while 1
-        if p.cdr.cdr == self.NIL
-          let p.cdr = p.cdr.car
-          break
-        endif
-        let p = p.cdr
-      endwhile
-      return lis
+      let p.cdr = o
+      return res.cdr
+    else
+      let o = self.read()
+      call self.skip_blank()
+      let p.cdr = self.cons(o, self.NIL)
+      let p = p.cdr
     endif
-    call add(res, self.read())
-    call self.skip_blank()
   endwhile
   call self.getchar()
-  return self.mk_list(res)
+  return res.cdr
 endfunction
 
 function s:lib.read_string()
   let res = self.getchar()
   while self.peekchar() != '"'
     if self.peekchar() == "eof"
-      throw "eof"
+      throw "read-error"
     elseif self.peekchar() == '\'
       let res .= self.getchar() . self.getchar()
     else
@@ -440,7 +439,7 @@ endfunction
 
 function s:lib.op_print(op)
   let value = a:op[1]
-  if value.type != "undefined"
+  if value.type != "undefined" && value.type != "EOF"
     echo "=>" self.to_str(a:op[1])
   endif
   call add(self.stack[0], a:op[1])
@@ -671,6 +670,7 @@ endfunction
 
 function s:lib.to_str(obj)
   if a:obj.type == "undefined"       | return "#<undefined>"
+  elseif a:obj.type == "EOF"         | return "#<EOF>"
   elseif a:obj.type == "NIL"         | return "()"
   elseif a:obj.type == "boolean"     | return (a:obj.val ? "#t" : "#f")
   elseif a:obj.type == "number"      | return string(a:obj.val)
@@ -688,6 +688,7 @@ endfunction
 
 function s:lib.to_vimobj(obj)
   if a:obj.type == "undefined"       | return a:obj.val
+  elseif a:obj.type == "EOF"         | return a:obj.val
   elseif a:obj.type == "NIL"         | return a:obj.val
   elseif a:obj.type == "boolean"     | return a:obj.val
   elseif a:obj.type == "number"      | return a:obj.val
@@ -831,10 +832,12 @@ function s:lib.init()
 
   " constant
   let self.Undefined = {"type":"undefined", "val":["#<undefined>"]}
+  let self.EOF = {"type":"EOF", "val":["#<EOF>"]}
   let self.NIL = {"type":"NIL", "val":[]}
   let self.False = {"type":"boolean", "val":0}
   let self.True  = {"type":"boolean", "val":1}
   lockvar self.Undefined
+  lockvar self.EOF
   lockvar self.NIL
   lockvar self.False
   lockvar self.True
@@ -1235,6 +1238,10 @@ mzscheme <<EOF
   (%vim-proc ()
     "let _res = self.Undefined"))
 
+(define eof-object
+  (%vim-proc ()
+    "let _res = self.EOF"))
+
 (define (%make-cmp op)
   (%vim-proc (lhs rhs . rest)
     "unlet lhs rhs rest
@@ -1341,6 +1348,7 @@ mzscheme <<EOF
 (define (string? x)    (= (%get-type x) "string"))
 (define (hash? x)      (= (%get-type x) "hash"))
 (define (undefined? x) (= (%get-type x) "undefined"))
+(define (eof-object? x)(= (%get-type x) "EOF"))
 (define (list? x)      (if (pair? x) (list? (cdr x)) (null? x)))
 (define (zero? x)      (= x 0))
 (define (positive? x)  (> x 0))
