@@ -27,9 +27,6 @@
 "   See mosalisp.init() function and trailing script for more
 "   information.
 "
-"
-" TODO:
-"   - error handling mechanism
 
 let s:sfile = expand("<sfile>:p")
 
@@ -463,14 +460,6 @@ function s:lib.op_loop(op)
   call insert(self.stack, ["op_read"])
 endfunction
 
-function s:lib.op_error(op)
-  let args = a:op[1]
-  echohl Error
-  echo args.car.val
-  echohl None
-  call insert(self.stack, ["op_exit", self.NIL])
-endfunction
-
 function s:lib.op_call(op)
   let [orig, code, func] = a:op[1:]
   if func.type == "macro"
@@ -589,8 +578,10 @@ function s:lib.op_and(op)
 endfunction
 
 function s:lib.error(msg)
-  let args = self.mk_list([self.mk_string(a:msg)])
-  call insert(self.stack, ["op_error", args])
+  let code = []
+  call add(code, self.mk_symbol("error"))
+  call add(code, self.mk_string(a:msg))
+  call insert(self.stack, ["op_eval", self.mk_list(code)])
 endfunction
 
 function s:lib.define(name, obj)
@@ -985,9 +976,10 @@ mzscheme <<EOF
     "let exitcode = (args == self.NIL) ? self.NIL : args.car
      call insert(self.stack, ['op_exit', exitcode])"))
 
-(define error
-  (%vim-proc (msg . args)
-    "call insert(self.stack, ['op_error', self.cons(msg, args)])"))
+(define (error msg . args)
+  (define obj (cons msg args))
+  (%set-attr obj "is-error" #t)
+  (raise obj))
 
 (define list
   (%vim-proc args
@@ -1053,9 +1045,14 @@ mzscheme <<EOF
 ;;;;; === exception srfi-34 ===
 ;; http://srfi.schemers.org/srfi-34/srfi-34.html
 
+(define *default-exception-handler*
+  (lambda (condition)
+    (set! *current-exception-handlers* (list *default-exception-handler*))
+    (format (current-error-port) "unhandled exception: %s\n" condition)
+    (exit)))
+
 (define *current-exception-handlers*
-  (list (lambda (condition)
-          (error "unhandled exception" condition))))
+  (list *default-exception-handler*))
 
 (define (current-exception-handler) (car *current-exception-handlers*))
 
@@ -1081,6 +1078,32 @@ mzscheme <<EOF
                (car handlers)
                obj)))))
 
+;; (guard (var clause ...) e1 e2 ...)
+(define guard
+  (macro (catch . body)
+    (define var (car catch))
+    (define clause (cdr catch))
+    (define p (last-pair clause))
+    (if (not (eq? (car p) 'else))
+      (set-cdr! p (cons '(else (handler-k (lambda () (raise condition)))) '())))
+    `((call/cc
+        (lambda (guard-k)
+          (with-exception-handler
+            (lambda (condition)
+              ((call/cc
+                 (lambda (handler-k)
+                   (guard-k
+                     (lambda ()
+                       (let ((,var condition))
+                         (cond ,@clause))))))))
+            (lambda ()
+              (call-with-values
+                (lambda () ,@body)
+                (lambda args
+                  (guard-k (lambda ()
+                             (apply values args)))))))
+          )))))
+
 ;;;;; === end ===
 
 (define %echon-port
@@ -1089,10 +1112,18 @@ mzscheme <<EOF
      let _res = self.Undefined"))
 (%set-attr %echon-port "is-output-port" #t)
 
-(define %current-output-port %echon-port)
+(define %echon-error-port
+  (%vim-proc (obj)
+    "echohl Error
+     echon (obj.type == 'string') ? obj.val : self.to_str(obj)
+     echohl None
+     let _res = self.Undefined"))
+(%set-attr %echon-error-port "is-output-port" #t)
 
-(define (current-output-port)
-  %current-output-port)
+(define %current-output-port %echon-port)
+(define %current-error-port %echon-error-port)
+(define (current-output-port) %current-output-port)
+(define (current-error-port) %current-error-port)
 
 (define display
   (%vim-proc (obj . rest)
@@ -1640,17 +1671,21 @@ mzscheme <<EOF
   )
 
 (define (test8)
-  (display
-    (call-with-current-continuation
-      (lambda (k)
-        (with-exception-handler (lambda (x)
-                                (display "condition: ")
-                                (display x)
-                                (newline)
-                                (k 'exception))
-        (lambda ()
-          (+ 1 (raise 'an-error)))))))
-  )
+  (call-with-current-continuation
+    (lambda (k)
+      (with-exception-handler (lambda (x)
+                              (display "condition: ")
+                              (display x)
+                              (newline)
+                              (k "return-from-handler"))
+      (lambda ()
+        (+ 1 (raise 'an-error)))))))
+
+(define (test9)
+  (guard (e (else (format #t "catch! %s\n" e)))
+    (display "raise!\n")
+    (raise 'raised-error))
+  (raise 'test-unhandled-exception))
 
 (define (fact n)
   (if (<= n 1)
