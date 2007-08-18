@@ -511,17 +511,6 @@ function s:lib.op_define(op)
   call add(self.stack[0], self.Undefined)
 endfunction
 
-function s:lib.op_set(op)
-  let [name, value] = a:op[1:]
-  let [env, val] = self.findscope(self.scope, name)
-  if env != {}
-    let env[name] = value
-    call add(self.stack[0], self.Undefined)
-  else
-    call self.error(printf("Unbounded Variable: %s", name))
-  endif
-endfunction
-
 function s:lib.op_if(op)
   let [t, f, cond] = a:op[1:]
   call insert(self.stack, ["op_eval", (cond != self.False) ? t : f])
@@ -917,10 +906,21 @@ mzscheme <<EOF
   (%vim-syntax (obj)
     "let _res = obj"))
 
+(define %set!
+  (%vim-proc (name value)
+    "unlet name
+     let name = self.to_vimobj(_args.car)
+     let [env, val] = self.findscope(self.scope, name)
+     if env != {}
+       let env[name] = value
+       let _res = self.Undefined
+     else
+       call self.error(printf('Unbounded Variable: %s', name))
+     endif"))
+
 (define set!
-  (%vim-syntax (name value)
-    "call insert(self.stack, ['op_set', self.to_vimobj(name)])
-     call insert(self.stack, ['op_eval', value])"))
+  (macro (name value)
+    `(%set! (quote ,name) ,value)))
 
 (define if
   (%vim-syntax (cond t . rest)
@@ -975,11 +975,6 @@ mzscheme <<EOF
   (%vim-proc args
     "let exitcode = (args == self.NIL) ? self.NIL : args.car
      call insert(self.stack, ['op_exit', exitcode])"))
-
-(define (error msg . args)
-  (define obj (cons msg args))
-  (%set-attr obj "is-error" #t)
-  (raise obj))
 
 (define list
   (%vim-proc args
@@ -1077,6 +1072,11 @@ mzscheme <<EOF
         (error "handler returned"
                (car handlers)
                obj)))))
+
+(define (error msg . args)
+  (define obj (cons msg args))
+  (%set-attr obj "is-error" #t)
+  (raise obj))
 
 ;; (guard (var clause ...) e1 e2 ...)
 (define guard
