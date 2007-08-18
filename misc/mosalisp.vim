@@ -659,7 +659,7 @@ endfunction
 function s:lib.f_continue(this, args)
   let self.stack = map(copy(a:this.stack), 'copy(v:val)')
   let self.scope = a:this.scope
-  call add(self.stack[0], (a:args == self.NIL) ? self.NIL : a:args.car)
+  call add(self.stack[0], (a:args == self.NIL) ? self.Undefined : a:args.car)
 endfunction
 
 function s:lib.f_vim_function(this, args)
