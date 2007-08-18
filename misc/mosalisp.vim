@@ -1442,16 +1442,16 @@ mzscheme <<EOF
     "let _res = self.reverse(lst)"))
 
 (define when
-  (macro code
-    `(if ,(car code)
+  (macro (test . body)
+    `(if ,test
        (begin
-         ,@(cdr code)))))
+         ,@body))))
 
 (define unless
-  (macro code
-    `(if (not ,(car code))
+  (macro (test . body)
+    `(if (not ,test)
        (begin
-         ,@(cdr code)))))
+         ,@body))))
 
 ;;;;; === copy from init.scm in minischeme ===
 (define (caar x) (car (car x)))
