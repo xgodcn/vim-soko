@@ -380,38 +380,36 @@ function s:lib.reverse(cell)
   return p
 endfunction
 
-function s:lib.copylist(obj, noref, nest, newobj)
+function s:lib.copylist(obj, noref, copysession)
   if a:obj.type != 'pair'
     return [a:obj, {}]
-  elseif self.obj_index(a:nest, a:obj) != -1
-    let n = self.obj_index(a:nest, a:obj)
-    return [a:newobj[n], {}]
+  elseif get(a:obj, "copysession", 0) is a:copysession
+    return [a:obj.copyobj, {}]
   endif
   let res = copy(a:obj)
-  call add(a:nest, a:obj)
-  call add(a:newobj, res)
+  let a:obj.copysession = a:copysession
+  let a:obj.copyobj = res
   let p = res
-  while p.cdr.type == "pair" && self.obj_index(a:nest, p.cdr) == -1
-    call add(a:nest, p.cdr)
-    let p.cdr = copy(p.cdr)
-    call add(a:newobj, p.cdr)
-    let p = p.cdr
+  while p.cdr.type == "pair" && get(p.cdr, "copysession", 0) isnot a:copysession
+    let newobj = copy(p.cdr)
+    let p.cdr.copysession = a:copysession
+    let p.cdr.copyobj = newobj
+    let p = newobj.cdr
   endwhile
-  if p.cdr.type == "pair"   " means self.obj_index(a:nest, p.cdr) != -1
-    let n = self.obj_index(a:nest, p.cdr)
-    let p.cdr = a:newobj[n]
+  if p.cdr.type == "pair"   " recursive list
+    let p.cdr = p.cdr.newobj
   endif
   let lastcell = p
   if a:noref
     let p = res
     while p isnot lastcell
       if p.car.type == "pair"
-        let p.car = self.copylist(p.car, a:noref, a:nest, a:newobj)[0]
+        let p.car = self.copylist(p.car, a:noref, a:copysession)[0]
       endif
       let p = p.cdr
     endwhile
     if p.cdr.type == "pair"
-      let p.cdr = self.copylist(p.cdr, a:noref, a:nest, a:newobj)[0]
+      let p.cdr = self.copylist(p.cdr, a:noref, a:copysession)[0]
     endif
   endif
   return [res, lastcell]
@@ -671,7 +669,7 @@ function s:lib.to_str(obj)
   elseif a:obj.type == "string"      | return string(a:obj.val)
   elseif a:obj.type == "symbol"      | return a:obj.val
   elseif a:obj.type == "hash"        | return "#<hash>"
-  elseif a:obj.type == "pair"        | return self.to_str_pair(a:obj, [])
+  elseif a:obj.type == "pair"        | return self.to_str_pair(a:obj, {"copyid":0})
   elseif a:obj.type == "closure"     | return "#<closure>"
   elseif a:obj.type == "continuation"| return "#<continuation>"
   elseif a:obj.type == "procedure"   | return "#<procedure>"
@@ -689,7 +687,7 @@ function s:lib.to_vimobj(obj)
   elseif a:obj.type == "string"      | return a:obj.val
   elseif a:obj.type == "symbol"      | return a:obj.val
   elseif a:obj.type == "hash"        | return a:obj.val
-  elseif a:obj.type == "pair"        | return self.to_vimobj_pair(a:obj, [], [])
+  elseif a:obj.type == "pair"        | return self.to_vimobj_pair(a:obj, {})
   elseif a:obj.type == "closure"     | return a:obj
   elseif a:obj.type == "continuation"| return a:obj
   elseif a:obj.type == "procedure"   | return a:obj
@@ -707,31 +705,35 @@ function s:lib.to_lispobj(obj)
   endif
 endfunction
 
-function s:lib.to_str_pair(obj, nest)
-  if self.obj_index(a:nest, a:obj) != -1
-    let n = self.obj_index(a:nest, a:obj)
-    return printf("#%d(...)", n)
+function s:lib.to_str_pair(obj, copysession)
+  if get(a:obj, "copysession", 0) is a:copysession
+    return printf("#%d(...)", a:obj.copyid)
   endif
   let p = a:obj
-  while p.type == "pair" && self.obj_index(a:nest, p) == -1
-    call add(a:nest, p)
+  while p.type == "pair" && get(p, "copysession", 0) isnot a:copysession
+    let p.copysession = a:copysession
+    let p.copyid = a:copysession.copyid
+    let a:copysession.copyid += 1
     let p = p.cdr
   endwhile
   let tail = p
   let res = []
   let p = a:obj
-  while p isnot tail
+  while 1
     if p.car.type == "pair"
-      call add(res, self.to_str_pair(p.car, a:nest))
+      call add(res, self.to_str_pair(p.car, a:copysession))
     else
       call add(res, self.to_str(p.car))
     endif
     let p = p.cdr
+    if p is tail
+      break
+    endif
   endwhile
-  if p != self.NIL    " improper list
+  if p != self.NIL  " improper list
     call add(res, ".")
     if p.type == "pair"
-      call add(res, self.to_str_pair(p, a:nest))
+      call add(res, self.to_str_pair(p, a:copysession))
     else
       call add(res, self.to_str(p))
     endif
@@ -739,38 +741,40 @@ function s:lib.to_str_pair(obj, nest)
   return '(' . join(res) . ')'
 endfunction
 
-function s:lib.to_vimobj_pair(obj, nest, vimobj)
+function s:lib.to_vimobj_pair(obj, copysession)
   " Improper list is converted to proper list because Vim does not
   " support it.
   " Vim does not support List like this
   " (define x (list 1 2 3 4 5))
   " (set-car! x (cdr x))
-  if self.obj_index(a:nest, a:obj) != -1
-    let n = self.obj_index(a:nest, a:obj)
-    return a:vimobj[n]
+  if get(a:obj, "copysession", 0) is a:copysession
+    return a:obj.copyobj
   endif
-  let res = []
-  call add(a:nest, a:obj)
-  call add(a:vimobj, res)
   let p = a:obj
-  while p.cdr.type == "pair" && self.obj_index(a:nest, p.cdr) == -1
-    call add(a:nest, p.cdr)
-    call add(a:vimobj, [])  " can't link non-top cons cell
+  while p.type == "pair" && get(p, "copysession", 0) isnot a:copysession
+    let p.copysession = a:copysession
+    let p.copyobj = []  " can't link non-top cons cell
     let p = p.cdr
   endwhile
-  let tail = p.cdr
+  let tail = p
+  let res = []
+  let a:obj.copysession = a:copysession
+  let a:obj.copyobj = res
   let p = a:obj
-  while p isnot tail
+  while 1
     if p.car.type == "pair"
-      call add(res, self.to_vimobj_pair(p.car, a:nest, a:vimobj))
+      call add(res, self.to_vimobj_pair(p.car, a:copysession))
     else
       call add(res, self.to_vimobj(p.car))
     endif
     let p = p.cdr
+    if p is tail
+      break
+    endif
   endwhile
-  if p != self.NIL    " improper list
+  if p != self.NIL  " improper list
     if p.type == "pair"
-      call add(res, self.to_vimobj_pair(p, a:nest, a:vimobj))
+      call add(res, self.to_vimobj_pair(p, a:copysession))
     else
       call add(res, self.to_vimobj(p))
     endif
@@ -782,20 +786,26 @@ function s:lib.to_lispobj_pair(obj, nest, lispobj)
   if self.obj_index(a:nest, a:obj) != -1
     let n = self.obj_index(a:nest, a:obj)
     return a:lispobj[n]
+  elseif empty(a:obj)
+    call add(a:nest, a:obj)
+    call add(a:lispobj, self.NIL)
+    return self.NIL
   endif
   let res = {}  " place holder
-  let r = self.NIL
   call add(a:nest, a:obj)
   call add(a:lispobj, res)
+  let top = self.cons(self.NIL, self.NIL)
+  let r = top
   for p in a:obj
     if type(p) == type([])
-      let r = self.cons(self.to_lispobj_pair(p, a:nest, a:lispobj), r)
+      let r.cdr = self.cons(self.to_lispobj_pair(p, a:nest, a:lispobj), self.NIL)
     else
-      let r = self.cons(self.to_lispobj(p), r)
+      let r.cdr = self.cons(self.to_lispobj(p), self.NIL)
     endif
+    let r = r.cdr
     unlet p     " avoid "E706: Variable type mismatch for: p"
   endfor
-  return self.obj_replace(res, self.reverse(r))
+  return self.obj_replace(res, top.cdr)
 endfunction
 
 function s:lib.obj_index(lst, obj)
@@ -1220,9 +1230,9 @@ mzscheme <<EOF
     "if rest == self.NIL
        let _res = arg1
      else
-       let [_res, r] = self.copylist(arg1, 0, [], [])
+       let [_res, r] = self.copylist(arg1, 0, {})
        while rest.cdr != self.NIL
-         let [r.cdr, r] = self.copylist(rest.car, 0, [], [])
+         let [r.cdr, r] = self.copylist(rest.car, 0, {})
          let rest = rest.cdr
        endwhile
        let r.cdr = rest.car
