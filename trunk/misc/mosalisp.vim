@@ -1,7 +1,7 @@
 " mosalisp.vim - lisp interpreter
 " Maintainer:   Yukihiro Nakadaira <yukihiro.nakadaira@gmail.com>
 " License:      This file is placed in the public domain.
-" Last Change:  2007-08-18
+" Last Change:  2007-08-19
 "
 " Usage:
 "   :source mosalisp.vim
@@ -27,6 +27,11 @@
 "   See mosalisp.init() function and trailing script for more
 "   information.
 "
+"
+"   TODO:
+"     input-port, output-port, (read)
+"     class, error type
+"
 
 let s:sfile = expand("<sfile>:p")
 
@@ -38,47 +43,43 @@ function s:lib.repl()
   set nomore
   let self.inbuf = []
   let self.read_nest = 1
-  let self.getchar = self.getchar_input
   let self.scope = self.cons(self.top_env, self.NIL)
-  let self.stack = [["op_loop", 1, self.NIL]]
-  while self.stack[0][0] != "op_exit"
-    let op = remove(self.stack, 0)
-    try
-      call self[op[0]](op)
-    catch
-      echohl Error
-      echo "Exception from" self.get_throwpoint()
-      echo v:exception
-      echohl None
-      break
-    endtry
-  endwhile
+  let self.stack = []
+  call insert(self.stack, ['op_exit'])
+  call insert(self.stack, ['op_eval', self.cons(self.mk_symbol("read-eval-print-loop"), self.NIL)])
+  call self.loop()
   let &more = save_more
 endfunction
 
 function s:lib.load_str(str, ...)
   let self.inbuf = split(a:str, '\zs')
-  let self.getchar = self.getchar_str
+  call add(self.inbuf, "eof")
   let self.scope = self.cons(self.top_env, self.NIL)
-  let self.stack = [["op_loop", 0, self.NIL]]
-  while self.stack[0][0] != "op_exit"
-    let op = remove(self.stack, 0)
-    try
-      call self[op[0]](op)
-    catch
-      echohl Error
-      echo "Exception from" self.get_throwpoint()
-      echo v:exception
-      echohl None
-      break
-    endtry
-  endwhile
+  let self.stack = []
+  call insert(self.stack, ['op_exit'])
+  call insert(self.stack, ['op_eval', self.cons(self.mk_symbol("read-eval-print-loop"), self.cons(self.False, self.NIL))])
+  call self.loop()
   let res = self.stack[0][1]
   return get(a:000, 0, 0) ? res : self.to_vimobj(res)
 endfunction
 
 function s:lib.load(fname, ...)
   return self.load_str(join(readfile(a:fname), "\n"), get(a:000, 0, 0))
+endfunction
+
+function s:lib.loop()
+  while self.stack[0][0] != "op_exit"
+    let op = remove(self.stack, 0)
+    try
+      call self[op[0]](op)
+    catch
+      echohl Error
+      echo "Exception from" self.get_throwpoint()
+      echo v:exception
+      echohl None
+      break
+    endtry
+  endwhile
 endfunction
 
 function s:lib.dump_env()
@@ -221,25 +222,32 @@ function s:lib.read_symbol()
   while self.peekchar() !~ 'eof\|[() \t\n]'
     let res .= self.getchar()
   endwhile
+  if res == ""
+    throw "read-error"
+  endif
   return self.mk_symbol(res)
 endfunction
 
 function s:lib.read_quote()
-  let res = [self.mk_symbol(self.getchar() == "'" ? 'quote' : 'quasiquote')]
-  call add(res, self.read())
-  return self.mk_list(res)
+  if self.getchar() == "'"
+    let q = self.mk_symbol('quote')
+  else
+    let q = self.mk_symbol('quasiquote')
+  endif
+  let r = self.read()
+  return self.cons(q, self.cons(r, self.NIL))
 endfunction
 
 function s:lib.read_unquote()
   call self.getchar()
   if self.peekchar() == '@'
     call self.getchar()
-    let res = [self.mk_symbol('unquote-splicing')]
+    let q = self.mk_symbol('unquote-splicing')
   else
-    let res = [self.mk_symbol('unquote')]
+    let q = self.mk_symbol('unquote')
   endif
-  call add(res, self.read())
-  return self.mk_list(res)
+  let r = self.read()
+  return self.cons(q, self.cons(r, self.NIL))
 endfunction
 
 function s:lib.skip_comment()
@@ -268,7 +276,7 @@ function s:lib.peekchar()
   return c
 endfunction
 
-function s:lib.getchar_input()
+function s:lib.getchar()
   if self.inbuf == []
     let prefix = repeat(">", self.read_nest) . " "
     try
@@ -279,16 +287,9 @@ function s:lib.getchar_input()
     endtry
     echon printf("\r%s%s\n", prefix, str)
     let self.inbuf = split(str, '\zs') + ["\n"]
-    return self.getchar_input()
+    return self.getchar()
   endif
   if self.inbuf[0] == "eof"
-    return "eof"
-  endif
-  return remove(self.inbuf, 0)
-endfunction
-
-function s:lib.getchar_str()
-  if self.inbuf == []
     return "eof"
   endif
   return remove(self.inbuf, 0)
@@ -427,7 +428,7 @@ function s:lib.op_eval(op)
     if env != {}
       call add(self.stack[0], val)
     else
-      call self.error(printf("Unbounded Variable: %s", code.val))
+      call self.raise(self.mk_symbol("unbound-variable"), code)
     endif
   elseif code.type == "pair"
     call insert(self.stack, ["op_call", code, code.cdr])
@@ -437,24 +438,13 @@ function s:lib.op_eval(op)
   endif
 endfunction
 
-function s:lib.op_print(op)
-  let value = a:op[1]
-  if value.type != "undefined" && value.type != "EOF"
-    echo "=>" self.to_str(a:op[1])
-  endif
-  call add(self.stack[0], a:op[1])
-endfunction
-
 function s:lib.op_loop(op)
-  let [do_print, ret] = a:op[1:]
+  let [ret] = a:op[1:]
   if self.peekchar() == "eof"
     call insert(self.stack, ["op_exit", ret])
     return
   endif
-  call insert(self.stack, ["op_loop", do_print])
-  if do_print
-    call insert(self.stack, ["op_print"])
-  endif
+  call insert(self.stack, ["op_loop"])
   call insert(self.stack, ["op_eval"])
   call insert(self.stack, ["op_read"])
 endfunction
@@ -491,7 +481,11 @@ endfunction
 
 function s:lib.op_apply(op)
   let [func, args] = a:op[1:]
-  call self[func.val](func, args)
+  if func.type !~ 'procedure\|syntax\|closure\|macro\|continuation'
+    call self.raise(self.mk_symbol('apply-error'), self.cons(func, args))
+  else
+    call self[func.val](func, args)
+  endif
 endfunction
 
 function s:lib.op_macro_replace(op)
@@ -565,11 +559,11 @@ function s:lib.op_and(op)
   endif
 endfunction
 
-function s:lib.error(msg)
-  let code = []
-  call add(code, self.mk_symbol("error"))
-  call add(code, self.mk_string(a:msg))
-  call insert(self.stack, ["op_eval", self.mk_list(code)])
+function s:lib.raise(...)
+  let obj = self.mk_list(a:000)
+  let arg = self.mk_list([self.mk_symbol("quote"), obj])
+  let code = self.mk_list([self.mk_symbol("raise"), arg])
+  call insert(self.stack, ["op_eval", code])
 endfunction
 
 function s:lib.define(name, obj)
@@ -610,7 +604,7 @@ function s:lib.f_closure(this, args)
   let a = a:args
   while p.type == "pair"
     if a == self.NIL
-      call self.error("Too few arguments")
+      call self.raise(self.mk_symbol("too-few-arguments"))
       return
     endif
     call self.define(p.car.val, a.car)
@@ -619,7 +613,7 @@ function s:lib.f_closure(this, args)
   if p != self.NIL
     call self.define(p.val, a)
   elseif a != self.NIL
-    call self.error("Too many arguments")
+    call self.raise(self.mk_symbol("too-many-arguments"))
     return
   endif
 
@@ -632,7 +626,7 @@ function s:lib.f_procedure(this, args)
   let a = a:args
   while p.type == "pair"
     if a == self.NIL
-      call self.error("Too few arguments")
+      call self.raise(self.mk_symbol("too-few-arguments"))
       return
     endif
     execute printf("let %s = a.car", p.car.val)
@@ -642,7 +636,7 @@ function s:lib.f_procedure(this, args)
   if p != self.NIL
     execute printf("let %s = a", p.val)
   elseif a != self.NIL
-    call self.error("Too many arguments")
+    call self.raise(self.mk_symbol("too-many-arguments"))
     return
   endif
   unlet p a
@@ -864,7 +858,11 @@ function s:lib.init()
   let lines = readfile(s:sfile)
   let start = index(lines, "mzscheme <<EOF") + 1
   let end = index(lines, "EOF", start + 1) - 1
-  call self.load_str(join(lines[start : end], "\n"))
+  let self.inbuf = split(join(lines[start : end], "\n"), '\zs')
+  call add(self.inbuf, "eof")
+  let self.scope = self.cons(self.top_env, self.NIL)
+  let self.stack = [["op_loop", self.NIL]]
+  call self.loop()
   echo "done"
 endfunction
 
@@ -875,6 +873,7 @@ mzscheme <<EOF
 ;; init script
 ;; "mzscheme <<EOF" is only used for highlighting.
 
+;;;;; core {{{
 (define %vim-proc
   (%vim-syntax (args expr)
     "let _res = self.mk_procedure('procedure', args, self.to_vimobj(expr))"))
@@ -918,7 +917,7 @@ mzscheme <<EOF
        let env[name] = value
        let _res = self.Undefined
      else
-       call self.error(printf('Unbounded Variable: %s', name))
+       call self.raise(self.mk_symbol('unbound-variable'), self.mk_string(name))
      endif"))
 
 (define set!
@@ -961,27 +960,17 @@ mzscheme <<EOF
      let macro = self.findscope(self.scope, symbol.val)[1]
      call insert(self.stack, ['op_apply', macro, code])"))
 
-(define call-with-current-continuation
-  (%vim-proc (proc)
-    "let cont = self.mk_continuation()
-     call insert(self.stack, ['op_apply', proc, self.cons(cont, self.NIL)])"))
-
-(define call/cc call-with-current-continuation)
-
 (define load
   (%vim-proc (filename)
-    "let save = [self.inbuf, self.getchar, self.stack]
+    "let save = [self.inbuf, self.stack]
      let _res = self.load(self.to_vimobj(filename), 1)
-     let [self.inbuf, self.getchar, self.stack] = save"))
+     let [self.inbuf, self.stack] = save"))
 
+;; TODO: (exit) corrupt dynamic-wind and exception state
 (define exit
   (%vim-proc args
     "let exitcode = (args == self.NIL) ? self.NIL : args.car
      call insert(self.stack, ['op_exit', exitcode])"))
-
-(define list
-  (%vim-proc args
-    "let _res = args"))
 
 (define (values . args)
   (if (and (pair? args) (null? (cdr args)))
@@ -999,215 +988,9 @@ mzscheme <<EOF
     (apply consumer (cdr res))
     (consumer res)))
 
-;;;;; === dynamic-wind ===
-;; http://www.cs.hmc.edu/~fleck/envision/scheme48/meeting/node7.html
-
-(define *here* (list #f))
-
-(define original-cwcc call-with-current-continuation)
-
-(define (call-with-current-continuation proc)
-  (let ((here *here*))
-    (original-cwcc
-      (lambda (cont)
-        (proc
-          (lambda results
-            (reroot! here)
-            (apply cont results)))))))
-
-(define call/cc call-with-current-continuation)
-
-(define (dynamic-wind before during after)
-  (let ((here *here*))
-    (reroot! (cons (cons before after) here))
-    (call-with-values
-      during
-      (lambda results
-        (reroot! here)
-        (apply values results)))))
-
-(define (reroot! there)
-  (if (not (eq? *here* there))
-    (begin
-      (reroot! (cdr there))
-      (let ((before (caar there))
-            (after (cdar there)))
-        (set-car! *here* (cons after before))
-        (set-cdr! *here* there)
-        (set-car! there #f)
-        (set-cdr! there '())
-        (set! *here* there)
-        (before)))))
-;;;;; === end ===
-
-;;;;; === exception srfi-34 ===
-;; http://srfi.schemers.org/srfi-34/srfi-34.html
-
-(define *default-exception-handler*
-  (lambda (condition)
-    (set! *current-exception-handlers* (list *default-exception-handler*))
-    (format (current-error-port) "unhandled exception: %s\n" condition)
-    (exit)))
-
-(define *current-exception-handlers*
-  (list *default-exception-handler*))
-
-(define (current-exception-handler) (car *current-exception-handlers*))
-
-(define (with-exception-handler handler thunk)
-  (with-exception-handlers (cons handler *current-exception-handlers*)
-                           thunk))
-
-(define (with-exception-handlers new-handlers thunk)
-  (let ((previous-handlers *current-exception-handlers*))
-    (dynamic-wind
-      (lambda ()
-        (set! *current-exception-handlers* new-handlers))
-      thunk
-      (lambda ()
-        (set! *current-exception-handlers* previous-handlers)))))
-
-(define (raise obj)
-  (let ((handlers *current-exception-handlers*))
-    (with-exception-handlers (cdr handlers)
-      (lambda ()
-        ((car handlers) obj)
-        (error "handler returned"
-               (car handlers)
-               obj)))))
-
-(define (error msg . args)
-  (define obj (cons msg args))
-  (%set-attr obj "is-error" #t)
-  (raise obj))
-
-;; (guard (var clause ...) e1 e2 ...)
-(define guard
-  (macro (catch . body)
-    (define var (car catch))
-    (define clause (cdr catch))
-    (define p (last-pair clause))
-    (if (not (eq? (car p) 'else))
-      (set-cdr! p (cons '(else (handler-k (lambda () (raise condition)))) '())))
-    `((call/cc
-        (lambda (guard-k)
-          (with-exception-handler
-            (lambda (condition)
-              ((call/cc
-                 (lambda (handler-k)
-                   (guard-k
-                     (lambda ()
-                       (let ((,var condition))
-                         (cond ,@clause))))))))
-            (lambda ()
-              (call-with-values
-                (lambda () ,@body)
-                (lambda args
-                  (guard-k (lambda ()
-                             (apply values args)))))))
-          )))))
-
-;;;;; === end ===
-
-(define %echon-port
-  (%vim-proc (obj)
-    "echon (obj.type == 'string') ? obj.val : self.to_str(obj)
-     let _res = self.Undefined"))
-(%set-attr %echon-port "is-output-port" #t)
-
-(define %echon-error-port
-  (%vim-proc (obj)
-    "echohl Error
-     echon (obj.type == 'string') ? obj.val : self.to_str(obj)
-     echohl None
-     let _res = self.Undefined"))
-(%set-attr %echon-error-port "is-output-port" #t)
-
-(define %current-output-port %echon-port)
-(define %current-error-port %echon-error-port)
-(define (current-output-port) %current-output-port)
-(define (current-error-port) %current-error-port)
-
-(define display
-  (%vim-proc (obj . rest)
-    "let port = (rest == self.NIL) ? self.findscope(self.scope, '%current-output-port')[1] : rest.car
-     call insert(self.stack, ['op_apply', port, self.cons(obj, self.NIL)])"))
-
-(define (newline . rest)
-  (apply display "\n" rest))
-
-(define %format
-  (%vim-proc (fmt args)
-    "let lst = [self.to_vimobj(fmt)]
-     let p = args
-     while p.type == 'pair'
-       if p.car.type == 'number' || p.car.type == 'string'
-         call add(lst, self.to_vimobj(p.car))
-       else
-         call add(lst, self.to_str(p.car))
-       endif
-       let p = p.cdr
-     endwhile
-     let str = (len(lst) == 1) ? lst[0] : call('printf', lst)
-     let _res = self.to_lispobj(str)"))
-
-(define (format port . args)
-  ;; (format port fmt . args)
-  ;; (format #t fmt . args) => (format (current-output-port) fmt . args)
-  ;; (format #f fmt . args) => (%format fmt args)
-  ;; (format fmt . args)    => (%format fmt args)
-  (if (string? port)
-    (begin
-      (set! args (cons port args))
-      (set! port #f)))
-  (cond ((output-port? port) (port (%format (car args) (cdr args))))
-        (port ((current-output-port) (%format (car args) (cdr args))))
-        (else (%format (car args) (cdr args)))))
-
-(define :call
-  (%vim-proc (func . args)
-    "unlet func args
-     let [func; args] = self.to_vimobj(_args)
-     let VimObj = call(func, args)
-     let _res = self.to_lispobj(VimObj)"))
-
-(define :execute
-  (%vim-proc (expr)
-    "execute self.to_vimobj(expr)
-     let _res = self.Undefined"))
-
-(define :let
-  (%vim-proc (name value)
-    "unlet name value
-     let [name, VimObj] = self.to_vimobj(_args)
-     execute printf('let %s = VimObj', name)
-     let _res = self.Undefined"))
-
-(define make-hash-table
-  (%vim-proc ()
-    "let _res = self.mk_hash({})"))
-
-;; Dictionary is not boxed automatically.
-;; Box its value for each access for now.
-;; type check is lazy.
-(define hash-table-ref
-  (%vim-proc (hash key)
-    "unlet hash key
-     let [hash, key] = self.to_vimobj(_args)
-     let Value = hash[key]
-     if type(Value) == type({}) && has_key(Value, 'type')
-       let _res = Value
-     else
-       let _res = self.to_lispobj(Value)
-     endif"))
-
-(define hash-table-put!
-  (%vim-proc (hash key value)
-    "unlet hash key
-     let hash = self.to_vimobj(_args.car)
-     let key = self.to_vimobj(_args.cdr.car)
-     let hash[key] = value
-     let _res = self.Undefined"))
+(define list
+  (%vim-proc args
+    "let _res = args"))
 
 (define cons
   (%vim-proc (car cdr)
@@ -1607,8 +1390,228 @@ mzscheme <<EOF
                       '()))
                `,vars))))))
 ;;;;; === end ===
+;;;;; }}}
+;;;;; hash {{{
+(define make-hash-table
+  (%vim-proc ()
+    "let _res = self.mk_hash({})"))
 
-;;;;; === test ===
+;; Dictionary is not boxed automatically.
+;; Box its value for each access for now.
+;; type check is lazy.
+(define hash-table-ref
+  (%vim-proc (hash key)
+    "unlet hash key
+     let [hash, key] = self.to_vimobj(_args)
+     let Value = hash[key]
+     if type(Value) == type({}) && has_key(Value, 'type')
+       let _res = Value
+     else
+       let _res = self.to_lispobj(Value)
+     endif"))
+
+(define hash-table-put!
+  (%vim-proc (hash key value)
+    "unlet hash key
+     let hash = self.to_vimobj(_args.car)
+     let key = self.to_vimobj(_args.cdr.car)
+     let hash[key] = value
+     let _res = self.Undefined"))
+;;;;; }}}
+;;;;; call/cc, dynamic-wind {{{
+;; http://www.cs.hmc.edu/~fleck/envision/scheme48/meeting/node7.html
+
+(define %call-with-current-continuation
+  (%vim-proc (proc)
+    "let cont = self.mk_continuation()
+     call insert(self.stack, ['op_apply', proc, self.cons(cont, self.NIL)])"))
+
+(define *here* (list #f))
+
+(define (call-with-current-continuation proc)
+  (let ((here *here*))
+    (%call-with-current-continuation
+      (lambda (cont)
+        (proc
+          (lambda results
+            (reroot! here)
+            (apply cont results)))))))
+
+(define call/cc call-with-current-continuation)
+
+(define (dynamic-wind before during after)
+  (let ((here *here*))
+    (reroot! (cons (cons before after) here))
+    (call-with-values
+      during
+      (lambda results
+        (reroot! here)
+        (apply values results)))))
+
+(define (reroot! there)
+  (if (not (eq? *here* there))
+    (begin
+      (reroot! (cdr there))
+      (let ((before (caar there))
+            (after (cdar there)))
+        (set-car! *here* (cons after before))
+        (set-cdr! *here* there)
+        (set-car! there #f)
+        (set-cdr! there '())
+        (set! *here* there)
+        (before)))))
+;;;;; }}}
+;;;;; exception srfi-34 {{{
+;; http://srfi.schemers.org/srfi-34/srfi-34.html
+
+(define *default-exception-handler*
+  (lambda (condition)
+    (set! *current-exception-handlers* (list *default-exception-handler*))
+    (format (current-error-port) "unhandled exception: %s\n" condition)
+    (exit)))
+
+(define *current-exception-handlers*
+  (list *default-exception-handler*))
+
+(define (current-exception-handler) (car *current-exception-handlers*))
+
+(define (with-exception-handler handler thunk)
+  (with-exception-handlers (cons handler *current-exception-handlers*)
+                           thunk))
+
+(define (with-exception-handlers new-handlers thunk)
+  (let ((previous-handlers *current-exception-handlers*))
+    (dynamic-wind
+      (lambda ()
+        (set! *current-exception-handlers* new-handlers))
+      thunk
+      (lambda ()
+        (set! *current-exception-handlers* previous-handlers)))))
+
+(define (raise obj)
+  (let ((handlers *current-exception-handlers*))
+    (with-exception-handlers (cdr handlers)
+      (lambda ()
+        ((car handlers) obj)
+        (error "handler returned"
+               (car handlers)
+               obj)))))
+
+(define (error msg . args)
+  (define obj (cons 'error (cons msg args)))
+  (raise obj))
+
+;; (guard (var clause ...) e1 e2 ...)
+(define guard
+  (macro (catch . body)
+    (define var (car catch))
+    (define clause (cdr catch))
+    (define p (last-pair clause))
+    (if (not (eq? (car p) 'else))
+      (set-cdr! p (cons '(else (handler-k (lambda () (raise condition)))) '())))
+    `((call/cc
+        (lambda (guard-k)
+          (with-exception-handler
+            (lambda (condition)
+              ((call/cc
+                 (lambda (handler-k)
+                   (guard-k
+                     (lambda ()
+                       (let ((,var condition))
+                         (cond ,@clause))))))))
+            (lambda ()
+              (call-with-values
+                (lambda () ,@body)
+                (lambda args
+                  (guard-k (lambda ()
+                             (apply values args)))))))
+          )))))
+
+;;;;; }}}
+;;;;; io {{{
+(define %echon-port
+  (%vim-proc (str)
+    "echon str.val
+     let _res = self.Undefined"))
+(%set-attr %echon-port "is-output-port" #t)
+
+(define %echon-error-port
+  (%vim-proc (str)
+    "echohl Error
+     echon str.val
+     echohl None
+     let _res = self.Undefined"))
+(%set-attr %echon-error-port "is-output-port" #t)
+
+(define %current-output-port %echon-port)
+(define %current-error-port %echon-error-port)
+(define (current-output-port) %current-output-port)
+(define (current-error-port) %current-error-port)
+
+(define print
+  (%vim-proc (obj . rest)
+    "let port = (rest == self.NIL) ? self.findscope(self.scope, '%current-output-port')[1] : rest.car
+     let obj = self.mk_string(self.to_str(obj))
+     call insert(self.stack, ['op_apply', port, self.cons(obj, self.NIL)])"))
+
+(define display
+  (%vim-proc (obj . rest)
+    "let port = (rest == self.NIL) ? self.findscope(self.scope, '%current-output-port')[1] : rest.car
+     let obj = (obj.type == 'string') ? obj : self.mk_string(self.to_str(obj))
+     call insert(self.stack, ['op_apply', port, self.cons(obj, self.NIL)])"))
+
+(define (newline . rest)
+  (apply display "\n" rest))
+
+(define %format
+  (%vim-proc (fmt args)
+    "let lst = [self.to_vimobj(fmt)]
+     let p = args
+     while p.type == 'pair'
+       if p.car.type == 'number' || p.car.type == 'string'
+         call add(lst, self.to_vimobj(p.car))
+       else
+         call add(lst, self.to_str(p.car))
+       endif
+       let p = p.cdr
+     endwhile
+     let str = (len(lst) == 1) ? lst[0] : call('printf', lst)
+     let _res = self.to_lispobj(str)"))
+
+(define (format port . args)
+  ;; (format port fmt . args)
+  ;; (format #t fmt . args) => (format (current-output-port) fmt . args)
+  ;; (format #f fmt . args) => (%format fmt args)
+  ;; (format fmt . args)    => (%format fmt args)
+  (if (string? port)
+    (begin
+      (set! args (cons port args))
+      (set! port #f)))
+  (cond ((output-port? port) (port (%format (car args) (cdr args))))
+        (port ((current-output-port) (%format (car args) (cdr args))))
+        (else (%format (car args) (cdr args)))))
+;;;;; }}}
+;;;;; ex command {{{
+(define :call
+  (%vim-proc (func . args)
+    "unlet func args
+     let [func; args] = self.to_vimobj(_args)
+     let VimObj = call(func, args)
+     let _res = self.to_lispobj(VimObj)"))
+
+(define :execute
+  (%vim-proc (expr)
+    "execute self.to_vimobj(expr)
+     let _res = self.Undefined"))
+
+(define :let
+  (%vim-proc (name value)
+    "unlet name value
+     let [name, VimObj] = self.to_vimobj(_args)
+     execute printf('let %s = VimObj', name)
+     let _res = self.Undefined"))
+;;;;; }}}
+;;;;; test {{{
 (define (test1)
   (define (endless n) (format #t "%d\n" n) (endless (+ n 1)))
   (endless 0))
@@ -1714,6 +1717,43 @@ mzscheme <<EOF
     (if (>= i (str-len str))
       (:call "join" (reverse res) "")
       (loop (+ i 1) (cons (str-ref-hex str i) res)))))
+;;;;; }}}
+
+(define (read-eval-print-loop . opt)
+  (define doprint (if (null? opt) #t (car opt)))
+  (define %read
+    (%vim-proc ()
+      "try
+         let _res = self.read()
+       catch /read-error/
+         let self.read_nest = 1
+         if self.inbuf != []
+           if self.inbuf[-1] == 'eof'
+             let self.inbuf = ['eof']
+           else
+             let self.inbuf = []
+           endif
+         endif
+         call self.raise(self.mk_symbol('read-error'))
+       endtry"))
+  (define %top-eval
+    (%vim-proc (lst)
+      "call insert(self.stack, ['op_return', self.scope])
+       call insert(self.stack, ['op_eval', lst])
+       let self.scope = self.cons(self.top_env, self.NIL)"))
+  (define (loop)
+    (let ((obj (%read)))
+      (unless (eof-object? obj)
+        (let ((obj (%top-eval obj)))
+          (when (and doprint (not (undefined? obj)))
+            (display "=> ")
+            (print obj)
+            (newline))
+          (loop)))))
+  (define continue (call/cc (lambda (c) c)))
+  (guard (e (else (format (current-error-port) "ERROR: %s\n" condition)
+                  (continue continue)))
+    (loop)))
 
 EOF
 
