@@ -1,7 +1,7 @@
 " mosalisp.vim - lisp interpreter
 " Maintainer:   Yukihiro Nakadaira <yukihiro.nakadaira@gmail.com>
 " License:      This file is placed in the public domain.
-" Last Change:  2007-08-19
+" Last Change:  2007-08-20
 "
 " Usage:
 "   :source mosalisp.vim
@@ -328,11 +328,13 @@ function s:lib.mk_vim_function(func)
 endfunction
 
 function s:lib.mk_list(lst)
-  let p = self.NIL
+  let top = self.cons(self.NIL, self.NIL)
+  let p = top
   for item in a:lst
-    let p = self.cons(item, p)
+    let p.cdr = self.cons(item, self.NIL)
+    let p = p.cdr
   endfor
-  return self.reverse(p)
+  return top.cdr
 endfunction
 
 " lisp function
