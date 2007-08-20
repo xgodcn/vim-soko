@@ -396,7 +396,8 @@ function s:lib.copylist(obj, noref, copysession)
     let newobj = copy(p.cdr)
     let p.cdr.copysession = a:copysession
     let p.cdr.copyobj = newobj
-    let p = newobj.cdr
+    let p.cdr = newobj
+    let p = p.cdr
   endwhile
   if p.cdr.type == "pair"   " recursive list
     let p.cdr = p.cdr.newobj
