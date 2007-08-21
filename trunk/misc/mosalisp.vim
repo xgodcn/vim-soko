@@ -1,7 +1,7 @@
 " mosalisp.vim - lisp interpreter
 " Maintainer:   Yukihiro Nakadaira <yukihiro.nakadaira@gmail.com>
 " License:      This file is placed in the public domain.
-" Last Change:  2007-08-20
+" Last Change:  2007-08-21
 "
 " Usage:
 "   :source mosalisp.vim
@@ -1733,7 +1733,7 @@ mzscheme <<EOF
 ;;;;; }}}
 
 (define (read-eval-print-loop . opt)
-  (define doprint (if (null? opt) #t (car opt)))
+  (define interactive (if (null? opt) #t (car opt)))
   (define %read
     (%vim-proc ()
       "try
@@ -1758,14 +1758,14 @@ mzscheme <<EOF
     (let ((obj (%read)))
       (unless (eof-object? obj)
         (let ((obj (%top-eval obj)))
-          (when (and doprint (not (undefined? obj)))
+          (when (and interactive (not (undefined? obj)))
             (display "=> ")
             (print obj)
             (newline))
           (loop)))))
   (define continue (call/cc (lambda (c) c)))
   (guard (e (else (format (current-error-port) "ERROR: %s\n" condition)
-                  (continue continue)))
+                  (if interactive (continue continue))))
     (loop)))
 
 EOF
