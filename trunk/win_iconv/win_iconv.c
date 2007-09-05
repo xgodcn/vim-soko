@@ -31,6 +31,14 @@
 # define iconv libiconv
 #endif
 
+#define MB_CHAR_MAX 16
+
+#define return_error(code)  \
+    do {                    \
+        errno = code;       \
+        return -1;          \
+    } while (0)
+
 typedef void* iconv_t;
 
 DLL_EXPORT iconv_t iconv_open(const char *tocode, const char *fromcode);
@@ -40,18 +48,27 @@ DLL_EXPORT size_t iconv(iconv_t cd, const char **inbuf, size_t *inbytesleft, cha
 DLL_EXPORT int libiconvctl (iconv_t cd, int request, void* argument) { return 0; }
 #endif
 
-static int kernel_iconv_close(iconv_t cd);
-static size_t kernel_iconv(iconv_t cd, const char **inbuf, size_t *inbytesleft, char **outbuf, size_t *outbytesleft);
-static size_t mlang_iconv(iconv_t cd, const char **inbuf, size_t *inbytesleft, char **outbuf, size_t *outbytesleft);
+static int win_iconv_close(iconv_t cd);
+static size_t win_iconv(iconv_t cd, const char **inbuf, size_t *inbytesleft, char **outbuf, size_t *outbytesleft);
 
-typedef int (* f_iconv_close)(iconv_t cd);
+typedef struct csconv_t csconv_t;
+typedef struct rec_iconv_t rec_iconv_t;
+
+typedef int (*f_iconv_close)(iconv_t cd);
 typedef size_t (*f_iconv)(iconv_t cd, const char **inbuf, size_t *inbytesleft, char **outbuf, size_t *outbytesleft);
+typedef int (*f_mbtowc)(csconv_t *cv, const char *buf, int bufsize, wchar_t *wbuf, int *wbufsize);
+typedef int (*f_wctomb)(csconv_t *cv, const wchar_t *wbuf, int wbufsize, char *buf, int bufsize);
+typedef int (*f_mblen)(csconv_t *cv, const char *buf, int bufsize);
+typedef int (*f_flush)(csconv_t *cv, char *buf, int bufsize);
 
 struct csconv_t {
-    DWORD mode;
     int codepage;
+    f_mbtowc mbtowc;
+    f_wctomb wctomb;
+    f_mblen mblen;
+    f_flush flush;
+    DWORD mode;
 };
-typedef struct csconv_t csconv_t;
 
 struct rec_iconv_t {
     csconv_t from;
@@ -59,16 +76,249 @@ struct rec_iconv_t {
     f_iconv_close iconv_close;
     f_iconv iconv;
 };
-typedef struct rec_iconv_t rec_iconv_t;
-
-static csconv_t make_csconv(const char *name);
-static int name_to_codepage(const char *name);
-static int is_kernel_codepage(int codepage);
-static int cp_mblen(int codepage, const char *str);
-static int utf16_to_wchar(const char *buf, wchar_t *wbuf, int codepage);
-static int wchar_to_utf16(const wchar_t *wbuf, char *buf, int codepage);
 
 static int load_mlang();
+static csconv_t make_csconv(const char *name);
+static int name_to_codepage(const char *name);
+
+static int sbcs_mblen(csconv_t *cv, const char *buf, int bufsize);
+static int dbcs_mblen(csconv_t *cv, const char *buf, int bufsize);
+static int utf8_mblen(csconv_t *cv, const char *buf, int bufsize);
+static int eucjp_mblen(csconv_t *cv, const char *buf, int bufsize);
+
+static int kernel_mbtowc(csconv_t *cv, const char *buf, int bufsize, wchar_t *wbuf, int *wbufsize);
+static int kernel_wctomb(csconv_t *cv, const wchar_t *wbuf, int wbufsize, char *buf, int bufsize);
+static int mlang_mbtowc(csconv_t *cv, const char *buf, int bufsize, wchar_t *wbuf, int *wbufsize);
+static int mlang_wctomb(csconv_t *cv, const wchar_t *wbuf, int wbufsize, char *buf, int bufsize);
+static int utf16le_mbtowc(csconv_t *cv, const char *buf, int bufsize, wchar_t *wbuf, int *wbufsize);
+static int utf16le_wctomb(csconv_t *cv, const wchar_t *wbuf, int wbufsize, char *buf, int bufsize);
+static int utf16be_mbtowc(csconv_t *cv, const char *buf, int bufsize, wchar_t *wbuf, int *wbufsize);
+static int utf16be_wctomb(csconv_t *cv, const wchar_t *wbuf, int wbufsize, char *buf, int bufsize);
+
+static int flush_dummy(csconv_t *cv, char *buf, int bufsize);
+
+struct {
+    int codepage;
+    const char *name;
+} codepage_alias[] = {
+    {65001, "CP65001"},
+    {65001, "UTF8"},
+    {65001, "UTF-8"},
+
+    /* !IsValidCodePage(1200) */
+    {1200, "CP1200"},
+    {1200, "UTF16LE"},
+    {1200, "UTF-16LE"},
+
+    /* !IsValidCodePage(1201) */
+    {1201, "CP1201"},
+    {1201, "UTF16"},
+    {1201, "UTF16BE"},
+    {1201, "UTF-16BE"},
+
+    /* copy from libiconv `iconv -l` */
+    /* !IsValidCodePage(367) */
+    {20127, "ANSI_X3.4-1968"},
+    {20127, "ANSI_X3.4-1986"},
+    {20127, "ASCII"},
+    {20127, "CP367"},
+    {20127, "IBM367"},
+    {20127, "ISO-IR-6"},
+    {20127, "ISO646-US"},
+    {20127, "ISO_646.IRV:1991"},
+    {20127, "US"},
+    {20127, "US-ASCII"},
+    {20127, "CSASCII"},
+
+    /* !IsValidCodePage(819) */
+    {1252, "CP819"},
+    {1252, "IBM819"},
+    {1252, "ISO-8859-1"},
+    {1252, "ISO-IR-100"},
+    {1252, "ISO8859-1"},
+    {1252, "ISO_8859-1"},
+    {1252, "ISO_8859-1:1987"},
+    {1252, "L1"},
+    {1252, "LATIN1"},
+    {1252, "CSISOLATIN1"},
+
+    {1250, "CP1250"},
+    {1250, "MS-EE"},
+    {1250, "WINDOWS-1250"},
+
+    {1251, "CP1251"},
+    {1251, "MS-CYRL"},
+    {1251, "WINDOWS-1251"},
+
+    {1252, "CP1252"},
+    {1252, "MS-ANSI"},
+    {1252, "WINDOWS-1252"},
+
+    {1253, "CP1253"},
+    {1253, "MS-GREEK"},
+    {1253, "WINDOWS-1253"},
+
+    {1254, "CP1254"},
+    {1254, "MS-TURK"},
+    {1254, "WINDOWS-1254"},
+
+    {1255, "CP1255"},
+    {1255, "MS-HEBR"},
+    {1255, "WINDOWS-1255"},
+
+    {1256, "CP1256"},
+    {1256, "MS-ARAB"},
+    {1256, "WINDOWS-1256"},
+
+    {1257, "CP1257"},
+    {1257, "WINBALTRIM"},
+    {1257, "WINDOWS-1257"},
+
+    {1258, "CP1258"},
+    {1258, "WINDOWS-1258"},
+
+    {850, "850"},
+    {850, "CP850"},
+    {850, "IBM850"},
+    {850, "CSPC850MULTILINGUAL"},
+
+    /* !IsValidCodePage(862) */
+    {862, "862"},
+    {862, "CP862"},
+    {862, "IBM862"},
+    {862, "CSPC862LATINHEBREW"},
+
+    {866, "866"},
+    {866, "CP866"},
+    {866, "IBM866"},
+    {866, "CSIBM866"},
+
+    /* !IsValidCodePage(154) */
+    {154, "CP154"},
+    {154, "CYRILLIC-ASIAN"},
+    {154, "PT154"},
+    {154, "PTCP154"},
+    {154, "CSPTCP154"},
+
+    /* !IsValidCodePage(1133) */
+    {1133, "CP1133"},
+    {1133, "IBM-CP1133"},
+
+    {874, "CP874"},
+    {874, "WINDOWS-874"},
+
+    /*
+     * what is different between 20932 and 51932
+     * CP20932: A1C1 -> U+301C
+     * CP51932: A1C1 -> U+FF5E
+     */
+    /* !IsValidCodePage(51932) */
+    {51932, "CP51932"},
+    {51932, "MS51932"},
+    {51932, "WINDOWS-51932"},
+    {51932, "EUC-JP"},
+
+    {932, "CP932"},
+    {932, "MS932"},
+    {932, "SHIFFT_JIS"},
+    {932, "SHIFFT_JIS-MS"},
+    {932, "SJIS"},
+    {932, "SJIS-MS"},
+    {932, "SJIS-OPEN"},
+    {932, "SJIS-WIN"},
+    {932, "WINDOWS-31J"},
+    {932, "WINDOWS-932"},
+    {932, "CSWINDOWS31J"},
+
+    {50221, "CP50221"},
+    {50221, "ISO-2022-JP"},
+    {50221, "ISO-2022-JP-MS"},
+    {50221, "MS50221"},
+    {50221, "WINDOWS-50221"},
+
+    {936, "CP936"},
+    {936, "GBK"},
+    {936, "MS936"},
+    {936, "WINDOWS-936"},
+
+    {950, "CP950"},
+    {950, "BIG5"},
+
+    {949, "CP949"},
+    {949, "UHC"},
+    {949, "EUC-KR"},
+
+    {1361, "CP1361"},
+    {1361, "JOHAB"},
+
+    {437, "437"},
+    {437, "CP437"},
+    {437, "IBM437"},
+    {437, "CSPC8CODEPAGE437"},
+
+    {737, "CP737"},
+
+    {775, "CP775"},
+    {775, "IBM775"},
+    {775, "CSPC775BALTIC"},
+
+    {852, "852"},
+    {852, "CP852"},
+    {852, "IBM852"},
+    {852, "CSPCP852"},
+
+    /* !IsValidCodePage(853) */
+    {853, "CP853"},
+
+    {855, "855"},
+    {855, "CP855"},
+    {855, "IBM855"},
+    {855, "CSIBM855"},
+
+    {857, "857"},
+    {857, "CP857"},
+    {857, "IBM857"},
+    {857, "CSIBM857"},
+
+    /* !IsValidCodePage(858) */
+    {858, "CP858"},
+
+    {860, "860"},
+    {860, "CP860"},
+    {860, "IBM860"},
+    {860, "CSIBM860"},
+
+    {861, "861"},
+    {861, "CP-IS"},
+    {861, "CP861"},
+    {861, "IBM861"},
+    {861, "CSIBM861"},
+
+    {863, "863"},
+    {863, "CP863"},
+    {863, "IBM863"},
+    {863, "CSIBM863"},
+
+    {864, "CP864"},
+    {864, "IBM864"},
+    {864, "CSIBM864"},
+
+    {865, "865"},
+    {865, "CP865"},
+    {865, "IBM865"},
+    {865, "CSIBM865"},
+
+    {869, "869"},
+    {869, "CP-GR"},
+    {869, "CP869"},
+    {869, "IBM869"},
+    {869, "CSIBM869"},
+
+    /* !IsValidCodePage(1152) */
+    {1125, "CP1125"},
+
+    {0, NULL}
+};
 
 typedef HRESULT (WINAPI *CONVERTINETSTRING)(
     LPDWORD lpdwMode,
@@ -118,6 +368,8 @@ static RFC1766TOLCID Rfc1766ToLcid;
 static int
 load_mlang()
 {
+    if (ConvertINetString != NULL)
+        return 1;
     HMODULE h = LoadLibrary("mlang.dll");
     if (!h)
         return 0;
@@ -145,28 +397,8 @@ iconv_open(const char *tocode, const char *fromcode)
         return (iconv_t)(-1);
     }
 
-    /* load mlang.dll if necessary. */
-    if (ConvertINetString == NULL
-            && (!is_kernel_codepage(cd.from.codepage)
-                || !is_kernel_codepage(cd.to.codepage)))
-    {
-        if (!load_mlang())
-        {
-            errno = EINVAL;
-            return (iconv_t)(-1);
-        }
-    }
-
-    if (is_kernel_codepage(cd.from.codepage) && is_kernel_codepage(cd.to.codepage))
-    {
-        cd.iconv_close = kernel_iconv_close;
-        cd.iconv = kernel_iconv;
-    }
-    else
-    {
-        cd.iconv_close = kernel_iconv_close;
-        cd.iconv = mlang_iconv;
-    }
+    cd.iconv_close = win_iconv_close;
+    cd.iconv = win_iconv;
 
     res = (rec_iconv_t *)malloc(sizeof(rec_iconv_t));
     *res = cd;
@@ -186,173 +418,47 @@ iconv(iconv_t cd, const char **inbuf, size_t *inbytesleft, char **outbuf, size_t
 }
 
 static int
-kernel_iconv_close(iconv_t cd)
+win_iconv_close(iconv_t cd)
 {
     free(cd);
     return 0;
 }
 
 static size_t
-kernel_iconv(iconv_t _cd, const char **inbuf, size_t *inbytesleft, char **outbuf, size_t *outbytesleft)
+win_iconv(iconv_t _cd, const char **inbuf, size_t *inbytesleft, char **outbuf, size_t *outbytesleft)
 {
     rec_iconv_t *cd = (rec_iconv_t *)_cd;
-    wchar_t wbuf[16]; /* enough room for one character */
-    char buf[32];
+    wchar_t wbuf[MB_CHAR_MAX]; /* enough room for one character */
     int insize;
     int outsize;
     int wsize;
-    int len;
-    BOOL usedDefaultChar = 0;
 
     if (inbuf == NULL || *inbuf == NULL)
-        return 0;
-
-    while (*inbytesleft != 0)
     {
-        len = cp_mblen(cd->from.codepage, *inbuf);
-        if (len == -1)
+        if (outbuf != NULL && *outbuf != NULL && cd->to.flush != NULL)
         {
-            errno = EILSEQ;
-            return (size_t)(-1);
-        }
-
-        if (*inbytesleft < len)
-        {
-            errno = EINVAL;
-            return (size_t)(-1);
-        }
-
-        if (cd->from.codepage == 1200 || cd->from.codepage == 1201)
-        {
-            if (!utf16_to_wchar(*inbuf, wbuf, cd->from.codepage))
-            {
-                errno = EILSEQ;
+            outsize = cd->to.flush(&cd->to, *outbuf, *outbytesleft);
+            cd->to.mode = 0;
+            if (outsize == -1)
                 return (size_t)(-1);
-            }
-            insize = len;
-            wsize = len / 2;
         }
         else
-        {
-            insize = len;
-            wsize = MultiByteToWideChar(cd->from.codepage, MB_ERR_INVALID_CHARS,
-                    *inbuf, insize, wbuf, sizeof(wbuf));
-            if (wsize == 0)
-            {
-                errno = EILSEQ;
-                return (size_t)(-1);
-            }
-        }
-
-        if (cd->to.codepage == 1200 || cd->to.codepage == 1201)
-        {
-            if (!wchar_to_utf16(wbuf, buf, cd->to.codepage))
-            {
-                errno = EILSEQ;
-                return (size_t)(-1);
-            }
-            outsize = wsize * 2;
-        }
-        else
-        {
-            outsize = WideCharToMultiByte(cd->to.codepage, 0,
-                    wbuf, wsize, buf, sizeof(buf),
-                    NULL, (cd->to.codepage == 65000 || cd->to.codepage == 65001)
-                            ? NULL : &usedDefaultChar);
-            if (outsize == 0 || usedDefaultChar)
-            {
-                errno = EILSEQ;
-                return (size_t)(-1);
-            }
-        }
-
-        if (*outbytesleft < outsize)
-        {
-            errno = E2BIG;
-            return (size_t)(-1);
-        }
-
-        memcpy(*outbuf, buf, outsize);
-        *inbuf += insize;
-        *outbuf += outsize;
-        *inbytesleft -= insize;
-        *outbytesleft -= outsize;
+            cd->to.mode = 0;
+        return 0;
     }
 
-    return 0;
-}
-
-static size_t
-mlang_iconv(iconv_t _cd, const char **inbuf, size_t *inbytesleft, char **outbuf, size_t *outbytesleft)
-{
-    rec_iconv_t *cd = (rec_iconv_t *)_cd;
-    wchar_t wbuf[16]; /* enough room for one character */
-    char buf[32];
-    int insize;
-    int outsize;
-    int wsize;
-    int len;
-    HRESULT hr;
-
-    if (inbuf == NULL || *inbuf == NULL)
-        return 0;
-
     while (*inbytesleft != 0)
     {
-        len = cp_mblen(cd->from.codepage, *inbuf);
-        if (len == -1)
-        {
-            errno = EILSEQ;
-            return (size_t)(-1);
-        }
+        wsize = MB_CHAR_MAX;
 
-        if (*inbytesleft < len)
-        {
-            errno = EINVAL;
+        insize = cd->from.mbtowc(&cd->from, *inbuf, *inbytesleft, wbuf, &wsize);
+        if (insize == -1)
             return (size_t)(-1);
-        }
 
-        /* Few codepage combination cannot be converted directly (e.g.
-         * CP51932 <-> UTF-8).  Convert via Unicode for it. */
-#if 0
-        insize = len;
-        outsize = *outbytesleft;
-        hr = ConvertINetString(&cd->from.mode, cd->from.codepage, cd->to.codepage,
-                *inbuf, &insize, buf, &outsize);
-        if (hr != S_OK || insize != len)
-        {
-            errno = EILSEQ;
+        outsize = cd->to.wctomb(&cd->to, wbuf, wsize, *outbuf, *outbytesleft);
+        if (outsize == -1)
             return (size_t)(-1);
-        }
-#else
-        insize = len;
-        wsize = sizeof(wbuf);
-        hr = ConvertINetMultiByteToUnicode(&cd->from.mode, cd->from.codepage,
-                *inbuf, &insize, wbuf, &wsize);
-        if (hr != S_OK || insize != len)
-        {
-            errno = EILSEQ;
-            return (size_t)(-1);
-        }
 
-        len = wsize;
-        outsize = sizeof(buf);
-        hr = ConvertINetUnicodeToMultiByte(&cd->to.mode, cd->to.codepage,
-                wbuf, &wsize, buf, &outsize);
-        if (hr != S_OK || wsize != len)
-        {
-            errno = EILSEQ;
-            return (size_t)(-1);
-        }
-#endif
-
-        if (*outbytesleft < outsize)
-        {
-            errno = E2BIG;
-            return (size_t)(-1);
-        }
-
-        memcpy(*outbuf, buf, outsize);
         *inbuf += insize;
         *outbuf += outsize;
         *inbytesleft -= insize;
@@ -365,337 +471,300 @@ mlang_iconv(iconv_t _cd, const char **inbuf, size_t *inbytesleft, char **outbuf,
 static csconv_t
 make_csconv(const char *name)
 {
+    CPINFOEX cpinfoex;
     csconv_t cv;
+
     cv.mode = 0;
     cv.codepage = name_to_codepage(name);
+    if (cv.codepage == 1200)
+    {
+        cv.mbtowc = utf16le_mbtowc;
+        cv.wctomb = utf16le_wctomb;
+        cv.mblen = NULL;
+        cv.flush = NULL;
+    }
+    else if (cv.codepage == 1201)
+    {
+        cv.mbtowc = utf16be_mbtowc;
+        cv.wctomb = utf16be_wctomb;
+        cv.mblen = NULL;
+        cv.flush = NULL;
+    }
+    else if (cv.codepage == 65001)
+    {
+        cv.mbtowc = kernel_mbtowc;
+        cv.wctomb = kernel_wctomb;
+        cv.mblen = utf8_mblen;
+        cv.flush = NULL;
+    }
+    else if (cv.codepage == 51932 && load_mlang())
+    {
+        cv.mbtowc = mlang_mbtowc;
+        cv.wctomb = mlang_wctomb;
+        cv.mblen = eucjp_mblen;
+        cv.flush = NULL;
+    }
+    else if (IsValidCodePage(cv.codepage)
+            && GetCPInfoEx(cv.codepage, 0, &cpinfoex) != 0
+            && (cpinfoex.MaxCharSize == 1 || cpinfoex.MaxCharSize == 2))
+    {
+        cv.mbtowc = kernel_mbtowc;
+        cv.wctomb = kernel_wctomb;
+        if (cpinfoex.MaxCharSize == 1)
+            cv.mblen = sbcs_mblen;
+        else
+            cv.mblen = dbcs_mblen;
+        cv.flush = NULL;
+    }
+    else
+    {
+        /* not supported */
+        cv.codepage = -1;
+    }
     return cv;
 }
 
 static int
 name_to_codepage(const char *name)
 {
+    int i;
+
     if ((name[0] == 'c' || name[0] == 'C') && (name[1] == 'p' || name[1] == 'P'))
-    {
-        int codepage = atoi(name + 2);
-        if (IsValidCodePage(codepage))
-            return codepage;
-    }
+        return atoi(name + 2);
+    else if ('0' <= name[0] && name[0] <= '9')
+        return atoi(name);
 
-    if (lstrcmpi(name, "CP65001") == 0) return 65001;
-    if (lstrcmpi(name, "UTF8") == 0) return 65001;
-    if (lstrcmpi(name, "UTF-8") == 0) return 65001;
-
-    /* !IsValidCodePage(1200) */
-    if (lstrcmpi(name, "CP1200") == 0) return 1200;
-    if (lstrcmpi(name, "UTF16LE") == 0) return 1200;
-    if (lstrcmpi(name, "UTF-16LE") == 0) return 1200;
-
-    /* !IsValidCodePage(1201) */
-    if (lstrcmpi(name, "CP1201") == 0) return 1201;
-    if (lstrcmpi(name, "UTF16") == 0) return 1201;
-    if (lstrcmpi(name, "UTF16BE") == 0) return 1201;
-    if (lstrcmpi(name, "UTF-16BE") == 0) return 1201;
-
-    /* copy from libiconv `iconv -l` */
-    /* !IsValidCodePage(367) */
-    if (lstrcmpi(name, "ANSI_X3.4-1968") == 0) return 20127;
-    if (lstrcmpi(name, "ANSI_X3.4-1986") == 0) return 20127;
-    if (lstrcmpi(name, "ASCII") == 0) return 20127;
-    if (lstrcmpi(name, "CP367") == 0) return 20127;
-    if (lstrcmpi(name, "IBM367") == 0) return 20127;
-    if (lstrcmpi(name, "ISO-IR-6") == 0) return 20127;
-    if (lstrcmpi(name, "ISO646-US") == 0) return 20127;
-    if (lstrcmpi(name, "ISO_646.IRV:1991") == 0) return 20127;
-    if (lstrcmpi(name, "US") == 0) return 20127;
-    if (lstrcmpi(name, "US-ASCII") == 0) return 20127;
-    if (lstrcmpi(name, "CSASCII") == 0) return 20127;
-
-    /* !IsValidCodePage(819) */
-    if (lstrcmpi(name, "CP819") == 0) return 1252;
-    if (lstrcmpi(name, "IBM819") == 0) return 1252;
-    if (lstrcmpi(name, "ISO-8859-1") == 0) return 1252;
-    if (lstrcmpi(name, "ISO-IR-100") == 0) return 1252;
-    if (lstrcmpi(name, "ISO8859-1") == 0) return 1252;
-    if (lstrcmpi(name, "ISO_8859-1") == 0) return 1252;
-    if (lstrcmpi(name, "ISO_8859-1:1987") == 0) return 1252;
-    if (lstrcmpi(name, "L1") == 0) return 1252;
-    if (lstrcmpi(name, "LATIN1") == 0) return 1252;
-    if (lstrcmpi(name, "CSISOLATIN1") == 0) return 1252;
-
-    if (lstrcmpi(name, "CP1250") == 0) return 1250;
-    if (lstrcmpi(name, "MS-EE") == 0) return 1250;
-    if (lstrcmpi(name, "WINDOWS-1250") == 0) return 1250;
-
-    if (lstrcmpi(name, "CP1251") == 0) return 1251;
-    if (lstrcmpi(name, "MS-CYRL") == 0) return 1251;
-    if (lstrcmpi(name, "WINDOWS-1251") == 0) return 1251;
-
-    if (lstrcmpi(name, "CP1252") == 0) return 1252;
-    if (lstrcmpi(name, "MS-ANSI") == 0) return 1252;
-    if (lstrcmpi(name, "WINDOWS-1252") == 0) return 1252;
-
-    if (lstrcmpi(name, "CP1253") == 0) return 1253;
-    if (lstrcmpi(name, "MS-GREEK") == 0) return 1253;
-    if (lstrcmpi(name, "WINDOWS-1253") == 0) return 1253;
-
-    if (lstrcmpi(name, "CP1254") == 0) return 1254;
-    if (lstrcmpi(name, "MS-TURK") == 0) return 1254;
-    if (lstrcmpi(name, "WINDOWS-1254") == 0) return 1254;
-
-    if (lstrcmpi(name, "CP1255") == 0) return 1255;
-    if (lstrcmpi(name, "MS-HEBR") == 0) return 1255;
-    if (lstrcmpi(name, "WINDOWS-1255") == 0) return 1255;
-
-    if (lstrcmpi(name, "CP1256") == 0) return 1256;
-    if (lstrcmpi(name, "MS-ARAB") == 0) return 1256;
-    if (lstrcmpi(name, "WINDOWS-1256") == 0) return 1256;
-
-    if (lstrcmpi(name, "CP1257") == 0) return 1257;
-    if (lstrcmpi(name, "WINBALTRIM") == 0) return 1257;
-    if (lstrcmpi(name, "WINDOWS-1257") == 0) return 1257;
-
-    if (lstrcmpi(name, "CP1258") == 0) return 1258;
-    if (lstrcmpi(name, "WINDOWS-1258") == 0) return 1258;
-
-    if (lstrcmpi(name, "850") == 0) return 850;
-    if (lstrcmpi(name, "CP850") == 0) return 850;
-    if (lstrcmpi(name, "IBM850") == 0) return 850;
-    if (lstrcmpi(name, "CSPC850MULTILINGUAL") == 0) return 850;
-
-    /* !IsValidCodePage(862) */
-    if (lstrcmpi(name, "862") == 0) return 862;
-    if (lstrcmpi(name, "CP862") == 0) return 862;
-    if (lstrcmpi(name, "IBM862") == 0) return 862;
-    if (lstrcmpi(name, "CSPC862LATINHEBREW") == 0) return 862;
-
-    if (lstrcmpi(name, "866") == 0) return 866;
-    if (lstrcmpi(name, "CP866") == 0) return 866;
-    if (lstrcmpi(name, "IBM866") == 0) return 866;
-    if (lstrcmpi(name, "CSIBM866") == 0) return 866;
-
-    /* !IsValidCodePage(154) */
-    if (lstrcmpi(name, "CP154") == 0) return 154;
-    if (lstrcmpi(name, "CYRILLIC-ASIAN") == 0) return 154;
-    if (lstrcmpi(name, "PT154") == 0) return 154;
-    if (lstrcmpi(name, "PTCP154") == 0) return 154;
-    if (lstrcmpi(name, "CSPTCP154") == 0) return 154;
-
-    /* !IsValidCodePage(1133) */
-    if (lstrcmpi(name, "CP1133") == 0) return 1133;
-    if (lstrcmpi(name, "IBM-CP1133") == 0) return 1133;
-
-    if (lstrcmpi(name, "CP874") == 0) return 874;
-    if (lstrcmpi(name, "WINDOWS-874") == 0) return 874;
-
-    /* what is different 20932 and 51932 */
-    /* !IsValidCodePage(51932) */
-    if (lstrcmpi(name, "CP51932") == 0) return 51932;
-    if (lstrcmpi(name, "MS51932") == 0) return 51932;
-    if (lstrcmpi(name, "WINDOWS-51932") == 0) return 51932;
-
-    /* 20932 can be converted with MultiByteToWideChar() */
-    /* if (lstrcmpi(name, "EUC-JP") == 0) return 51932; */
-    if (lstrcmpi(name, "EUC-JP") == 0) return 20932;
-
-    if (lstrcmpi(name, "CP932") == 0) return 932;
-    if (lstrcmpi(name, "MS932") == 0) return 932;
-    if (lstrcmpi(name, "SHIFFT_JIS") == 0) return 932;
-    if (lstrcmpi(name, "SHIFFT_JIS-MS") == 0) return 932;
-    if (lstrcmpi(name, "SJIS") == 0) return 932;
-    if (lstrcmpi(name, "SJIS-MS") == 0) return 932;
-    if (lstrcmpi(name, "SJIS-OPEN") == 0) return 932;
-    if (lstrcmpi(name, "SJIS-WIN") == 0) return 932;
-    if (lstrcmpi(name, "WINDOWS-31J") == 0) return 932;
-    if (lstrcmpi(name, "WINDOWS-932") == 0) return 932;
-    if (lstrcmpi(name, "CSWINDOWS31J") == 0) return 932;
-
-    if (lstrcmpi(name, "CP50221") == 0) return 50221;
-    if (lstrcmpi(name, "ISO-2022-JP") == 0) return 50221;
-    if (lstrcmpi(name, "ISO-2022-JP-MS") == 0) return 50221;
-    if (lstrcmpi(name, "MS50221") == 0) return 50221;
-    if (lstrcmpi(name, "WINDOWS-50221") == 0) return 50221;
-
-    if (lstrcmpi(name, "CP936") == 0) return 936;
-    if (lstrcmpi(name, "GBK") == 0) return 936;
-    if (lstrcmpi(name, "MS936") == 0) return 936;
-    if (lstrcmpi(name, "WINDOWS-936") == 0) return 936;
-
-    if (lstrcmpi(name, "CP950") == 0) return 950;
-    if (lstrcmpi(name, "BIG5") == 0) return 950;
-
-    if (lstrcmpi(name, "CP949") == 0) return 949;
-    if (lstrcmpi(name, "UHC") == 0) return 949;
-    if (lstrcmpi(name, "EUC-KR") == 0) return 949;
-
-    if (lstrcmpi(name, "CP1361") == 0) return 1361;
-    if (lstrcmpi(name, "JOHAB") == 0) return 1361;
-
-    if (lstrcmpi(name, "437") == 0) return 437;
-    if (lstrcmpi(name, "CP437") == 0) return 437;
-    if (lstrcmpi(name, "IBM437") == 0) return 437;
-    if (lstrcmpi(name, "CSPC8CODEPAGE437") == 0) return 437;
-
-    if (lstrcmpi(name, "CP737") == 0) return 737;
-
-    if (lstrcmpi(name, "CP775") == 0) return 775;
-    if (lstrcmpi(name, "IBM775") == 0) return 775;
-    if (lstrcmpi(name, "CSPC775BALTIC") == 0) return 775;
-
-    if (lstrcmpi(name, "852") == 0) return 852;
-    if (lstrcmpi(name, "CP852") == 0) return 852;
-    if (lstrcmpi(name, "IBM852") == 0) return 852;
-    if (lstrcmpi(name, "CSPCP852") == 0) return 852;
-
-    /* !IsValidCodePage(853) */
-    if (lstrcmpi(name, "CP853") == 0) return 853;
-
-    if (lstrcmpi(name, "855") == 0) return 855;
-    if (lstrcmpi(name, "CP855") == 0) return 855;
-    if (lstrcmpi(name, "IBM855") == 0) return 855;
-    if (lstrcmpi(name, "CSIBM855") == 0) return 855;
-
-    if (lstrcmpi(name, "857") == 0) return 857;
-    if (lstrcmpi(name, "CP857") == 0) return 857;
-    if (lstrcmpi(name, "IBM857") == 0) return 857;
-    if (lstrcmpi(name, "CSIBM857") == 0) return 857;
-
-    /* !IsValidCodePage(858) */
-    if (lstrcmpi(name, "CP858") == 0) return 858;
-
-    if (lstrcmpi(name, "860") == 0) return 860;
-    if (lstrcmpi(name, "CP860") == 0) return 860;
-    if (lstrcmpi(name, "IBM860") == 0) return 860;
-    if (lstrcmpi(name, "CSIBM860") == 0) return 860;
-
-    if (lstrcmpi(name, "861") == 0) return 861;
-    if (lstrcmpi(name, "CP-IS") == 0) return 861;
-    if (lstrcmpi(name, "CP861") == 0) return 861;
-    if (lstrcmpi(name, "IBM861") == 0) return 861;
-    if (lstrcmpi(name, "CSIBM861") == 0) return 861;
-
-    if (lstrcmpi(name, "863") == 0) return 863;
-    if (lstrcmpi(name, "CP863") == 0) return 863;
-    if (lstrcmpi(name, "IBM863") == 0) return 863;
-    if (lstrcmpi(name, "CSIBM863") == 0) return 863;
-
-    if (lstrcmpi(name, "CP864") == 0) return 864;
-    if (lstrcmpi(name, "IBM864") == 0) return 864;
-    if (lstrcmpi(name, "CSIBM864") == 0) return 864;
-
-    if (lstrcmpi(name, "865") == 0) return 865;
-    if (lstrcmpi(name, "CP865") == 0) return 865;
-    if (lstrcmpi(name, "IBM865") == 0) return 865;
-    if (lstrcmpi(name, "CSIBM865") == 0) return 865;
-
-    if (lstrcmpi(name, "869") == 0) return 869;
-    if (lstrcmpi(name, "CP-GR") == 0) return 869;
-    if (lstrcmpi(name, "CP869") == 0) return 869;
-    if (lstrcmpi(name, "IBM869") == 0) return 869;
-    if (lstrcmpi(name, "CSIBM869") == 0) return 869;
-
-    /* !IsValidCodePage(1152) */
-    if (lstrcmpi(name, "CP1125") == 0) return 1125;
-
+    for (i = 0; codepage_alias[i].name != NULL; ++i)
+        if (lstrcmpi(name, codepage_alias[i].name) == 0)
+            return codepage_alias[i].codepage;
     return -1;
 }
 
 static int
-is_kernel_codepage(int codepage)
+sbcs_mblen(csconv_t *cv, const char *buf, int bufsize)
 {
-    return ((IsValidCodePage(codepage) || codepage == 1200 || codepage == 1201));
+    return 1;
 }
 
 static int
-cp_mblen(int codepage, const char *str)
+dbcs_mblen(csconv_t *cv, const char *buf, int bufsize)
 {
-    CPINFOEX cpinfoex;
-
-    if (codepage == 51932)
-        codepage = 20932; /* use 20932 for GetCPInfoEx() */
-
-    if (codepage == 1200)
-    {
-        /* UTF-16LE */
-        int wc = ((str[1] & 0xFF) << 8) | (str[0] & 0xFF);
-        if (0xD800 <= wc && wc <= 0xDBFF)
-            return 4;
-        return 2;
-    }
-    else if (codepage == 1201)
-    {
-        /* UTF-16BE */
-        int wc = ((str[0] & 0xFF) << 8) | (str[1] & 0xFF);
-        if (0xD800 <= wc && wc <= 0xDBFF)
-            return 4;
-        return 2;
-    }
-    else if (codepage == 65001)
-    {
-        /* UTF-8 */
-        if ((str[0] & 0xFF) < 0x80) return 1;
-        if ((str[0] & 0xE0) == 0xC0) return 2;
-        if ((str[0] & 0xF0) == 0xE0) return 3;
-        if ((str[0] & 0xF8) == 0xF0) return 4;
-        if ((str[0] & 0xFC) == 0xF8) return 5;
-        if ((str[0] & 0xFE) == 0xFC) return 6;
-    }
-    else if (GetCPInfoEx(codepage, 0, &cpinfoex) != 0)
-    {
-        if (cpinfoex.MaxCharSize == 1)
-            return 1;
-        else if (cpinfoex.MaxCharSize == 2)
-        {
-            if (IsDBCSLeadByteEx(codepage, str[0]))
-                return 2;
-            else
-                return 1;
-        }
-    }
-
-    return -1;
+    int len = IsDBCSLeadByteEx(cv->codepage, buf[0]) ? 2 : 1;
+    if (bufsize < len)
+        return_error(EINVAL);
+    return len;
 }
 
 static int
-utf16_to_wchar(const char *buf, wchar_t *wbuf, int codepage)
+utf8_mblen(csconv_t *cv, const char *_buf, int bufsize)
 {
-    wbuf[0] = ((buf[0] & 0xFF) << 8) | (buf[1] & 0xFF);
-    if (codepage == 1200)
-        wbuf[0] = ((wbuf[0] & 0xFF00) >> 8) | ((wbuf[0] & 0x00FF) << 8);
+    unsigned char *buf = (unsigned char *)_buf;
+    int len = 0;
+
+    if (buf[0] < 0x80) len = 1;
+    else if ((buf[0] & 0xE0) == 0xC0) len = 2;
+    else if ((buf[0] & 0xF0) == 0xE0) len = 3;
+    else if ((buf[0] & 0xF8) == 0xF0) len = 4;
+    else if ((buf[0] & 0xFC) == 0xF8) len = 5;
+    else if ((buf[0] & 0xFE) == 0xFC) len = 6;
+
+    if (len == 0)
+        return_error(EILSEQ);
+    else if (bufsize < len)
+        return_error(EINVAL);
+    return len;
+}
+
+static int
+eucjp_mblen(csconv_t *cv, const char *_buf, int bufsize)
+{
+    unsigned char *buf = (unsigned char *)_buf;
+
+    if (buf[0] < 0x80) /* ASCII */
+        return 1;
+    else if (buf[0] == 0x8E) /* JIS X 0201 */
+    {
+        if (bufsize < 2)
+            return_error(EINVAL);
+        else if (!(0xA1 <= buf[1] && buf[1] <= 0xDF))
+            return_error(EILSEQ);
+        return 2;
+    }
+    else if (buf[0] == 0x8F) /* JIS X 0212 */
+    {
+        if (bufsize < 3)
+            return_error(EINVAL);
+        else if (!(0xA1 <= buf[1] && buf[1] <= 0xFE)
+                || !(0xA1 <= buf[2] && buf[2] <= 0xFE))
+            return_error(EILSEQ);
+        return 3;
+    }
+    else /* JIS X 0208 */
+    {
+        if (bufsize < 2)
+            return_error(EINVAL);
+        else if (!(0xA1 <= buf[0] && buf[0] <= 0xFE)
+                || !(0xA1 <= buf[1] && buf[1] <= 0xFE))
+            return_error(EILSEQ);
+        return 2;
+    }
+}
+
+static int
+kernel_mbtowc(csconv_t *cv, const char *buf, int bufsize, wchar_t *wbuf, int *wbufsize)
+{
+    int len;
+
+    len = cv->mblen(cv, buf, bufsize);
+    if (len == -1)
+        return -1;
+    *wbufsize = MultiByteToWideChar(cv->codepage, MB_ERR_INVALID_CHARS,
+            buf, len, wbuf, *wbufsize);
+    if (*wbufsize == 0)
+        return_error(EILSEQ);
+    return len;
+}
+
+static int
+kernel_wctomb(csconv_t *cv, const wchar_t *wbuf, int wbufsize, char *buf, int bufsize)
+{
+    BOOL usedDefaultChar = 0;
+    int len;
+
+    len = WideCharToMultiByte(cv->codepage, 0,
+            wbuf, wbufsize, buf, bufsize, NULL,
+            (cv->codepage == 65000 || cv->codepage == 65001) ? NULL : &usedDefaultChar);
+    if (len == 0)
+    {
+        if (GetLastError() == ERROR_INSUFFICIENT_BUFFER)
+            return_error(E2BIG);
+        return_error(EILSEQ);
+    }
+    else if (usedDefaultChar)
+        return_error(EILSEQ);
+    return len;
+}
+
+static int
+mlang_mbtowc(csconv_t *cv, const char *buf, int bufsize, wchar_t *wbuf, int *wbufsize)
+{
+    int len;
+    int insize;
+    HRESULT hr;
+
+    len = cv->mblen(cv, buf, bufsize);
+    if (len == -1)
+        return -1;
+    insize = len;
+    hr = ConvertINetMultiByteToUnicode(&cv->mode, cv->codepage,
+            buf, &insize, wbuf, wbufsize);
+    if (hr != S_OK || insize != len)
+        return_error(EILSEQ);
+    return len;
+}
+
+static int
+mlang_wctomb(csconv_t *cv, const wchar_t *wbuf, int wbufsize, char *buf, int bufsize)
+{
+    char tmpbuf[MB_CHAR_MAX]; /* enough room for one character */;
+    int tmpsize = MB_CHAR_MAX;
+    int insize = wbufsize;
+    HRESULT hr;
+
+    hr = ConvertINetUnicodeToMultiByte(&cv->mode, cv->codepage,
+            wbuf, &wbufsize, tmpbuf, &tmpsize);
+    if (hr != S_OK || insize != wbufsize)
+        return_error(EILSEQ);
+    else if (bufsize < tmpsize)
+        return_error(E2BIG);
+    memcpy(buf, tmpbuf, tmpsize);
+    return tmpsize;
+}
+
+static int
+utf16le_mbtowc(csconv_t *cv, const char *_buf, int bufsize, wchar_t *wbuf, int *wbufsize)
+{
+    unsigned char *buf = (unsigned char *)_buf;
+
+    if (bufsize < 2)
+        return_error(EINVAL);
+    wbuf[0] = (buf[1] << 8) | buf[0];
     if (0xD800 <= wbuf[0] && wbuf[0] <= 0xDBFF)
     {
-        wbuf[1] = ((buf[2] & 0xFF) << 8) | (buf[3] & 0xFF);
-        if (codepage == 1200)
-            wbuf[1] = ((wbuf[1] & 0xFF00) >> 8) | ((wbuf[1] & 0x00FF) << 8);
-        if (wbuf[1] < 0xDC00 || 0xDFFF < wbuf[1])
-            return 0;
+        if (bufsize < 4)
+            return_error(EINVAL);
+        wbuf[1] = (buf[3] << 8) | buf[2];
+        if (!(0xDC00 <= wbuf[1] && wbuf[1] <= 0xDFFF))
+            return_error(EILSEQ);
+        *wbufsize = 2;
+        return 4;
     }
-    return 1;
+    *wbufsize = 1;
+    return 2;
 }
 
 static int
-wchar_to_utf16(const wchar_t *wbuf, char *buf, int codepage)
+utf16le_wctomb(csconv_t *cv, const wchar_t *wbuf, int wbufsize, char *buf, int bufsize)
 {
-    if (codepage == 1200)
+    if (bufsize < 2)
+        return_error(E2BIG);
+    buf[0] = (wbuf[0] & 0x00FF);
+    buf[1] = (wbuf[0] & 0xFF00) >> 8;
+    if (0xD800 <= wbuf[0] && wbuf[0] <= 0xDBFF)
     {
-        buf[0] = (wbuf[0] & 0x00FF);
-        buf[1] = (wbuf[0] & 0xFF00) >> 8;
-        if (0xD800 <= wbuf[0] && wbuf[0] <= 0xDBFF)
-        {
-            buf[2] = (wbuf[1] & 0x00FF);
-            buf[3] = (wbuf[2] & 0xFF00) >> 8;
-        }
+        if (bufsize < 4)
+            return_error(E2BIG);
+        buf[2] = (wbuf[1] & 0x00FF);
+        buf[3] = (wbuf[1] & 0xFF00) >> 8;
+        return 4;
     }
-    else if (codepage == 1201)
+    return 2;
+}
+
+static int
+utf16be_mbtowc(csconv_t *cv, const char *_buf, int bufsize, wchar_t *wbuf, int *wbufsize)
+{
+    unsigned char *buf = (unsigned char *)_buf;
+
+    if (bufsize < 2)
+        return_error(EINVAL);
+    wbuf[0] = (buf[0] << 8) | buf[1];
+    if (0xD800 <= wbuf[0] && wbuf[0] <= 0xDBFF)
     {
-        buf[0] = (wbuf[0] & 0xFF00) >> 8;
-        buf[1] = (wbuf[0] & 0x00FF);
-        if (0xD800 <= wbuf[0] && wbuf[0] <= 0xDBFF)
-        {
-            buf[2] = (wbuf[1] & 0xFF00) >> 8;
-            buf[3] = (wbuf[2] & 0x00FF);
-        }
+        if (bufsize < 4)
+            return_error(EINVAL);
+        wbuf[1] = (buf[2] << 8) | buf[3];
+        if (!(0xDC00 <= wbuf[1] && wbuf[1] <= 0xDFFF))
+            return_error(EILSEQ);
+        *wbufsize = 2;
+        return 4;
     }
-    return 1;
+    *wbufsize = 1;
+    return 2;
+}
+
+static int
+utf16be_wctomb(csconv_t *cv, const wchar_t *wbuf, int wbufsize, char *buf, int bufsize)
+{
+    if (bufsize < 2)
+        return_error(E2BIG);
+    buf[0] = (wbuf[0] & 0xFF00) >> 8;
+    buf[1] = (wbuf[0] & 0x00FF);
+    if (0xD800 <= wbuf[0] && wbuf[0] <= 0xDBFF)
+    {
+        if (bufsize < 4)
+            return_error(E2BIG);
+        buf[2] = (wbuf[1] & 0xFF00) >> 8;
+        buf[3] = (wbuf[1] & 0x00FF);
+        return 4;
+    }
+    return 2;
+}
+
+static int
+flush_dummy(csconv_t *cv, char *buf, int bufsize)
+{
+    return 0;
 }
 
 #if defined(MAKE_EXE)
@@ -724,6 +793,13 @@ main(int argc, char **argv)
 
     for (i = 1; i < argc; ++i)
     {
+        if (strcmp(argv[i], "-l") == 0)
+        {
+            for (i = 0; codepage_alias[i].name != NULL; ++i)
+                printf("%s\n", codepage_alias[i].name);
+            return 0;
+        }
+
         if (strcmp(argv[i], "-f") == 0)
             fromcode = argv[++i];
         else if (strcmp(argv[i], "-t") == 0)
