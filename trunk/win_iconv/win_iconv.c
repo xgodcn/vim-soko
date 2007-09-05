@@ -1,10 +1,8 @@
 /*
- * Stateful encoding (such as iso-2022) is not supported because it is
- * difficult to handle shift sequence properly.
- *
- * MLang function drop or replace invalid bytes and does not return
- * useful error status as iconv.  It cannot be used for encoding
- * validation purpose.
+ * Win32 API does not support strict encoding conversion for some
+ * codepage.  And MLang function drop or replace invalid bytes and does
+ * not return useful error status as iconv.  This implementation cannot
+ * be used for encoding validation purpose.
  */
 
 #include <windows.h>
@@ -94,8 +92,9 @@ static int utf16le_mbtowc(csconv_t *cv, const char *buf, int bufsize, wchar_t *w
 static int utf16le_wctomb(csconv_t *cv, const wchar_t *wbuf, int wbufsize, char *buf, int bufsize);
 static int utf16be_mbtowc(csconv_t *cv, const char *buf, int bufsize, wchar_t *wbuf, int *wbufsize);
 static int utf16be_wctomb(csconv_t *cv, const wchar_t *wbuf, int wbufsize, char *buf, int bufsize);
-
-static int flush_dummy(csconv_t *cv, char *buf, int bufsize);
+static int iso2022jp_mbtowc(csconv_t *cv, const char *buf, int bufsize, wchar_t *wbuf, int *wbufsize);
+static int iso2022jp_wctomb(csconv_t *cv, const wchar_t *wbuf, int wbufsize, char *buf, int bufsize);
+static int iso2022jp_flush(csconv_t *cv, char *buf, int bufsize);
 
 struct {
     int codepage;
@@ -441,6 +440,8 @@ win_iconv(iconv_t _cd, const char **inbuf, size_t *inbytesleft, char **outbuf, s
             cd->to.mode = 0;
             if (outsize == -1)
                 return (size_t)(-1);
+            *outbuf += outsize;
+            *outbytesleft -= outsize;
         }
         else
             cd->to.mode = 0;
@@ -455,9 +456,14 @@ win_iconv(iconv_t _cd, const char **inbuf, size_t *inbytesleft, char **outbuf, s
         if (insize == -1)
             return (size_t)(-1);
 
-        outsize = cd->to.wctomb(&cd->to, wbuf, wsize, *outbuf, *outbytesleft);
-        if (outsize == -1)
-            return (size_t)(-1);
+        if (wsize == 0)
+            outsize = 0;
+        else
+        {
+            outsize = cd->to.wctomb(&cd->to, wbuf, wsize, *outbuf, *outbytesleft);
+            if (outsize == -1)
+                return (size_t)(-1);
+        }
 
         *inbuf += insize;
         *outbuf += outsize;
@@ -496,6 +502,13 @@ make_csconv(const char *name)
         cv.wctomb = kernel_wctomb;
         cv.mblen = utf8_mblen;
         cv.flush = NULL;
+    }
+    else if (cv.codepage == 50220 || cv.codepage == 50221 || cv.codepage == 50222)
+    {
+        cv.mbtowc = iso2022jp_mbtowc;
+        cv.wctomb = iso2022jp_wctomb;
+        cv.mblen = NULL;
+        cv.flush = iso2022jp_flush;
     }
     else if (cv.codepage == 51932 && load_mlang())
     {
@@ -765,9 +778,139 @@ utf16be_wctomb(csconv_t *cv, const wchar_t *wbuf, int wbufsize, char *buf, int b
     return 2;
 }
 
+static const char * iso2022jp_escape_ascii = "\x1B\x28\x42";
+static const char * iso2022jp_escape_jisx0201 = "\x1B\x28\x4A";
+static const char * iso2022jp_escape_jisc6226 = "\x1B\x24\x40";
+static const char * iso2022jp_escape_jisx0208 = "\x1B\x24\x42";
+
+#define ISO2022JP_ESC_SIZE 3
+
+#define ISO2022JP_MODE_ASCII        0
+#define ISO2022JP_MODE_JISX0201     1
+#define ISO2022JP_MODE_JISC6226     2
+#define ISO2022JP_MODE_JISX0208     3
+
 static int
-flush_dummy(csconv_t *cv, char *buf, int bufsize)
+iso2022jp_mbtowc(csconv_t *cv, const char *_buf, int bufsize, wchar_t *wbuf, int *wbufsize)
 {
+    unsigned char *buf = (unsigned char *)_buf;
+    char tmp[MB_CHAR_MAX];
+    int len;
+
+    if (buf[0] == 0x1B)
+    {
+        if (bufsize < ISO2022JP_ESC_SIZE)
+            return_error(EINVAL);
+        if (strncmp(buf, iso2022jp_escape_ascii, ISO2022JP_ESC_SIZE) == 0)
+            cv->mode = ISO2022JP_MODE_ASCII;
+        else if (strncmp(buf, iso2022jp_escape_jisx0201, ISO2022JP_ESC_SIZE) == 0)
+            cv->mode = ISO2022JP_MODE_JISX0201;
+        else if (strncmp(buf, iso2022jp_escape_jisc6226, ISO2022JP_ESC_SIZE) == 0)
+            cv->mode = ISO2022JP_MODE_JISC6226;
+        else if (strncmp(buf, iso2022jp_escape_jisx0208, ISO2022JP_ESC_SIZE) == 0)
+            cv->mode = ISO2022JP_MODE_JISX0208;
+        else
+            return_error(EILSEQ);
+        *wbufsize = 0;
+        return ISO2022JP_ESC_SIZE;
+    }
+
+    if (0x80 <= buf[0])
+        return_error(EILSEQ);
+
+    if (cv->mode == ISO2022JP_MODE_ASCII)
+    {
+        memcpy(tmp, iso2022jp_escape_ascii, ISO2022JP_ESC_SIZE);
+        memcpy(tmp + ISO2022JP_ESC_SIZE, buf, 1);
+        len = 1;
+    }
+    else if (cv->mode == ISO2022JP_MODE_JISX0201)
+    {
+        memcpy(tmp, iso2022jp_escape_jisx0201, ISO2022JP_ESC_SIZE);
+        memcpy(tmp + ISO2022JP_ESC_SIZE, buf, 1);
+        len = 1;
+    }
+    else if (cv->mode == ISO2022JP_MODE_JISC6226)
+    {
+        if (bufsize < 2)
+            return_error(EINVAL);
+        else if (0x80 <= buf[1])
+            return_error(EILSEQ);
+        memcpy(tmp, iso2022jp_escape_jisc6226, ISO2022JP_ESC_SIZE);
+        memcpy(tmp + ISO2022JP_ESC_SIZE, buf, 2);
+        len = 2;
+    }
+    else if (cv->mode == ISO2022JP_MODE_JISX0208)
+    {
+        if (bufsize < 2)
+            return_error(EINVAL);
+        else if (0x80 <= buf[1])
+            return_error(EILSEQ);
+        memcpy(tmp, iso2022jp_escape_jisx0208, ISO2022JP_ESC_SIZE);
+        memcpy(tmp + ISO2022JP_ESC_SIZE, buf, 2);
+        len = 2;
+    }
+    /* MB_ERR_INVALID_CHARS cannot be used for CP50220, CP50221 and
+     * CP50222 */
+    *wbufsize = MultiByteToWideChar(cv->codepage, 0,
+            tmp, len + ISO2022JP_ESC_SIZE, wbuf, *wbufsize);
+    if (*wbufsize == 0)
+        return_error(EILSEQ);
+    return len;
+}
+
+static int
+iso2022jp_wctomb(csconv_t *cv, const wchar_t *wbuf, int wbufsize, char *buf, int bufsize)
+{
+    char tmp[MB_CHAR_MAX];
+    int len;
+    int mode = cv->mode;
+
+    /* defaultChar cannot be used for CP50220, CP50221 and CP50222 */
+    len = WideCharToMultiByte(cv->codepage, 0,
+            wbuf, wbufsize, tmp, sizeof(tmp), NULL, NULL);
+    if (len == 0)
+        return_error(EILSEQ);
+
+    if (tmp[0] != 0x1B)
+        mode = ISO2022JP_MODE_ASCII;
+    else if (strncmp(tmp, iso2022jp_escape_jisx0201, ISO2022JP_ESC_SIZE) == 0)
+        mode = ISO2022JP_MODE_JISX0201;
+    else if (strncmp(tmp, iso2022jp_escape_jisc6226, ISO2022JP_ESC_SIZE) == 0)
+        mode = ISO2022JP_MODE_JISC6226;
+    else if (strncmp(tmp, iso2022jp_escape_jisx0208, ISO2022JP_ESC_SIZE) == 0)
+        mode = ISO2022JP_MODE_JISX0208;
+
+    if (cv->mode != mode && mode == ISO2022JP_MODE_ASCII)
+    {
+        /* insert escape sequence */
+        memmove(tmp + ISO2022JP_ESC_SIZE, tmp, len);
+        memcpy(tmp, iso2022jp_escape_ascii, ISO2022JP_ESC_SIZE);
+        len += ISO2022JP_ESC_SIZE;
+    }
+    else if (cv->mode == mode && mode != ISO2022JP_MODE_ASCII)
+    {
+        /* remove escape sequence */
+        memmove(tmp, tmp + ISO2022JP_ESC_SIZE, len);
+        len -= ISO2022JP_ESC_SIZE;
+    }
+    if (bufsize < len)
+        return_error(E2BIG);
+    memcpy(buf, tmp, len);
+    cv->mode = mode;
+    return len;
+}
+
+static int
+iso2022jp_flush(csconv_t *cv, char *buf, int bufsize)
+{
+    if (cv->mode != ISO2022JP_MODE_ASCII)
+    {
+        if (bufsize < ISO2022JP_ESC_SIZE)
+            return_error(E2BIG);
+        memcpy(buf, iso2022jp_escape_ascii, ISO2022JP_ESC_SIZE);
+        return ISO2022JP_ESC_SIZE;
+    }
     return 0;
 }
 
@@ -841,18 +984,26 @@ main(int argc, char **argv)
         outp = outbuf;
         outbytesleft = sizeof(outbuf);
         r = iconv(cd, &inp, &inbytesleft, &outp, &outbytesleft);
+        fwrite(outbuf, 1, sizeof(outbuf) - outbytesleft, stdout);
         if (r != (size_t)(-1) || errno == E2BIG || errno == EINVAL)
         {
-            fwrite(outbuf, 1, sizeof(outbuf) - outbytesleft, stdout);
             memmove(inbuf, inp, sizeof(inbuf) - inbytesleft);
             rest = inbytesleft;
         }
         else
         {
-            fwrite(outbuf, 1, sizeof(outbuf) - outbytesleft, stdout);
             perror("conversion error");
             return 1;
         }
+    }
+    outp = outbuf;
+    outbytesleft = sizeof(outbuf);
+    r = iconv(cd, NULL, NULL, &outp, &outbytesleft);
+    fwrite(outbuf, 1, sizeof(outbuf) - outbytesleft, stdout);
+    if (r == (size_t)(-1))
+    {
+        perror("conversion error");
+        return 1;
     }
 
     iconv_close(cd);
