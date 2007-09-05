@@ -876,6 +876,11 @@ iso2022jp_mbtowc(csconv_t *cv, const char *_buf, int bufsize, wchar_t *wbuf, int
             tmp, len + ISO2022JP_ESC_SIZE, wbuf, *wbufsize);
     if (*wbufsize == 0)
         return_error(EILSEQ);
+
+    /* Check for conversion error.  Assuming defaultChar is 0x3F. */
+    if (wbuf[0] == buf[0] && cv->mode != ISO2022JP_MODE_ASCII)
+        return_error(EILSEQ);
+
     return len;
 }
 
@@ -890,6 +895,10 @@ iso2022jp_wctomb(csconv_t *cv, const wchar_t *wbuf, int wbufsize, char *buf, int
     len = WideCharToMultiByte(cv->codepage, 0,
             wbuf, wbufsize, tmp, sizeof(tmp), NULL, NULL);
     if (len == 0)
+        return_error(EILSEQ);
+
+    /* Check for conversion error.  Assuming defaultChar is 0x3F. */
+    if (len == 1 && wbuf[0] != tmp[0])
         return_error(EILSEQ);
 
     if (tmp[0] != 0x1B)
