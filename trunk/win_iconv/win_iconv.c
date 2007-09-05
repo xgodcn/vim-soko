@@ -1,4 +1,6 @@
 /*
+ * iconv() library implemented with Win32 API.
+ *
  * Win32 API does not support strict encoding conversion for some
  * codepage.  And MLang function drop or replace invalid bytes and does
  * not return useful error status as iconv.  This implementation cannot
@@ -22,13 +24,6 @@
 # define DLL_EXPORT
 #endif
 
-/* libiconv interface for vim */
-#if defined(USE_LIBICONV_INTERFACE)
-# define iconv_open libiconv_open
-# define iconv_close libiconv_close
-# define iconv libiconv
-#endif
-
 #define MB_CHAR_MAX 16
 
 #define return_error(code)  \
@@ -42,9 +37,6 @@ typedef void* iconv_t;
 DLL_EXPORT iconv_t iconv_open(const char *tocode, const char *fromcode);
 DLL_EXPORT int iconv_close(iconv_t cd);
 DLL_EXPORT size_t iconv(iconv_t cd, const char **inbuf, size_t *inbytesleft, char **outbuf, size_t *outbytesleft);
-#if defined(USE_LIBICONV_INTERFACE)
-DLL_EXPORT int libiconvctl (iconv_t cd, int request, void* argument) { return 0; }
-#endif
 
 static int win_iconv_close(iconv_t cd);
 static size_t win_iconv(iconv_t cd, const char **inbuf, size_t *inbytesleft, char **outbuf, size_t *outbytesleft);
@@ -415,6 +407,34 @@ iconv(iconv_t cd, const char **inbuf, size_t *inbytesleft, char **outbuf, size_t
 {
     return ((rec_iconv_t *)cd)->iconv(cd, inbuf, inbytesleft, outbuf, outbytesleft);
 }
+
+/* libiconv interface for vim */
+#if defined(USE_LIBICONV_INTERFACE)
+DLL_EXPORT iconv_t
+libiconv_open(const char *tocode, const char *fromcode)
+{
+    return iconv_open(tocode, fromcode);
+}
+
+DLL_EXPORT int
+libiconv_close(iconv_t cd)
+{
+    return iconv_close(cd);
+}
+
+DLL_EXPORT size_t
+libiconv(iconv_t cd, const char **inbuf, size_t *inbytesleft, char **outbuf, size_t *outbytesleft)
+{
+    return iconv(cd, inbuf, inbytesleft, outbuf, outbytesleft);
+}
+
+DLL_EXPORT int
+libiconvctl (iconv_t cd, int request, void* argument)
+{
+    /* not supported */
+    return 0;
+}
+#endif
 
 static int
 win_iconv_close(iconv_t cd)
