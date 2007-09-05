@@ -497,6 +497,13 @@ make_csconv(const char *name)
         cv.mblen = utf8_mblen;
         cv.flush = NULL;
     }
+    else if (cv.codepage == 51932 && load_mlang())
+    {
+        cv.mbtowc = mlang_mbtowc;
+        cv.wctomb = mlang_wctomb;
+        cv.mblen = eucjp_mblen;
+        cv.flush = NULL;
+    }
     else if (IsValidCodePage(cv.codepage)
             && GetCPInfoEx(cv.codepage, 0, &cpinfoex) != 0
             && (cpinfoex.MaxCharSize == 1 || cpinfoex.MaxCharSize == 2))
@@ -507,13 +514,6 @@ make_csconv(const char *name)
             cv.mblen = sbcs_mblen;
         else
             cv.mblen = dbcs_mblen;
-        cv.flush = NULL;
-    }
-    else if (cv.codepage == 51932 && load_mlang())
-    {
-        cv.mbtowc = mlang_mbtowc;
-        cv.wctomb = mlang_wctomb;
-        cv.mblen = eucjp_mblen;
         cv.flush = NULL;
     }
     else
@@ -689,6 +689,8 @@ utf16le_mbtowc(csconv_t *cv, const char *_buf, int bufsize, wchar_t *wbuf, int *
     if (bufsize < 2)
         return_error(EINVAL);
     wbuf[0] = (buf[1] << 8) | buf[0];
+    if (0xDC00 <= wbuf[0] && wbuf[0] <= 0xDFFF)
+        return_error(EILSEQ);
     if (0xD800 <= wbuf[0] && wbuf[0] <= 0xDBFF)
     {
         if (bufsize < 4)
@@ -729,6 +731,8 @@ utf16be_mbtowc(csconv_t *cv, const char *_buf, int bufsize, wchar_t *wbuf, int *
     if (bufsize < 2)
         return_error(EINVAL);
     wbuf[0] = (buf[0] << 8) | buf[1];
+    if (0xDC00 <= wbuf[0] && wbuf[0] <= 0xDFFF)
+        return_error(EILSEQ);
     if (0xD800 <= wbuf[0] && wbuf[0] <= 0xDBFF)
     {
         if (bufsize < 4)
