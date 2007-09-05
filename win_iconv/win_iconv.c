@@ -1,5 +1,5 @@
 /*
- * iconv() library implemented with Win32 API.
+ * iconv library implemented with Win32 API.
  *
  * Win32 API does not support strict encoding conversion for some
  * codepage.  And MLang function drop or replace invalid bytes and does
@@ -878,6 +878,7 @@ iso2022jp_mbtowc(csconv_t *cv, const char *_buf, int bufsize, wchar_t *wbuf, int
         return_error(EILSEQ);
 
     /* Check for conversion error.  Assuming defaultChar is 0x3F. */
+    /* ascii should be converted from ascii */
     if (wbuf[0] == buf[0] && cv->mode != ISO2022JP_MODE_ASCII)
         return_error(EILSEQ);
 
@@ -898,6 +899,7 @@ iso2022jp_wctomb(csconv_t *cv, const wchar_t *wbuf, int wbufsize, char *buf, int
         return_error(EILSEQ);
 
     /* Check for conversion error.  Assuming defaultChar is 0x3F. */
+    /* ascii should be converted from ascii */
     if (len == 1 && wbuf[0] != tmp[0])
         return_error(EILSEQ);
 
