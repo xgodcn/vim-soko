@@ -565,7 +565,7 @@ name_to_codepage(const char *name)
     else if ('0' <= name[0] && name[0] <= '9')
         return atoi(name);     /* 123 */
     else if ((name[0] == 'x' || name[0] == 'X') && (name[1] == 'x' || name[1] == 'X'))
-        return atoi(name);     /* XX123 for debug */
+        return atoi(name + 2); /* XX123 for debug */
 
     for (i = 0; codepage_alias[i].name != NULL; ++i)
         if (lstrcmpi(name, codepage_alias[i].name) == 0)
