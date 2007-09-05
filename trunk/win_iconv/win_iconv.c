@@ -497,13 +497,6 @@ make_csconv(const char *name)
         cv.mblen = utf8_mblen;
         cv.flush = NULL;
     }
-    else if (cv.codepage == 51932 && load_mlang())
-    {
-        cv.mbtowc = mlang_mbtowc;
-        cv.wctomb = mlang_wctomb;
-        cv.mblen = eucjp_mblen;
-        cv.flush = NULL;
-    }
     else if (IsValidCodePage(cv.codepage)
             && GetCPInfoEx(cv.codepage, 0, &cpinfoex) != 0
             && (cpinfoex.MaxCharSize == 1 || cpinfoex.MaxCharSize == 2))
@@ -514,6 +507,13 @@ make_csconv(const char *name)
             cv.mblen = sbcs_mblen;
         else
             cv.mblen = dbcs_mblen;
+        cv.flush = NULL;
+    }
+    else if (cv.codepage == 51932 && load_mlang())
+    {
+        cv.mbtowc = mlang_mbtowc;
+        cv.wctomb = mlang_wctomb;
+        cv.mblen = eucjp_mblen;
         cv.flush = NULL;
     }
     else
