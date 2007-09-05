@@ -437,14 +437,12 @@ win_iconv(iconv_t _cd, const char **inbuf, size_t *inbytesleft, char **outbuf, s
         if (outbuf != NULL && *outbuf != NULL && cd->to.flush != NULL)
         {
             outsize = cd->to.flush(&cd->to, *outbuf, *outbytesleft);
-            cd->to.mode = 0;
             if (outsize == -1)
                 return (size_t)(-1);
             *outbuf += outsize;
             *outbytesleft -= outsize;
         }
-        else
-            cd->to.mode = 0;
+        cd->to.mode = 0;
         return 0;
     }
 
