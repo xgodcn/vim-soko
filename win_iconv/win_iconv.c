@@ -61,6 +61,7 @@ struct csconv_t {
 };
 
 struct rec_iconv_t {
+    iconv_t self;
     csconv_t from;
     csconv_t to;
     f_iconv_close iconv_close;
@@ -377,35 +378,43 @@ load_mlang()
 iconv_t
 iconv_open(const char *tocode, const char *fromcode)
 {
-    rec_iconv_t cd;
-    rec_iconv_t *res;
+    rec_iconv_t *cd;
 
-    cd.from = make_csconv(fromcode);
-    cd.to = make_csconv(tocode);
-    if (cd.from.codepage == -1 || cd.to.codepage == -1)
+    cd = (rec_iconv_t *)malloc(sizeof(rec_iconv_t));
+    if (cd == NULL)
     {
+        errno = ENOMEM;
+        return (iconv_t)(-1);
+    }
+
+    cd->from = make_csconv(fromcode);
+    cd->to = make_csconv(tocode);
+    if (cd->from.codepage == -1 || cd->to.codepage == -1)
+    {
+        free(cd);
         errno = EINVAL;
         return (iconv_t)(-1);
     }
 
-    cd.iconv_close = win_iconv_close;
-    cd.iconv = win_iconv;
+    cd->self = (iconv_t)cd;
+    cd->iconv_close = win_iconv_close;
+    cd->iconv = win_iconv;
 
-    res = (rec_iconv_t *)malloc(sizeof(rec_iconv_t));
-    *res = cd;
-    return (iconv_t)res;
+    return (iconv_t)cd;
 }
 
 int
-iconv_close(iconv_t cd)
+iconv_close(iconv_t _cd)
 {
-    return ((rec_iconv_t *)cd)->iconv_close(cd);
+    rec_iconv_t *cd = (rec_iconv_t *)_cd;
+    return cd->iconv_close(cd->self);
 }
 
 size_t
-iconv(iconv_t cd, const char **inbuf, size_t *inbytesleft, char **outbuf, size_t *outbytesleft)
+iconv(iconv_t _cd, const char **inbuf, size_t *inbytesleft, char **outbuf, size_t *outbytesleft)
 {
-    return ((rec_iconv_t *)cd)->iconv(cd, inbuf, inbytesleft, outbuf, outbytesleft);
+    rec_iconv_t *cd = (rec_iconv_t *)_cd;
+    return cd->iconv(cd->self, inbuf, inbytesleft, outbuf, outbytesleft);
 }
 
 /* libiconv interface for vim */
