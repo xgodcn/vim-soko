@@ -26,6 +26,9 @@
 
 #define MB_CHAR_MAX 16
 
+#define LITTLE_ENDIAN 0
+#define BIG_ENDIAN 1
+
 #define return_error(code)  \
     do {                    \
         errno = code;       \
@@ -58,6 +61,7 @@ struct csconv_t {
     f_mblen mblen;
     f_flush flush;
     DWORD mode;
+    int flag;
 };
 
 struct rec_iconv_t {
@@ -81,10 +85,10 @@ static int kernel_mbtowc(csconv_t *cv, const char *buf, int bufsize, wchar_t *wb
 static int kernel_wctomb(csconv_t *cv, const wchar_t *wbuf, int wbufsize, char *buf, int bufsize);
 static int mlang_mbtowc(csconv_t *cv, const char *buf, int bufsize, wchar_t *wbuf, int *wbufsize);
 static int mlang_wctomb(csconv_t *cv, const wchar_t *wbuf, int wbufsize, char *buf, int bufsize);
-static int utf16le_mbtowc(csconv_t *cv, const char *buf, int bufsize, wchar_t *wbuf, int *wbufsize);
-static int utf16le_wctomb(csconv_t *cv, const wchar_t *wbuf, int wbufsize, char *buf, int bufsize);
-static int utf16be_mbtowc(csconv_t *cv, const char *buf, int bufsize, wchar_t *wbuf, int *wbufsize);
-static int utf16be_wctomb(csconv_t *cv, const wchar_t *wbuf, int wbufsize, char *buf, int bufsize);
+static int utf16_mbtowc(csconv_t *cv, const char *buf, int bufsize, wchar_t *wbuf, int *wbufsize);
+static int utf16_wctomb(csconv_t *cv, const wchar_t *wbuf, int wbufsize, char *buf, int bufsize);
+static int utf32_mbtowc(csconv_t *cv, const char *buf, int bufsize, wchar_t *wbuf, int *wbufsize);
+static int utf32_wctomb(csconv_t *cv, const wchar_t *wbuf, int wbufsize, char *buf, int bufsize);
 static int iso2022jp_mbtowc(csconv_t *cv, const char *buf, int bufsize, wchar_t *wbuf, int *wbufsize);
 static int iso2022jp_wctomb(csconv_t *cv, const wchar_t *wbuf, int wbufsize, char *buf, int bufsize);
 static int iso2022jp_flush(csconv_t *cv, char *buf, int bufsize);
@@ -97,16 +101,28 @@ struct {
     {65001, "UTF8"},
     {65001, "UTF-8"},
 
-    /* !IsValidCodePage(1200) */
     {1200, "CP1200"},
     {1200, "UTF16LE"},
     {1200, "UTF-16LE"},
+    /* use little endian by default. */
+    {1200, "UTF16"},
+    {1200, "UTF-16"},
 
-    /* !IsValidCodePage(1201) */
     {1201, "CP1201"},
-    {1201, "UTF16"},
     {1201, "UTF16BE"},
     {1201, "UTF-16BE"},
+    {1201, "unicodeFFFE"},
+
+    {12000, "CP12000"},
+    {12000, "UTF32LE"},
+    {12000, "UTF-32LE"},
+    /* use little endian by default. */
+    {12000, "UTF32"},
+    {12000, "UTF-32"},
+
+    {12001, "CP12001"},
+    {12001, "UTF32BE"},
+    {12001, "UTF-32BE"},
 
     /* copy from libiconv `iconv -l` */
     /* !IsValidCodePage(367) */
@@ -309,6 +325,157 @@ struct {
     /* !IsValidCodePage(1152) */
     {1125, "CP1125"},
 
+    /*
+     * Code Page Identifiers
+     * http://msdn2.microsoft.com/en-us/library/ms776446.aspx
+     */
+    {37, "IBM037"}, /* IBM EBCDIC US-Canada */
+    {437, "IBM437"}, /* OEM United States */
+    {500, "IBM500"}, /* IBM EBCDIC International */
+    {708, "ASMO-708"}, /* Arabic (ASMO 708) */
+    /* 709 		Arabic (ASMO-449+, BCON V4) */
+    /* 710 		Arabic - Transparent Arabic */
+    {720, "DOS-720"}, /* Arabic (Transparent ASMO); Arabic (DOS) */
+    {737, "ibm737"}, /* OEM Greek (formerly 437G); Greek (DOS) */
+    {775, "ibm775"}, /* OEM Baltic; Baltic (DOS) */
+    {850, "ibm850"}, /* OEM Multilingual Latin 1; Western European (DOS) */
+    {852, "ibm852"}, /* OEM Latin 2; Central European (DOS) */
+    {855, "IBM855"}, /* OEM Cyrillic (primarily Russian) */
+    {857, "ibm857"}, /* OEM Turkish; Turkish (DOS) */
+    {858, "IBM00858"}, /* OEM Multilingual Latin 1 + Euro symbol */
+    {860, "IBM860"}, /* OEM Portuguese; Portuguese (DOS) */
+    {861, "ibm861"}, /* OEM Icelandic; Icelandic (DOS) */
+    {862, "DOS-862"}, /* OEM Hebrew; Hebrew (DOS) */
+    {863, "IBM863"}, /* OEM French Canadian; French Canadian (DOS) */
+    {864, "IBM864"}, /* OEM Arabic; Arabic (864) */
+    {865, "IBM865"}, /* OEM Nordic; Nordic (DOS) */
+    {866, "cp866"}, /* OEM Russian; Cyrillic (DOS) */
+    {869, "ibm869"}, /* OEM Modern Greek; Greek, Modern (DOS) */
+    {870, "IBM870"}, /* IBM EBCDIC Multilingual/ROECE (Latin 2); IBM EBCDIC Multilingual Latin 2 */
+    {874, "windows-874"}, /* ANSI/OEM Thai (same as 28605, ISO 8859-15); Thai (Windows) */
+    {875, "cp875"}, /* IBM EBCDIC Greek Modern */
+    {932, "shift_jis"}, /* ANSI/OEM Japanese; Japanese (Shift-JIS) */
+    {936, "gb2312"}, /* ANSI/OEM Simplified Chinese (PRC, Singapore); Chinese Simplified (GB2312) */
+    {949, "ks_c_5601-1987"}, /* ANSI/OEM Korean (Unified Hangul Code) */
+    {950, "big5"}, /* ANSI/OEM Traditional Chinese (Taiwan; Hong Kong SAR, PRC); Chinese Traditional (Big5) */
+    {1026, "IBM1026"}, /* IBM EBCDIC Turkish (Latin 5) */
+    {1047, "IBM01047"}, /* IBM EBCDIC Latin 1/Open System */
+    {1140, "IBM01140"}, /* IBM EBCDIC US-Canada (037 + Euro symbol); IBM EBCDIC (US-Canada-Euro) */
+    {1141, "IBM01141"}, /* IBM EBCDIC Germany (20273 + Euro symbol); IBM EBCDIC (Germany-Euro) */
+    {1142, "IBM01142"}, /* IBM EBCDIC Denmark-Norway (20277 + Euro symbol); IBM EBCDIC (Denmark-Norway-Euro) */
+    {1143, "IBM01143"}, /* IBM EBCDIC Finland-Sweden (20278 + Euro symbol); IBM EBCDIC (Finland-Sweden-Euro) */
+    {1144, "IBM01144"}, /* IBM EBCDIC Italy (20280 + Euro symbol); IBM EBCDIC (Italy-Euro) */
+    {1145, "IBM01145"}, /* IBM EBCDIC Latin America-Spain (20284 + Euro symbol); IBM EBCDIC (Spain-Euro) */
+    {1146, "IBM01146"}, /* IBM EBCDIC United Kingdom (20285 + Euro symbol); IBM EBCDIC (UK-Euro) */
+    {1147, "IBM01147"}, /* IBM EBCDIC France (20297 + Euro symbol); IBM EBCDIC (France-Euro) */
+    {1148, "IBM01148"}, /* IBM EBCDIC International (500 + Euro symbol); IBM EBCDIC (International-Euro) */
+    {1149, "IBM01149"}, /* IBM EBCDIC Icelandic (20871 + Euro symbol); IBM EBCDIC (Icelandic-Euro) */
+    {1250, "windows-1250"}, /* ANSI Central European; Central European (Windows) */
+    {1251, "windows-1251"}, /* ANSI Cyrillic; Cyrillic (Windows) */
+    {1252, "windows-1252"}, /* ANSI Latin 1; Western European (Windows) */
+    {1253, "windows-1253"}, /* ANSI Greek; Greek (Windows) */
+    {1254, "windows-1254"}, /* ANSI Turkish; Turkish (Windows) */
+    {1255, "windows-1255"}, /* ANSI Hebrew; Hebrew (Windows) */
+    {1256, "windows-1256"}, /* ANSI Arabic; Arabic (Windows) */
+    {1257, "windows-1257"}, /* ANSI Baltic; Baltic (Windows) */
+    {1258, "windows-1258"}, /* ANSI/OEM Vietnamese; Vietnamese (Windows) */
+    {1361, "Johab"}, /* Korean (Johab) */
+    {10000, "macintosh"}, /* MAC Roman; Western European (Mac) */
+    {10001, "x-mac-japanese"}, /* Japanese (Mac) */
+    {10002, "x-mac-chinesetrad"}, /* MAC Traditional Chinese (Big5); Chinese Traditional (Mac) */
+    {10003, "x-mac-korean"}, /* Korean (Mac) */
+    {10004, "x-mac-arabic"}, /* Arabic (Mac) */
+    {10005, "x-mac-hebrew"}, /* Hebrew (Mac) */
+    {10006, "x-mac-greek"}, /* Greek (Mac) */
+    {10007, "x-mac-cyrillic"}, /* Cyrillic (Mac) */
+    {10008, "x-mac-chinesesimp"}, /* MAC Simplified Chinese (GB 2312); Chinese Simplified (Mac) */
+    {10010, "x-mac-romanian"}, /* Romanian (Mac) */
+    {10017, "x-mac-ukrainian"}, /* Ukrainian (Mac) */
+    {10021, "x-mac-thai"}, /* Thai (Mac) */
+    {10029, "x-mac-ce"}, /* MAC Latin 2; Central European (Mac) */
+    {10079, "x-mac-icelandic"}, /* Icelandic (Mac) */
+    {10081, "x-mac-turkish"}, /* Turkish (Mac) */
+    {10082, "x-mac-croatian"}, /* Croatian (Mac) */
+    {20000, "x-Chinese_CNS"}, /* CNS Taiwan; Chinese Traditional (CNS) */
+    {20001, "x-cp20001"}, /* TCA Taiwan */
+    {20002, "x_Chinese-Eten"}, /* Eten Taiwan; Chinese Traditional (Eten) */
+    {20003, "x-cp20003"}, /* IBM5550 Taiwan */
+    {20004, "x-cp20004"}, /* TeleText Taiwan */
+    {20005, "x-cp20005"}, /* Wang Taiwan */
+    {20105, "x-IA5"}, /* IA5 (IRV International Alphabet No. 5, 7-bit); Western European (IA5) */
+    {20106, "x-IA5-German"}, /* IA5 German (7-bit) */
+    {20107, "x-IA5-Swedish"}, /* IA5 Swedish (7-bit) */
+    {20108, "x-IA5-Norwegian"}, /* IA5 Norwegian (7-bit) */
+    {20127, "us-ascii"}, /* US-ASCII (7-bit) */
+    {20261, "x-cp20261"}, /* T.61 */
+    {20269, "x-cp20269"}, /* ISO 6937 Non-Spacing Accent */
+    {20273, "IBM273"}, /* IBM EBCDIC Germany */
+    {20277, "IBM277"}, /* IBM EBCDIC Denmark-Norway */
+    {20278, "IBM278"}, /* IBM EBCDIC Finland-Sweden */
+    {20280, "IBM280"}, /* IBM EBCDIC Italy */
+    {20284, "IBM284"}, /* IBM EBCDIC Latin America-Spain */
+    {20285, "IBM285"}, /* IBM EBCDIC United Kingdom */
+    {20290, "IBM290"}, /* IBM EBCDIC Japanese Katakana Extended */
+    {20297, "IBM297"}, /* IBM EBCDIC France */
+    {20420, "IBM420"}, /* IBM EBCDIC Arabic */
+    {20423, "IBM423"}, /* IBM EBCDIC Greek */
+    {20424, "IBM424"}, /* IBM EBCDIC Hebrew */
+    {20833, "x-EBCDIC-KoreanExtended"}, /* IBM EBCDIC Korean Extended */
+    {20838, "IBM-Thai"}, /* IBM EBCDIC Thai */
+    {20866, "koi8-r"}, /* Russian (KOI8-R); Cyrillic (KOI8-R) */
+    {20871, "IBM871"}, /* IBM EBCDIC Icelandic */
+    {20880, "IBM880"}, /* IBM EBCDIC Cyrillic Russian */
+    {20905, "IBM905"}, /* IBM EBCDIC Turkish */
+    {20924, "IBM00924"}, /* IBM EBCDIC Latin 1/Open System (1047 + Euro symbol) */
+    {20932, "EUC-JP"}, /* Japanese (JIS 0208-1990 and 0121-1990) */
+    {20936, "x-cp20936"}, /* Simplified Chinese (GB2312); Chinese Simplified (GB2312-80) */
+    {20949, "x-cp20949"}, /* Korean Wansung */
+    {21025, "cp1025"}, /* IBM EBCDIC Cyrillic Serbian-Bulgarian */
+    /* 21027 		(deprecated) */
+    {21866, "koi8-u"}, /* Ukrainian (KOI8-U); Cyrillic (KOI8-U) */
+    {28591, "iso-8859-1"}, /* ISO 8859-1 Latin 1; Western European (ISO) */
+    {28592, "iso-8859-2"}, /* ISO 8859-2 Central European; Central European (ISO) */
+    {28593, "iso-8859-3"}, /* ISO 8859-3 Latin 3 */
+    {28594, "iso-8859-4"}, /* ISO 8859-4 Baltic */
+    {28595, "iso-8859-5"}, /* ISO 8859-5 Cyrillic */
+    {28596, "iso-8859-6"}, /* ISO 8859-6 Arabic */
+    {28597, "iso-8859-7"}, /* ISO 8859-7 Greek */
+    {28598, "iso-8859-8"}, /* ISO 8859-8 Hebrew; Hebrew (ISO-Visual) */
+    {28599, "iso-8859-9"}, /* ISO 8859-9 Turkish */
+    {28603, "iso-8859-13"}, /* ISO 8859-13 Estonian */
+    {28605, "iso-8859-15"}, /* ISO 8859-15 Latin 9 */
+    {29001, "x-Europa"}, /* Europa 3 */
+    {38598, "iso-8859-8-i"}, /* ISO 8859-8 Hebrew; Hebrew (ISO-Logical) */
+    {50220, "iso-2022-jp"}, /* ISO 2022 Japanese with no halfwidth Katakana; Japanese (JIS) */
+    {50221, "csISO2022JP"}, /* ISO 2022 Japanese with halfwidth Katakana; Japanese (JIS-Allow 1 byte Kana) */
+    {50222, "iso-2022-jp"}, /* ISO 2022 Japanese JIS X 0201-1989; Japanese (JIS-Allow 1 byte Kana - SO/SI) */
+    {50225, "iso-2022-kr"}, /* ISO 2022 Korean */
+    {50227, "x-cp50227"}, /* ISO 2022 Simplified Chinese; Chinese Simplified (ISO 2022) */
+    /* 50229 		ISO 2022 Traditional Chinese */
+    /* 50930 		EBCDIC Japanese (Katakana) Extended */
+    /* 50931 		EBCDIC US-Canada and Japanese */
+    /* 50933 		EBCDIC Korean Extended and Korean */
+    /* 50935 		EBCDIC Simplified Chinese Extended and Simplified Chinese */
+    /* 50936 		EBCDIC Simplified Chinese */
+    /* 50937 		EBCDIC US-Canada and Traditional Chinese */
+    /* 50939 		EBCDIC Japanese (Latin) Extended and Japanese */
+    {51932, "euc-jp"}, /* EUC Japanese */
+    {51936, "EUC-CN"}, /* EUC Simplified Chinese; Chinese Simplified (EUC) */
+    {51949, "euc-kr"}, /* EUC Korean */
+    /* 51950 		EUC Traditional Chinese */
+    {52936, "hz-gb-2312"}, /* HZ-GB2312 Simplified Chinese; Chinese Simplified (HZ) */
+    {54936, "GB18030"}, /* Windows XP and later: GB18030 Simplified Chinese (4 byte); Chinese Simplified (GB18030) */
+    {57002, "x-iscii-de"}, /* ISCII Devanagari */
+    {57003, "x-iscii-be"}, /* ISCII Bengali */
+    {57004, "x-iscii-ta"}, /* ISCII Tamil */
+    {57005, "x-iscii-te"}, /* ISCII Telugu */
+    {57006, "x-iscii-as"}, /* ISCII Assamese */
+    {57007, "x-iscii-or"}, /* ISCII Oriya */
+    {57008, "x-iscii-ka"}, /* ISCII Kannada */
+    {57009, "x-iscii-ma"}, /* ISCII Malayalam */
+    {57010, "x-iscii-gu"}, /* ISCII Gujarati */
+    {57011, "x-iscii-pa"}, /* ISCII Punjabi */
+
     {0, NULL}
 };
 
@@ -507,19 +674,38 @@ make_csconv(const char *name)
     CPINFOEX cpinfoex;
     csconv_t cv;
 
+    cv.flag = 0;
     cv.mode = 0;
     cv.codepage = name_to_codepage(name);
     if (cv.codepage == 1200)
     {
-        cv.mbtowc = utf16le_mbtowc;
-        cv.wctomb = utf16le_wctomb;
+        cv.flag = LITTLE_ENDIAN;
+        cv.mbtowc = utf16_mbtowc;
+        cv.wctomb = utf16_wctomb;
         cv.mblen = NULL;
         cv.flush = NULL;
     }
     else if (cv.codepage == 1201)
     {
-        cv.mbtowc = utf16be_mbtowc;
-        cv.wctomb = utf16be_wctomb;
+        cv.flag = BIG_ENDIAN;
+        cv.mbtowc = utf16_mbtowc;
+        cv.wctomb = utf16_wctomb;
+        cv.mblen = NULL;
+        cv.flush = NULL;
+    }
+    else if (cv.codepage == 12000)
+    {
+        cv.flag = LITTLE_ENDIAN;
+        cv.mbtowc = utf32_mbtowc;
+        cv.wctomb = utf32_wctomb;
+        cv.mblen = NULL;
+        cv.flush = NULL;
+    }
+    else if (cv.codepage == 12001)
+    {
+        cv.flag = BIG_ENDIAN;
+        cv.mbtowc = utf32_mbtowc;
+        cv.wctomb = utf32_wctomb;
         cv.mblen = NULL;
         cv.flush = NULL;
     }
@@ -724,20 +910,26 @@ mlang_wctomb(csconv_t *cv, const wchar_t *wbuf, int wbufsize, char *buf, int buf
 }
 
 static int
-utf16le_mbtowc(csconv_t *cv, const char *_buf, int bufsize, wchar_t *wbuf, int *wbufsize)
+utf16_mbtowc(csconv_t *cv, const char *_buf, int bufsize, wchar_t *wbuf, int *wbufsize)
 {
     unsigned char *buf = (unsigned char *)_buf;
 
     if (bufsize < 2)
         return_error(EINVAL);
-    wbuf[0] = (buf[1] << 8) | buf[0];
+    if (cv->flag == LITTLE_ENDIAN)
+        wbuf[0] = (buf[1] << 8) | buf[0];
+    else
+        wbuf[0] = (buf[0] << 8) | buf[1];
     if (0xDC00 <= wbuf[0] && wbuf[0] <= 0xDFFF)
         return_error(EILSEQ);
     if (0xD800 <= wbuf[0] && wbuf[0] <= 0xDBFF)
     {
         if (bufsize < 4)
             return_error(EINVAL);
-        wbuf[1] = (buf[3] << 8) | buf[2];
+        if (cv->flag == LITTLE_ENDIAN)
+            wbuf[1] = (buf[3] << 8) | buf[2];
+        else
+            wbuf[1] = (buf[2] << 8) | buf[3];
         if (!(0xDC00 <= wbuf[1] && wbuf[1] <= 0xDFFF))
             return_error(EILSEQ);
         *wbufsize = 2;
@@ -748,63 +940,91 @@ utf16le_mbtowc(csconv_t *cv, const char *_buf, int bufsize, wchar_t *wbuf, int *
 }
 
 static int
-utf16le_wctomb(csconv_t *cv, const wchar_t *wbuf, int wbufsize, char *buf, int bufsize)
+utf16_wctomb(csconv_t *cv, const wchar_t *wbuf, int wbufsize, char *buf, int bufsize)
 {
     if (bufsize < 2)
         return_error(E2BIG);
-    buf[0] = (wbuf[0] & 0x00FF);
-    buf[1] = (wbuf[0] & 0xFF00) >> 8;
-    if (0xD800 <= wbuf[0] && wbuf[0] <= 0xDBFF)
+    if (cv->flag == LITTLE_ENDIAN)
+    {
+        buf[0] = (wbuf[0] & 0x00FF);
+        buf[1] = (wbuf[0] & 0xFF00) >> 8;
+    }
+    else
+    {
+        buf[0] = (wbuf[0] & 0xFF00) >> 8;
+        buf[1] = (wbuf[0] & 0x00FF);
+    }
+    if (0xD800 <= (wbuf[0] & 0xFFFF) && (wbuf[0] & 0xFFFF) <= 0xDBFF)
     {
         if (bufsize < 4)
             return_error(E2BIG);
-        buf[2] = (wbuf[1] & 0x00FF);
-        buf[3] = (wbuf[1] & 0xFF00) >> 8;
+        if (cv->flag == LITTLE_ENDIAN)
+        {
+            buf[2] = (wbuf[1] & 0x00FF);
+            buf[3] = (wbuf[1] & 0xFF00) >> 8;
+        }
+        else
+        {
+            buf[2] = (wbuf[1] & 0xFF00) >> 8;
+            buf[3] = (wbuf[1] & 0x00FF);
+        }
         return 4;
     }
     return 2;
 }
 
 static int
-utf16be_mbtowc(csconv_t *cv, const char *_buf, int bufsize, wchar_t *wbuf, int *wbufsize)
+utf32_mbtowc(csconv_t *cv, const char *_buf, int bufsize, wchar_t *wbuf, int *wbufsize)
 {
     unsigned char *buf = (unsigned char *)_buf;
+    unsigned int wc;
 
-    if (bufsize < 2)
+    if (bufsize < 4)
         return_error(EINVAL);
-    wbuf[0] = (buf[0] << 8) | buf[1];
-    if (0xDC00 <= wbuf[0] && wbuf[0] <= 0xDFFF)
+    if (cv->flag == LITTLE_ENDIAN)
+        wc = (buf[3] << 24) | (buf[2] << 16) | (buf[1] << 8) | buf[0];
+    else
+        wc = (buf[0] << 24) | (buf[1] << 16) | (buf[2] << 8) | buf[3];
+    if ((0xD800 <= wc && wc <= 0xDFFF) || 0x10FFFF < wc)
         return_error(EILSEQ);
-    if (0xD800 <= wbuf[0] && wbuf[0] <= 0xDBFF)
+    if (0xFFFF < wc)
     {
-        if (bufsize < 4)
-            return_error(EINVAL);
-        wbuf[1] = (buf[2] << 8) | buf[3];
-        if (!(0xDC00 <= wbuf[1] && wbuf[1] <= 0xDFFF))
-            return_error(EILSEQ);
+        wbuf[0] = 0xD800 | ((wc & 0x1F0000) - 1) | (wc & 0x00FC00);
+        wbuf[1] = 0xDC00 | (wc & 0x0003FF);
         *wbufsize = 2;
-        return 4;
     }
-    *wbufsize = 1;
-    return 2;
+    else
+    {
+        wbuf[0] = wc;
+        *wbufsize = 1;
+    }
+    return 4;
 }
 
 static int
-utf16be_wctomb(csconv_t *cv, const wchar_t *wbuf, int wbufsize, char *buf, int bufsize)
+utf32_wctomb(csconv_t *cv, const wchar_t *wbuf, int wbufsize, char *buf, int bufsize)
 {
-    if (bufsize < 2)
+    unsigned int wc = wbuf[0] & 0xFFFF;
+
+    if (bufsize < 4)
         return_error(E2BIG);
-    buf[0] = (wbuf[0] & 0xFF00) >> 8;
-    buf[1] = (wbuf[0] & 0x00FF);
-    if (0xD800 <= wbuf[0] && wbuf[0] <= 0xDBFF)
+    if (0xD800 <= wbuf[0] && wbuf[0] <= 0xDFFF)
+        wc = ((wbuf[0] & 0x03C0) << 16) | ((wbuf[0] & 0x003F) << 10) | (wbuf[1] & 0x03FF);
+    if (cv->flag == LITTLE_ENDIAN)
     {
-        if (bufsize < 4)
-            return_error(E2BIG);
-        buf[2] = (wbuf[1] & 0xFF00) >> 8;
-        buf[3] = (wbuf[1] & 0x00FF);
-        return 4;
+        buf[0] = wc & 0x000000FF;
+        buf[1] = (wc & 0x0000FF00) >> 8;
+        buf[2] = (wc & 0x00FF0000) >> 16;
+        buf[3] = (wc & 0xFF000000) >> 24;
     }
-    return 2;
+    else
+    {
+        buf[0] = (wc & 0xFF000000) >> 24;
+        buf[1] = (wc & 0x00FF0000) >> 16;
+        buf[2] = (wc & 0x0000FF00) >> 8;
+        buf[3] = wc & 0x000000FF;
+    }
+    return 4;
 }
 
 static const char * iso2022jp_escape_ascii = "\x1B\x28\x42";
