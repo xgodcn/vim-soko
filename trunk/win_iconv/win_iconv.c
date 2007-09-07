@@ -1261,8 +1261,8 @@ main(int argc, char **argv)
     char *fromcode = NULL;
     char *tocode = NULL;
     int i;
-    char inbuf[8192];
-    char outbuf[8192];
+    char inbuf[BUFSIZ];
+    char outbuf[BUFSIZ];
     const char *inp;
     char *outp;
     size_t inbytesleft;
