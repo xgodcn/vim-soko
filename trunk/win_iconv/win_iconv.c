@@ -29,6 +29,10 @@
 #define LITTLE_ENDIAN 0
 #define BIG_ENDIAN 1
 
+/* for unsigned calculation */
+#define U1(var) (var & 0xFF)
+#define U2(var) (var & 0xFFFF)
+
 #define return_error(code)  \
     do {                    \
         errno = code;       \
@@ -50,7 +54,7 @@ typedef struct rec_iconv_t rec_iconv_t;
 typedef int (*f_iconv_close)(iconv_t cd);
 typedef size_t (*f_iconv)(iconv_t cd, const char **inbuf, size_t *inbytesleft, char **outbuf, size_t *outbytesleft);
 typedef int (*f_mbtowc)(csconv_t *cv, const char *buf, int bufsize, wchar_t *wbuf, int *wbufsize);
-typedef int (*f_wctomb)(csconv_t *cv, const wchar_t *wbuf, int wbufsize, char *buf, int bufsize);
+typedef int (*f_wctomb)(csconv_t *cv, wchar_t *wbuf, int wbufsize, char *buf, int bufsize);
 typedef int (*f_mblen)(csconv_t *cv, const char *buf, int bufsize);
 typedef int (*f_flush)(csconv_t *cv, char *buf, int bufsize);
 
@@ -82,15 +86,15 @@ static int utf8_mblen(csconv_t *cv, const char *buf, int bufsize);
 static int eucjp_mblen(csconv_t *cv, const char *buf, int bufsize);
 
 static int kernel_mbtowc(csconv_t *cv, const char *buf, int bufsize, wchar_t *wbuf, int *wbufsize);
-static int kernel_wctomb(csconv_t *cv, const wchar_t *wbuf, int wbufsize, char *buf, int bufsize);
+static int kernel_wctomb(csconv_t *cv, wchar_t *wbuf, int wbufsize, char *buf, int bufsize);
 static int mlang_mbtowc(csconv_t *cv, const char *buf, int bufsize, wchar_t *wbuf, int *wbufsize);
-static int mlang_wctomb(csconv_t *cv, const wchar_t *wbuf, int wbufsize, char *buf, int bufsize);
+static int mlang_wctomb(csconv_t *cv, wchar_t *wbuf, int wbufsize, char *buf, int bufsize);
 static int utf16_mbtowc(csconv_t *cv, const char *buf, int bufsize, wchar_t *wbuf, int *wbufsize);
-static int utf16_wctomb(csconv_t *cv, const wchar_t *wbuf, int wbufsize, char *buf, int bufsize);
+static int utf16_wctomb(csconv_t *cv, wchar_t *wbuf, int wbufsize, char *buf, int bufsize);
 static int utf32_mbtowc(csconv_t *cv, const char *buf, int bufsize, wchar_t *wbuf, int *wbufsize);
-static int utf32_wctomb(csconv_t *cv, const wchar_t *wbuf, int wbufsize, char *buf, int bufsize);
+static int utf32_wctomb(csconv_t *cv, wchar_t *wbuf, int wbufsize, char *buf, int bufsize);
 static int iso2022jp_mbtowc(csconv_t *cv, const char *buf, int bufsize, wchar_t *wbuf, int *wbufsize);
-static int iso2022jp_wctomb(csconv_t *cv, const wchar_t *wbuf, int wbufsize, char *buf, int bufsize);
+static int iso2022jp_wctomb(csconv_t *cv, wchar_t *wbuf, int wbufsize, char *buf, int bufsize);
 static int iso2022jp_flush(csconv_t *cv, char *buf, int bufsize);
 
 struct {
@@ -854,7 +858,7 @@ kernel_mbtowc(csconv_t *cv, const char *buf, int bufsize, wchar_t *wbuf, int *wb
 }
 
 static int
-kernel_wctomb(csconv_t *cv, const wchar_t *wbuf, int wbufsize, char *buf, int bufsize)
+kernel_wctomb(csconv_t *cv, wchar_t *wbuf, int wbufsize, char *buf, int bufsize)
 {
     BOOL usedDefaultChar = 0;
     int len;
@@ -892,7 +896,7 @@ mlang_mbtowc(csconv_t *cv, const char *buf, int bufsize, wchar_t *wbuf, int *wbu
 }
 
 static int
-mlang_wctomb(csconv_t *cv, const wchar_t *wbuf, int wbufsize, char *buf, int bufsize)
+mlang_wctomb(csconv_t *cv, wchar_t *wbuf, int wbufsize, char *buf, int bufsize)
 {
     char tmpbuf[MB_CHAR_MAX]; /* enough room for one character */;
     int tmpsize = MB_CHAR_MAX;
@@ -940,7 +944,7 @@ utf16_mbtowc(csconv_t *cv, const char *_buf, int bufsize, wchar_t *wbuf, int *wb
 }
 
 static int
-utf16_wctomb(csconv_t *cv, const wchar_t *wbuf, int wbufsize, char *buf, int bufsize)
+utf16_wctomb(csconv_t *cv, wchar_t *wbuf, int wbufsize, char *buf, int bufsize)
 {
     if (bufsize < 2)
         return_error(E2BIG);
@@ -954,7 +958,7 @@ utf16_wctomb(csconv_t *cv, const wchar_t *wbuf, int wbufsize, char *buf, int buf
         buf[0] = (wbuf[0] & 0xFF00) >> 8;
         buf[1] = (wbuf[0] & 0x00FF);
     }
-    if (0xD800 <= (wbuf[0] & 0xFFFF) && (wbuf[0] & 0xFFFF) <= 0xDBFF)
+    if (0xD800 <= U2(wbuf[0]) && U2(wbuf[0]) <= 0xDBFF)
     {
         if (bufsize < 4)
             return_error(E2BIG);
@@ -1002,9 +1006,9 @@ utf32_mbtowc(csconv_t *cv, const char *_buf, int bufsize, wchar_t *wbuf, int *wb
 }
 
 static int
-utf32_wctomb(csconv_t *cv, const wchar_t *wbuf, int wbufsize, char *buf, int bufsize)
+utf32_wctomb(csconv_t *cv, wchar_t *wbuf, int wbufsize, char *buf, int bufsize)
 {
-    unsigned int wc = wbuf[0] & 0xFFFF;
+    unsigned int wc = U2(wbuf[0]);
 
     if (bufsize < 4)
         return_error(E2BIG);
@@ -1027,17 +1031,32 @@ utf32_wctomb(csconv_t *cv, const wchar_t *wbuf, int wbufsize, char *buf, int buf
     return 4;
 }
 
-static const char * iso2022jp_escape_ascii = "\x1B\x28\x42";
-static const char * iso2022jp_escape_jisx0201 = "\x1B\x28\x4A";
-static const char * iso2022jp_escape_jisc6226 = "\x1B\x24\x40";
-static const char * iso2022jp_escape_jisx0208 = "\x1B\x24\x42";
+
+/*
+ * 50220: ISO 2022 Japanese with no halfwidth Katakana; Japanese (JIS)
+ * 50221: ISO 2022 Japanese with halfwidth Katakana; Japanese (JIS-Allow
+ *        1 byte Kana)
+ * 50222: ISO 2022 Japanese JIS X 0201-1989; Japanese (JIS-Allow 1 byte
+ *        Kana - SO/SI)
+ */
+static const char *iso2022jp_escape_ascii = "\x1B\x28\x42";
+static const char *iso2022jp_escape_jisx0201_roman = "\x1B\x28\x4A";
+static const char *iso2022jp_escape_jisx0201_kana = "\x1B\x28\x49";
+static const char *iso2022jp_escape_jisc6226 = "\x1B\x24\x40";
+static const char *iso2022jp_escape_jisx0208 = "\x1B\x24\x42";
+
+/* shift out (to kana) */
+static const char *iso2022jp_SO = "\x0E";
+/* shift in (to ascii) */
+static const char *iso2022jp_SI = "\x0F";
 
 #define ISO2022JP_ESC_SIZE 3
 
-#define ISO2022JP_MODE_ASCII        0
-#define ISO2022JP_MODE_JISX0201     1
-#define ISO2022JP_MODE_JISC6226     2
-#define ISO2022JP_MODE_JISX0208     3
+#define ISO2022JP_MODE_ASCII            0
+#define ISO2022JP_MODE_JISX0201_ROMAN   1
+#define ISO2022JP_MODE_JISX0201_KANA    2
+#define ISO2022JP_MODE_JISC6226         3
+#define ISO2022JP_MODE_JISX0208         4
 
 static int
 iso2022jp_mbtowc(csconv_t *cv, const char *_buf, int bufsize, wchar_t *wbuf, int *wbufsize)
@@ -1052,8 +1071,10 @@ iso2022jp_mbtowc(csconv_t *cv, const char *_buf, int bufsize, wchar_t *wbuf, int
             return_error(EINVAL);
         if (strncmp(buf, iso2022jp_escape_ascii, ISO2022JP_ESC_SIZE) == 0)
             cv->mode = ISO2022JP_MODE_ASCII;
-        else if (strncmp(buf, iso2022jp_escape_jisx0201, ISO2022JP_ESC_SIZE) == 0)
-            cv->mode = ISO2022JP_MODE_JISX0201;
+        else if (strncmp(buf, iso2022jp_escape_jisx0201_roman, ISO2022JP_ESC_SIZE) == 0)
+            cv->mode = ISO2022JP_MODE_JISX0201_ROMAN;
+        else if (strncmp(buf, iso2022jp_escape_jisx0201_kana, ISO2022JP_ESC_SIZE) == 0)
+            cv->mode = ISO2022JP_MODE_JISX0201_KANA;
         else if (strncmp(buf, iso2022jp_escape_jisc6226, ISO2022JP_ESC_SIZE) == 0)
             cv->mode = ISO2022JP_MODE_JISC6226;
         else if (strncmp(buf, iso2022jp_escape_jisx0208, ISO2022JP_ESC_SIZE) == 0)
@@ -1062,6 +1083,18 @@ iso2022jp_mbtowc(csconv_t *cv, const char *_buf, int bufsize, wchar_t *wbuf, int
             return_error(EILSEQ);
         *wbufsize = 0;
         return ISO2022JP_ESC_SIZE;
+    }
+    else if (buf[0] == iso2022jp_SO[0])
+    {
+        cv->mode = ISO2022JP_MODE_JISX0201_KANA;
+        *wbufsize = 0;
+        return 1;
+    }
+    else if (buf[0] == iso2022jp_SI[0])
+    {
+        cv->mode = ISO2022JP_MODE_ASCII;
+        *wbufsize = 0;
+        return 1;
     }
 
     if (0x80 <= buf[0])
@@ -1073,9 +1106,15 @@ iso2022jp_mbtowc(csconv_t *cv, const char *_buf, int bufsize, wchar_t *wbuf, int
         memcpy(tmp + ISO2022JP_ESC_SIZE, buf, 1);
         len = 1;
     }
-    else if (cv->mode == ISO2022JP_MODE_JISX0201)
+    else if (cv->mode == ISO2022JP_MODE_JISX0201_ROMAN)
     {
-        memcpy(tmp, iso2022jp_escape_jisx0201, ISO2022JP_ESC_SIZE);
+        memcpy(tmp, iso2022jp_escape_jisx0201_roman, ISO2022JP_ESC_SIZE);
+        memcpy(tmp + ISO2022JP_ESC_SIZE, buf, 1);
+        len = 1;
+    }
+    else if (cv->mode == ISO2022JP_MODE_JISX0201_KANA)
+    {
+        memcpy(tmp, iso2022jp_escape_jisx0201_kana, ISO2022JP_ESC_SIZE);
         memcpy(tmp + ISO2022JP_ESC_SIZE, buf, 1);
         len = 1;
     }
@@ -1111,15 +1150,26 @@ iso2022jp_mbtowc(csconv_t *cv, const char *_buf, int bufsize, wchar_t *wbuf, int
     if (wbuf[0] == buf[0] && cv->mode != ISO2022JP_MODE_ASCII)
         return_error(EILSEQ);
 
+    /* XXX: U+301C is incompatible with other Japanese codepage.  Use
+     * U+FF5E instead. */
+    if (U2(wbuf[0]) == 0x301C)
+        wbuf[0] = 0xFF5E;
+
     return len;
 }
 
 static int
-iso2022jp_wctomb(csconv_t *cv, const wchar_t *wbuf, int wbufsize, char *buf, int bufsize)
+iso2022jp_wctomb(csconv_t *cv, wchar_t *wbuf, int wbufsize, char *buf, int bufsize)
 {
     char tmp[MB_CHAR_MAX];
     int len;
     int mode = cv->mode;
+
+    /* XXX: Handle U+FF5E as U+301C for compatibility with other
+     * Japanese codepage.  Is this conversion behavior (U+301C <->
+     * JIS:2141) portable in other Windows version? */
+    if (U2(wbuf[0]) == 0xFF5E)
+        wbuf[0] = 0x301C;
 
     /* defaultChar cannot be used for CP50220, CP50221 and CP50222 */
     len = WideCharToMultiByte(cv->codepage, 0,
@@ -1129,31 +1179,78 @@ iso2022jp_wctomb(csconv_t *cv, const wchar_t *wbuf, int wbufsize, char *buf, int
 
     /* Check for conversion error.  Assuming defaultChar is 0x3F. */
     /* ascii should be converted from ascii */
-    if (len == 1 && wbuf[0] != tmp[0])
+    if (len == 1 && wbuf[0] < 0x80 && wbuf[0] != tmp[0])
         return_error(EILSEQ);
 
     if (tmp[0] != 0x1B)
         mode = ISO2022JP_MODE_ASCII;
-    else if (strncmp(tmp, iso2022jp_escape_jisx0201, ISO2022JP_ESC_SIZE) == 0)
-        mode = ISO2022JP_MODE_JISX0201;
+    else if (strncmp(tmp, iso2022jp_escape_jisx0201_roman, ISO2022JP_ESC_SIZE) == 0)
+        mode = ISO2022JP_MODE_JISX0201_ROMAN;
+    else if (strncmp(tmp, iso2022jp_escape_jisx0201_kana, ISO2022JP_ESC_SIZE) == 0)
+        mode = ISO2022JP_MODE_JISX0201_KANA;
     else if (strncmp(tmp, iso2022jp_escape_jisc6226, ISO2022JP_ESC_SIZE) == 0)
         mode = ISO2022JP_MODE_JISC6226;
     else if (strncmp(tmp, iso2022jp_escape_jisx0208, ISO2022JP_ESC_SIZE) == 0)
         mode = ISO2022JP_MODE_JISX0208;
 
-    if (cv->mode != mode && mode == ISO2022JP_MODE_ASCII)
+    if (len > 4 && tmp[3] == iso2022jp_SO[0])
+        mode = ISO2022JP_MODE_JISX0201_KANA;
+
+    if (cv->codepage == 50222)
     {
-        /* insert escape sequence */
-        memmove(tmp + ISO2022JP_ESC_SIZE, tmp, len);
-        memcpy(tmp, iso2022jp_escape_ascii, ISO2022JP_ESC_SIZE);
-        len += ISO2022JP_ESC_SIZE;
+        if (cv->mode != mode && mode == ISO2022JP_MODE_ASCII)
+        {
+            /* insert escape sequence */
+            if (cv->mode == ISO2022JP_MODE_JISX0201_KANA)
+            {
+                /* use SI */
+                memmove(tmp + 1, tmp, len);
+                memcpy(tmp, iso2022jp_SI, 1);
+                len += 1;
+            }
+            else
+            {
+                memmove(tmp + ISO2022JP_ESC_SIZE, tmp, len);
+                memcpy(tmp, iso2022jp_escape_ascii, ISO2022JP_ESC_SIZE);
+                len += ISO2022JP_ESC_SIZE;
+            }
+        }
+        else if (cv->mode != mode && cv->mode == ISO2022JP_MODE_JISX0201_KANA)
+        {
+            /* insert SI */
+            memmove(tmp + 1, tmp, len);
+            memcpy(tmp, iso2022jp_SI, 1);
+            len += 1;
+        }
+        else if (cv->mode == mode && mode != ISO2022JP_MODE_ASCII)
+        {
+            /* remove escape sequence */
+            len -= ISO2022JP_ESC_SIZE;
+            memmove(tmp, tmp + ISO2022JP_ESC_SIZE, len);
+            if (tmp[0] == iso2022jp_SO[0])
+            {
+                len -= 1;
+                memmove(tmp, tmp + 1, len);
+            }
+        }
     }
-    else if (cv->mode == mode && mode != ISO2022JP_MODE_ASCII)
+    else
     {
-        /* remove escape sequence */
-        memmove(tmp, tmp + ISO2022JP_ESC_SIZE, len);
-        len -= ISO2022JP_ESC_SIZE;
+        if (cv->mode != mode && mode == ISO2022JP_MODE_ASCII)
+        {
+            /* insert escape sequence */
+            memmove(tmp + ISO2022JP_ESC_SIZE, tmp, len);
+            memcpy(tmp, iso2022jp_escape_ascii, ISO2022JP_ESC_SIZE);
+            len += ISO2022JP_ESC_SIZE;
+        }
+        else if (cv->mode == mode && mode != ISO2022JP_MODE_ASCII)
+        {
+            /* remove escape sequence */
+            len -= ISO2022JP_ESC_SIZE;
+            memmove(tmp, tmp + ISO2022JP_ESC_SIZE, len);
+        }
     }
+
     if (bufsize < len)
         return_error(E2BIG);
     memcpy(buf, tmp, len);
@@ -1181,8 +1278,8 @@ iso2022jp_flush(csconv_t *cv, char *buf, int bufsize)
 int
 main(int argc, char **argv)
 {
-    char *fromcode;
-    char *tocode;
+    char *fromcode = NULL;
+    char *tocode = NULL;
     int i;
     char inbuf[8192];
     char outbuf[8192];
