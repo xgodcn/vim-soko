@@ -65,15 +65,14 @@ struct csconv_t {
     f_mblen mblen;
     f_flush flush;
     DWORD mode;
-    int flag;
 };
 
 struct rec_iconv_t {
     iconv_t self;
-    csconv_t from;
-    csconv_t to;
     f_iconv_close iconv_close;
     f_iconv iconv;
+    csconv_t from;
+    csconv_t to;
 };
 
 static int load_mlang();
@@ -678,36 +677,17 @@ make_csconv(const char *name)
     CPINFOEX cpinfoex;
     csconv_t cv;
 
-    cv.flag = 0;
     cv.mode = 0;
     cv.codepage = name_to_codepage(name);
-    if (cv.codepage == 1200)
+    if (cv.codepage == 1200 || cv.codepage == 1201)
     {
-        cv.flag = LITTLE_ENDIAN;
         cv.mbtowc = utf16_mbtowc;
         cv.wctomb = utf16_wctomb;
         cv.mblen = NULL;
         cv.flush = NULL;
     }
-    else if (cv.codepage == 1201)
+    else if (cv.codepage == 12000 || cv.codepage == 12001)
     {
-        cv.flag = BIG_ENDIAN;
-        cv.mbtowc = utf16_mbtowc;
-        cv.wctomb = utf16_wctomb;
-        cv.mblen = NULL;
-        cv.flush = NULL;
-    }
-    else if (cv.codepage == 12000)
-    {
-        cv.flag = LITTLE_ENDIAN;
-        cv.mbtowc = utf32_mbtowc;
-        cv.wctomb = utf32_wctomb;
-        cv.mblen = NULL;
-        cv.flush = NULL;
-    }
-    else if (cv.codepage == 12001)
-    {
-        cv.flag = BIG_ENDIAN;
         cv.mbtowc = utf32_mbtowc;
         cv.wctomb = utf32_wctomb;
         cv.mblen = NULL;
@@ -920,9 +900,9 @@ utf16_mbtowc(csconv_t *cv, const char *_buf, int bufsize, wchar_t *wbuf, int *wb
 
     if (bufsize < 2)
         return_error(EINVAL);
-    if (cv->flag == LITTLE_ENDIAN)
+    if (cv->codepage == 1200) /* little endian */
         wbuf[0] = (buf[1] << 8) | buf[0];
-    else
+    else if (cv->codepage == 1201) /* big endian */
         wbuf[0] = (buf[0] << 8) | buf[1];
     if (0xDC00 <= wbuf[0] && wbuf[0] <= 0xDFFF)
         return_error(EILSEQ);
@@ -930,9 +910,9 @@ utf16_mbtowc(csconv_t *cv, const char *_buf, int bufsize, wchar_t *wbuf, int *wb
     {
         if (bufsize < 4)
             return_error(EINVAL);
-        if (cv->flag == LITTLE_ENDIAN)
+        if (cv->codepage == 1200) /* little endian */
             wbuf[1] = (buf[3] << 8) | buf[2];
-        else
+        else if (cv->codepage == 1201) /* big endian */
             wbuf[1] = (buf[2] << 8) | buf[3];
         if (!(0xDC00 <= wbuf[1] && wbuf[1] <= 0xDFFF))
             return_error(EILSEQ);
@@ -948,12 +928,12 @@ utf16_wctomb(csconv_t *cv, wchar_t *wbuf, int wbufsize, char *buf, int bufsize)
 {
     if (bufsize < 2)
         return_error(E2BIG);
-    if (cv->flag == LITTLE_ENDIAN)
+    if (cv->codepage == 1200) /* little endian */
     {
         buf[0] = (wbuf[0] & 0x00FF);
         buf[1] = (wbuf[0] & 0xFF00) >> 8;
     }
-    else
+    else if (cv->codepage == 1201) /* big endian */
     {
         buf[0] = (wbuf[0] & 0xFF00) >> 8;
         buf[1] = (wbuf[0] & 0x00FF);
@@ -962,12 +942,12 @@ utf16_wctomb(csconv_t *cv, wchar_t *wbuf, int wbufsize, char *buf, int bufsize)
     {
         if (bufsize < 4)
             return_error(E2BIG);
-        if (cv->flag == LITTLE_ENDIAN)
+        if (cv->codepage == 1200) /* little endian */
         {
             buf[2] = (wbuf[1] & 0x00FF);
             buf[3] = (wbuf[1] & 0xFF00) >> 8;
         }
-        else
+        else if (cv->codepage == 1201) /* big endian */
         {
             buf[2] = (wbuf[1] & 0xFF00) >> 8;
             buf[3] = (wbuf[1] & 0x00FF);
@@ -985,9 +965,9 @@ utf32_mbtowc(csconv_t *cv, const char *_buf, int bufsize, wchar_t *wbuf, int *wb
 
     if (bufsize < 4)
         return_error(EINVAL);
-    if (cv->flag == LITTLE_ENDIAN)
+    if (cv->codepage == 12000) /* little endian */
         wc = (buf[3] << 24) | (buf[2] << 16) | (buf[1] << 8) | buf[0];
-    else
+    else if (cv->codepage == 12001) /* big endian */
         wc = (buf[0] << 24) | (buf[1] << 16) | (buf[2] << 8) | buf[3];
     if ((0xD800 <= wc && wc <= 0xDFFF) || 0x10FFFF < wc)
         return_error(EILSEQ);
@@ -1014,14 +994,14 @@ utf32_wctomb(csconv_t *cv, wchar_t *wbuf, int wbufsize, char *buf, int bufsize)
         return_error(E2BIG);
     if (0xD800 <= wbuf[0] && wbuf[0] <= 0xDFFF)
         wc = ((wbuf[0] & 0x03C0) << 16) | ((wbuf[0] & 0x003F) << 10) | (wbuf[1] & 0x03FF);
-    if (cv->flag == LITTLE_ENDIAN)
+    if (cv->codepage == 12000) /* little endian */
     {
         buf[0] = wc & 0x000000FF;
         buf[1] = (wc & 0x0000FF00) >> 8;
         buf[2] = (wc & 0x00FF0000) >> 16;
         buf[3] = (wc & 0xFF000000) >> 24;
     }
-    else
+    else if (cv->codepage == 12001) /* big endian */
     {
         buf[0] = (wc & 0xFF000000) >> 24;
         buf[1] = (wc & 0x00FF0000) >> 16;
