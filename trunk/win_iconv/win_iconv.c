@@ -1324,7 +1324,7 @@ main(int argc, char **argv)
         fwrite(outbuf, 1, sizeof(outbuf) - outbytesleft, stdout);
         if (r != (size_t)(-1) || errno == E2BIG || errno == EINVAL)
         {
-            memmove(inbuf, inp, sizeof(inbuf) - inbytesleft);
+            memmove(inbuf, inp, inbytesleft);
             rest = inbytesleft;
         }
         else
