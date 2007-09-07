@@ -26,9 +26,6 @@
 
 #define MB_CHAR_MAX 16
 
-#define LITTLE_ENDIAN 0
-#define BIG_ENDIAN 1
-
 /* for unsigned calculation */
 #define U1(var) (var & 0xFF)
 #define U2(var) (var & 0xFFFF)
@@ -531,17 +528,17 @@ static int
 load_mlang()
 {
     if (ConvertINetString != NULL)
-        return 1;
+        return TRUE;
     HMODULE h = LoadLibrary("mlang.dll");
     if (!h)
-        return 0;
+        return FALSE;
     ConvertINetString = (CONVERTINETSTRING)GetProcAddress(h, "ConvertINetString");
     ConvertINetMultiByteToUnicode = (CONVERTINETMULTIBYTETOUNICODE)GetProcAddress(h, "ConvertINetMultiByteToUnicode");
     ConvertINetUnicodeToMultiByte = (CONVERTINETUNICODETOMULTIBYTE)GetProcAddress(h, "ConvertINetUnicodeToMultiByte");
     IsConvertINetStringAvailable = (ISCONVERTINETSTRINGAVAILABLE)GetProcAddress(h, "IsConvertINetStringAvailable");
     LcidToRfc1766 = (LCIDTORFC1766)GetProcAddress(h, "LcidToRfc1766");
     Rfc1766ToLcid = (RFC1766TOLCID)GetProcAddress(h, "Rfc1766ToLcid");
-    return 1;
+    return TRUE;
 }
 
 /* XXX: load libiconv.dll if possible? */
