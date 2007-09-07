@@ -1322,16 +1322,13 @@ main(int argc, char **argv)
         outbytesleft = sizeof(outbuf);
         r = iconv(cd, &inp, &inbytesleft, &outp, &outbytesleft);
         fwrite(outbuf, 1, sizeof(outbuf) - outbytesleft, stdout);
-        if (r != (size_t)(-1) || errno == E2BIG || errno == EINVAL)
-        {
-            memmove(inbuf, inp, inbytesleft);
-            rest = inbytesleft;
-        }
-        else
+        if (r == (size_t)(-1) && errno != EINVAL && errno != E2BIG)
         {
             perror("conversion error");
             return 1;
         }
+        memmove(inbuf, inp, inbytesleft);
+        rest = inbytesleft;
     }
     outp = outbuf;
     outbytesleft = sizeof(outbuf);
