@@ -1164,7 +1164,7 @@ iso2022jp_wctomb(csconv_t *cv, ushort *wbuf, int wbufsize, uchar *buf, int bufsi
 
     /* Check for conversion error.  Assuming defaultChar is 0x3F. */
     /* ascii should be converted from ascii */
-    if (len == 1 && wbuf[0] < 0x80 && wbuf[0] != tmp[0])
+    if (len == 1 && wbuf[0] >= 0x80)
         return_error(EILSEQ);
 
     if (tmp[0] != 0x1B)
