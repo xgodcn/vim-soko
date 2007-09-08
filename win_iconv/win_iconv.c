@@ -629,6 +629,7 @@ win_iconv(iconv_t _cd, const char **inbuf, size_t *inbytesleft, char **outbuf, s
     int insize;
     int outsize;
     int wsize;
+    DWORD mode;
 
     if (inbuf == NULL || *inbuf == NULL)
     {
@@ -646,6 +647,7 @@ win_iconv(iconv_t _cd, const char **inbuf, size_t *inbytesleft, char **outbuf, s
 
     while (*inbytesleft != 0)
     {
+        mode = cd->from.mode;
         wsize = MB_CHAR_MAX;
 
         insize = cd->from.mbtowc(&cd->from, (const uchar *)*inbuf, *inbytesleft, wbuf, &wsize);
@@ -658,7 +660,11 @@ win_iconv(iconv_t _cd, const char **inbuf, size_t *inbytesleft, char **outbuf, s
         {
             outsize = cd->to.wctomb(&cd->to, wbuf, wsize, (uchar *)*outbuf, *outbytesleft);
             if (outsize == -1)
+            {
+                /* Restore the mode.  Is this safe for MLang function? */
+                cd->from.mode = mode;
                 return (size_t)(-1);
+            }
         }
 
         *inbuf += insize;
