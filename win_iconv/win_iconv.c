@@ -1070,7 +1070,10 @@ iso2022jp_mbtowc(csconv_t *cv, const uchar *buf, int bufsize, ushort *wbuf, int 
             esc_len = STATIC_STRLEN(iso2022jp_escape_jisx0208_1983);
         }
         else
+        {
+            /* not supported escape sequence */
             return_error(EILSEQ);
+        }
         *wbufsize = 0;
         return esc_len;
     }
@@ -1276,8 +1279,8 @@ main(int argc, char **argv)
     int i;
     char inbuf[BUFSIZ];
     char outbuf[BUFSIZ];
-    const char *inp;
-    char *outp;
+    const char *pin;
+    char *pout;
     size_t inbytesleft;
     size_t outbytesleft;
     size_t rest = 0;
@@ -1330,22 +1333,22 @@ main(int argc, char **argv)
             || rest != 0)
     {
         inbytesleft += rest;
-        inp = inbuf;
-        outp = outbuf;
+        pin = inbuf;
+        pout = outbuf;
         outbytesleft = sizeof(outbuf);
-        r = iconv(cd, &inp, &inbytesleft, &outp, &outbytesleft);
+        r = iconv(cd, &pin, &inbytesleft, &pout, &outbytesleft);
         fwrite(outbuf, 1, sizeof(outbuf) - outbytesleft, stdout);
         if (r == (size_t)(-1) && errno != EINVAL && errno != E2BIG)
         {
             perror("conversion error");
             return 1;
         }
-        memmove(inbuf, inp, inbytesleft);
+        memmove(inbuf, pin, inbytesleft);
         rest = inbytesleft;
     }
-    outp = outbuf;
+    pout = outbuf;
     outbytesleft = sizeof(outbuf);
-    r = iconv(cd, NULL, NULL, &outp, &outbytesleft);
+    r = iconv(cd, NULL, NULL, &pout, &outbytesleft);
     fwrite(outbuf, 1, sizeof(outbuf) - outbytesleft, stdout);
     if (r == (size_t)(-1))
     {
