@@ -1125,7 +1125,7 @@ iso2022jp_mbtowc(csconv_t *cv, const uchar *buf, int bufsize, ushort *wbuf, int 
     /* MB_ERR_INVALID_CHARS cannot be used for CP50220, CP50221 and
      * CP50222 */
     *wbufsize = MultiByteToWideChar(cv->codepage, 0,
-            tmp, len + esc_len, wbuf, *wbufsize);
+            tmp, len + esc_len, (wchar_t *)wbuf, *wbufsize);
     if (*wbufsize == 0)
         return_error(EILSEQ);
 
