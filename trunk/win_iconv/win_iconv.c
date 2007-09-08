@@ -33,7 +33,7 @@
     } while (0)
 
 typedef unsigned char uchar;
-typedef unsigned short uwchar_t;
+typedef unsigned short ushort;
 
 typedef void* iconv_t;
 
@@ -49,8 +49,8 @@ typedef struct rec_iconv_t rec_iconv_t;
 
 typedef int (*f_iconv_close)(iconv_t cd);
 typedef size_t (*f_iconv)(iconv_t cd, const char **inbuf, size_t *inbytesleft, char **outbuf, size_t *outbytesleft);
-typedef int (*f_mbtowc)(csconv_t *cv, const uchar *buf, int bufsize, uwchar_t *wbuf, int *wbufsize);
-typedef int (*f_wctomb)(csconv_t *cv, uwchar_t *wbuf, int wbufsize, uchar *buf, int bufsize);
+typedef int (*f_mbtowc)(csconv_t *cv, const uchar *buf, int bufsize, ushort *wbuf, int *wbufsize);
+typedef int (*f_wctomb)(csconv_t *cv, ushort *wbuf, int wbufsize, uchar *buf, int bufsize);
 typedef int (*f_mblen)(csconv_t *cv, const uchar *buf, int bufsize);
 typedef int (*f_flush)(csconv_t *cv, uchar *buf, int bufsize);
 
@@ -80,16 +80,16 @@ static int dbcs_mblen(csconv_t *cv, const uchar *buf, int bufsize);
 static int utf8_mblen(csconv_t *cv, const uchar *buf, int bufsize);
 static int eucjp_mblen(csconv_t *cv, const uchar *buf, int bufsize);
 
-static int kernel_mbtowc(csconv_t *cv, const uchar *buf, int bufsize, uwchar_t *wbuf, int *wbufsize);
-static int kernel_wctomb(csconv_t *cv, uwchar_t *wbuf, int wbufsize, uchar *buf, int bufsize);
-static int mlang_mbtowc(csconv_t *cv, const uchar *buf, int bufsize, uwchar_t *wbuf, int *wbufsize);
-static int mlang_wctomb(csconv_t *cv, uwchar_t *wbuf, int wbufsize, uchar *buf, int bufsize);
-static int utf16_mbtowc(csconv_t *cv, const uchar *buf, int bufsize, uwchar_t *wbuf, int *wbufsize);
-static int utf16_wctomb(csconv_t *cv, uwchar_t *wbuf, int wbufsize, uchar *buf, int bufsize);
-static int utf32_mbtowc(csconv_t *cv, const uchar *buf, int bufsize, uwchar_t *wbuf, int *wbufsize);
-static int utf32_wctomb(csconv_t *cv, uwchar_t *wbuf, int wbufsize, uchar *buf, int bufsize);
-static int iso2022jp_mbtowc(csconv_t *cv, const uchar *buf, int bufsize, uwchar_t *wbuf, int *wbufsize);
-static int iso2022jp_wctomb(csconv_t *cv, uwchar_t *wbuf, int wbufsize, uchar *buf, int bufsize);
+static int kernel_mbtowc(csconv_t *cv, const uchar *buf, int bufsize, ushort *wbuf, int *wbufsize);
+static int kernel_wctomb(csconv_t *cv, ushort *wbuf, int wbufsize, uchar *buf, int bufsize);
+static int mlang_mbtowc(csconv_t *cv, const uchar *buf, int bufsize, ushort *wbuf, int *wbufsize);
+static int mlang_wctomb(csconv_t *cv, ushort *wbuf, int wbufsize, uchar *buf, int bufsize);
+static int utf16_mbtowc(csconv_t *cv, const uchar *buf, int bufsize, ushort *wbuf, int *wbufsize);
+static int utf16_wctomb(csconv_t *cv, ushort *wbuf, int wbufsize, uchar *buf, int bufsize);
+static int utf32_mbtowc(csconv_t *cv, const uchar *buf, int bufsize, ushort *wbuf, int *wbufsize);
+static int utf32_wctomb(csconv_t *cv, ushort *wbuf, int wbufsize, uchar *buf, int bufsize);
+static int iso2022jp_mbtowc(csconv_t *cv, const uchar *buf, int bufsize, ushort *wbuf, int *wbufsize);
+static int iso2022jp_wctomb(csconv_t *cv, ushort *wbuf, int wbufsize, uchar *buf, int bufsize);
 static int iso2022jp_flush(csconv_t *cv, uchar *buf, int bufsize);
 
 struct {
@@ -816,7 +816,7 @@ eucjp_mblen(csconv_t *cv, const uchar *buf, int bufsize)
 }
 
 static int
-kernel_mbtowc(csconv_t *cv, const uchar *buf, int bufsize, uwchar_t *wbuf, int *wbufsize)
+kernel_mbtowc(csconv_t *cv, const uchar *buf, int bufsize, ushort *wbuf, int *wbufsize)
 {
     int len;
 
@@ -831,7 +831,7 @@ kernel_mbtowc(csconv_t *cv, const uchar *buf, int bufsize, uwchar_t *wbuf, int *
 }
 
 static int
-kernel_wctomb(csconv_t *cv, uwchar_t *wbuf, int wbufsize, uchar *buf, int bufsize)
+kernel_wctomb(csconv_t *cv, ushort *wbuf, int wbufsize, uchar *buf, int bufsize)
 {
     BOOL usedDefaultChar = 0;
     int len;
@@ -851,7 +851,7 @@ kernel_wctomb(csconv_t *cv, uwchar_t *wbuf, int wbufsize, uchar *buf, int bufsiz
 }
 
 static int
-mlang_mbtowc(csconv_t *cv, const uchar *buf, int bufsize, uwchar_t *wbuf, int *wbufsize)
+mlang_mbtowc(csconv_t *cv, const uchar *buf, int bufsize, ushort *wbuf, int *wbufsize)
 {
     int len;
     int insize;
@@ -869,7 +869,7 @@ mlang_mbtowc(csconv_t *cv, const uchar *buf, int bufsize, uwchar_t *wbuf, int *w
 }
 
 static int
-mlang_wctomb(csconv_t *cv, uwchar_t *wbuf, int wbufsize, uchar *buf, int bufsize)
+mlang_wctomb(csconv_t *cv, ushort *wbuf, int wbufsize, uchar *buf, int bufsize)
 {
     char tmpbuf[MB_CHAR_MAX]; /* enough room for one character */;
     int tmpsize = MB_CHAR_MAX;
@@ -887,7 +887,7 @@ mlang_wctomb(csconv_t *cv, uwchar_t *wbuf, int wbufsize, uchar *buf, int bufsize
 }
 
 static int
-utf16_mbtowc(csconv_t *cv, const uchar *buf, int bufsize, uwchar_t *wbuf, int *wbufsize)
+utf16_mbtowc(csconv_t *cv, const uchar *buf, int bufsize, ushort *wbuf, int *wbufsize)
 {
     if (bufsize < 2)
         return_error(EINVAL);
@@ -915,7 +915,7 @@ utf16_mbtowc(csconv_t *cv, const uchar *buf, int bufsize, uwchar_t *wbuf, int *w
 }
 
 static int
-utf16_wctomb(csconv_t *cv, uwchar_t *wbuf, int wbufsize, uchar *buf, int bufsize)
+utf16_wctomb(csconv_t *cv, ushort *wbuf, int wbufsize, uchar *buf, int bufsize)
 {
     if (bufsize < 2)
         return_error(E2BIG);
@@ -949,7 +949,7 @@ utf16_wctomb(csconv_t *cv, uwchar_t *wbuf, int wbufsize, uchar *buf, int bufsize
 }
 
 static int
-utf32_mbtowc(csconv_t *cv, const uchar *buf, int bufsize, uwchar_t *wbuf, int *wbufsize)
+utf32_mbtowc(csconv_t *cv, const uchar *buf, int bufsize, ushort *wbuf, int *wbufsize)
 {
     unsigned int wc;
 
@@ -976,7 +976,7 @@ utf32_mbtowc(csconv_t *cv, const uchar *buf, int bufsize, uwchar_t *wbuf, int *w
 }
 
 static int
-utf32_wctomb(csconv_t *cv, uwchar_t *wbuf, int wbufsize, uchar *buf, int bufsize)
+utf32_wctomb(csconv_t *cv, ushort *wbuf, int wbufsize, uchar *buf, int bufsize)
 {
     unsigned int wc = wbuf[0];
 
@@ -1028,7 +1028,7 @@ static const char *iso2022jp_SI = "\x0F";
 #define ISO2022JP_MODE_JISX0208         3
 
 static int
-iso2022jp_mbtowc(csconv_t *cv, const uchar *buf, int bufsize, uwchar_t *wbuf, int *wbufsize)
+iso2022jp_mbtowc(csconv_t *cv, const uchar *buf, int bufsize, ushort *wbuf, int *wbufsize)
 {
     char tmp[MB_CHAR_MAX];
     int len;
@@ -1117,7 +1117,7 @@ iso2022jp_mbtowc(csconv_t *cv, const uchar *buf, int bufsize, uwchar_t *wbuf, in
 }
 
 static int
-iso2022jp_wctomb(csconv_t *cv, uwchar_t *wbuf, int wbufsize, uchar *buf, int bufsize)
+iso2022jp_wctomb(csconv_t *cv, ushort *wbuf, int wbufsize, uchar *buf, int bufsize)
 {
     char tmp[MB_CHAR_MAX];
     int len;
