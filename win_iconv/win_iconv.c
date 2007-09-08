@@ -526,9 +526,10 @@ static RFC1766TOLCID Rfc1766ToLcid;
 static int
 load_mlang()
 {
+    HMODULE h;
     if (ConvertINetString != NULL)
         return TRUE;
-    HMODULE h = LoadLibrary("mlang.dll");
+    h = LoadLibrary("mlang.dll");
     if (!h)
         return FALSE;
     ConvertINetString = (CONVERTINETSTRING)GetProcAddress(h, "ConvertINetString");
@@ -871,7 +872,7 @@ mlang_mbtowc(csconv_t *cv, const uchar *buf, int bufsize, ushort *wbuf, int *wbu
 static int
 mlang_wctomb(csconv_t *cv, ushort *wbuf, int wbufsize, uchar *buf, int bufsize)
 {
-    char tmpbuf[MB_CHAR_MAX]; /* enough room for one character */;
+    char tmpbuf[MB_CHAR_MAX]; /* enough room for one character */
     int tmpsize = MB_CHAR_MAX;
     int insize = wbufsize;
     HRESULT hr;
