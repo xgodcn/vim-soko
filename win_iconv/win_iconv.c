@@ -1152,7 +1152,7 @@ iso2022jp_wctomb(csconv_t *cv, ushort *wbuf, int wbufsize, uchar *buf, int bufsi
 
     /* XXX: Handle U+FF5E as U+301C for compatibility with other
      * Japanese codepage.  Is this conversion behavior (U+301C <->
-     * JIS:2141) portable in other Windows version? */
+     * JIS:2141) compatible with other Windows version? */
     if (wbuf[0] == 0xFF5E)
         wbuf[0] = 0x301C;
 
