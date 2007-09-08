@@ -32,6 +32,8 @@
         return -1;          \
     } while (0)
 
+#define STATIC_STRLEN(arr) (sizeof(arr) - 1)
+
 typedef unsigned char uchar;
 typedef unsigned short ushort;
 
@@ -623,7 +625,7 @@ static size_t
 win_iconv(iconv_t _cd, const char **inbuf, size_t *inbytesleft, char **outbuf, size_t *outbytesleft)
 {
     rec_iconv_t *cd = (rec_iconv_t *)_cd;
-    wchar_t wbuf[MB_CHAR_MAX]; /* enough room for one character */
+    ushort wbuf[MB_CHAR_MAX]; /* enough room for one character */
     int insize;
     int outsize;
     int wsize;
@@ -632,7 +634,7 @@ win_iconv(iconv_t _cd, const char **inbuf, size_t *inbytesleft, char **outbuf, s
     {
         if (outbuf != NULL && *outbuf != NULL && cd->to.flush != NULL)
         {
-            outsize = cd->to.flush(&cd->to, *outbuf, *outbytesleft);
+            outsize = cd->to.flush(&cd->to, (uchar *)*outbuf, *outbytesleft);
             if (outsize == -1)
                 return (size_t)(-1);
             *outbuf += outsize;
@@ -646,7 +648,7 @@ win_iconv(iconv_t _cd, const char **inbuf, size_t *inbytesleft, char **outbuf, s
     {
         wsize = MB_CHAR_MAX;
 
-        insize = cd->from.mbtowc(&cd->from, *inbuf, *inbytesleft, wbuf, &wsize);
+        insize = cd->from.mbtowc(&cd->from, (const uchar *)*inbuf, *inbytesleft, wbuf, &wsize);
         if (insize == -1)
             return (size_t)(-1);
 
@@ -654,7 +656,7 @@ win_iconv(iconv_t _cd, const char **inbuf, size_t *inbytesleft, char **outbuf, s
             outsize = 0;
         else
         {
-            outsize = cd->to.wctomb(&cd->to, wbuf, wsize, *outbuf, *outbytesleft);
+            outsize = cd->to.wctomb(&cd->to, wbuf, wsize, (uchar *)*outbuf, *outbytesleft);
             if (outsize == -1)
                 return (size_t)(-1);
         }
@@ -1010,18 +1012,16 @@ utf32_wctomb(csconv_t *cv, ushort *wbuf, int wbufsize, uchar *buf, int bufsize)
  * 50222: ISO 2022 Japanese JIS X 0201-1989; Japanese (JIS-Allow 1 byte
  *        Kana - SO/SI)
  */
-static const char *iso2022jp_escape_ascii = "\x1B\x28\x42";
-static const char *iso2022jp_escape_jisx0201_roman = "\x1B\x28\x4A";
-static const char *iso2022jp_escape_jisx0201_kana = "\x1B\x28\x49";
-static const char *iso2022jp_escape_jisx0208_1978 = "\x1B\x24\x40";
-static const char *iso2022jp_escape_jisx0208_1983 = "\x1B\x24\x42";
+static const char iso2022jp_escape_ascii[] = "\x1B\x28\x42";
+static const char iso2022jp_escape_jisx0201_roman[] = "\x1B\x28\x4A";
+static const char iso2022jp_escape_jisx0201_kana[] = "\x1B\x28\x49";
+static const char iso2022jp_escape_jisx0208_1978[] = "\x1B\x24\x40";
+static const char iso2022jp_escape_jisx0208_1983[] = "\x1B\x24\x42";
 
 /* shift out (to kana) */
-static const char *iso2022jp_SO = "\x0E";
+static const char iso2022jp_SO[] = "\x0E";
 /* shift in (to ascii) */
-static const char *iso2022jp_SI = "\x0F";
-
-#define ISO2022JP_ESC_SIZE 3
+static const char iso2022jp_SI[] = "\x0F";
 
 #define ISO2022JP_MODE_ASCII            0
 #define ISO2022JP_MODE_JISX0201_ROMAN   1
@@ -1033,25 +1033,46 @@ iso2022jp_mbtowc(csconv_t *cv, const uchar *buf, int bufsize, ushort *wbuf, int 
 {
     char tmp[MB_CHAR_MAX];
     int len;
+    int esc_len;
 
     if (buf[0] == 0x1B)
     {
-        if (bufsize < ISO2022JP_ESC_SIZE)
+        if (bufsize < 3) /* escape sequence is 3 or 4 bytes */
             return_error(EINVAL);
-        if (strncmp(buf, iso2022jp_escape_ascii, ISO2022JP_ESC_SIZE) == 0)
+        if (strncmp((char *)buf, iso2022jp_escape_ascii,
+                    STATIC_STRLEN(iso2022jp_escape_ascii)) == 0)
+        {
             cv->mode = ISO2022JP_MODE_ASCII;
-        else if (strncmp(buf, iso2022jp_escape_jisx0201_roman, ISO2022JP_ESC_SIZE) == 0)
+            esc_len = STATIC_STRLEN(iso2022jp_escape_ascii);
+        }
+        else if (strncmp((char *)buf, iso2022jp_escape_jisx0201_roman,
+                    STATIC_STRLEN(iso2022jp_escape_jisx0201_roman)) == 0)
+        {
             cv->mode = ISO2022JP_MODE_JISX0201_ROMAN;
-        else if (strncmp(buf, iso2022jp_escape_jisx0201_kana, ISO2022JP_ESC_SIZE) == 0)
+            esc_len = STATIC_STRLEN(iso2022jp_escape_jisx0201_roman);
+        }
+        else if (strncmp((char *)buf, iso2022jp_escape_jisx0201_kana,
+                    STATIC_STRLEN(iso2022jp_escape_jisx0201_kana)) == 0)
+        {
             cv->mode = ISO2022JP_MODE_JISX0201_KANA;
-        else if (strncmp(buf, iso2022jp_escape_jisx0208_1978, ISO2022JP_ESC_SIZE) == 0)
+            esc_len = STATIC_STRLEN(iso2022jp_escape_jisx0201_kana);
+        }
+        else if (strncmp((char *)buf, iso2022jp_escape_jisx0208_1978,
+                    STATIC_STRLEN(iso2022jp_escape_jisx0208_1978)) == 0)
+        {
             cv->mode = ISO2022JP_MODE_JISX0208;
-        else if (strncmp(buf, iso2022jp_escape_jisx0208_1983, ISO2022JP_ESC_SIZE) == 0)
+            esc_len = STATIC_STRLEN(iso2022jp_escape_jisx0208_1978);
+        }
+        else if (strncmp((char *)buf, iso2022jp_escape_jisx0208_1983,
+                    STATIC_STRLEN(iso2022jp_escape_jisx0208_1983)) == 0)
+        {
             cv->mode = ISO2022JP_MODE_JISX0208;
+            esc_len = STATIC_STRLEN(iso2022jp_escape_jisx0208_1983);
+        }
         else
             return_error(EILSEQ);
         *wbufsize = 0;
-        return ISO2022JP_ESC_SIZE;
+        return esc_len;
     }
     else if (buf[0] == iso2022jp_SO[0])
     {
@@ -1071,36 +1092,40 @@ iso2022jp_mbtowc(csconv_t *cv, const uchar *buf, int bufsize, ushort *wbuf, int 
 
     if (cv->mode == ISO2022JP_MODE_ASCII)
     {
-        memcpy(tmp, iso2022jp_escape_ascii, ISO2022JP_ESC_SIZE);
-        memcpy(tmp + ISO2022JP_ESC_SIZE, buf, 1);
         len = 1;
+        esc_len = STATIC_STRLEN(iso2022jp_escape_ascii);
+        memcpy(tmp, iso2022jp_escape_ascii, esc_len);
+        memcpy(tmp + esc_len, buf, len);
     }
     else if (cv->mode == ISO2022JP_MODE_JISX0201_ROMAN)
     {
-        memcpy(tmp, iso2022jp_escape_jisx0201_roman, ISO2022JP_ESC_SIZE);
-        memcpy(tmp + ISO2022JP_ESC_SIZE, buf, 1);
         len = 1;
+        esc_len = STATIC_STRLEN(iso2022jp_escape_jisx0201_roman);
+        memcpy(tmp, iso2022jp_escape_jisx0201_roman, esc_len);
+        memcpy(tmp + esc_len, buf, len);
     }
     else if (cv->mode == ISO2022JP_MODE_JISX0201_KANA)
     {
-        memcpy(tmp, iso2022jp_escape_jisx0201_kana, ISO2022JP_ESC_SIZE);
-        memcpy(tmp + ISO2022JP_ESC_SIZE, buf, 1);
         len = 1;
+        esc_len = STATIC_STRLEN(iso2022jp_escape_jisx0201_kana);
+        memcpy(tmp, iso2022jp_escape_jisx0201_kana, esc_len);
+        memcpy(tmp + esc_len, buf, len);
     }
     else if (cv->mode == ISO2022JP_MODE_JISX0208)
     {
-        if (bufsize < 2)
+        len = 2;
+        if (bufsize < len)
             return_error(EINVAL);
         else if (0x80 <= buf[1])
             return_error(EILSEQ);
-        memcpy(tmp, iso2022jp_escape_jisx0208_1983, ISO2022JP_ESC_SIZE);
-        memcpy(tmp + ISO2022JP_ESC_SIZE, buf, 2);
-        len = 2;
+        esc_len = STATIC_STRLEN(iso2022jp_escape_jisx0208_1983);
+        memcpy(tmp, iso2022jp_escape_jisx0208_1983, esc_len);
+        memcpy(tmp + esc_len, buf, len);
     }
     /* MB_ERR_INVALID_CHARS cannot be used for CP50220, CP50221 and
      * CP50222 */
     *wbufsize = MultiByteToWideChar(cv->codepage, 0,
-            tmp, len + ISO2022JP_ESC_SIZE, wbuf, *wbufsize);
+            tmp, len + esc_len, wbuf, *wbufsize);
     if (*wbufsize == 0)
         return_error(EILSEQ);
 
@@ -1122,6 +1147,7 @@ iso2022jp_wctomb(csconv_t *cv, ushort *wbuf, int wbufsize, uchar *buf, int bufsi
 {
     char tmp[MB_CHAR_MAX];
     int len;
+    int esc_len;
     int mode = cv->mode;
 
     /* XXX: Handle U+FF5E as U+301C for compatibility with other
@@ -1142,90 +1168,93 @@ iso2022jp_wctomb(csconv_t *cv, ushort *wbuf, int wbufsize, uchar *buf, int bufsi
         return_error(EILSEQ);
 
     if (tmp[0] != 0x1B)
+    {
         mode = ISO2022JP_MODE_ASCII;
-    else if (strncmp(tmp, iso2022jp_escape_jisx0201_roman, ISO2022JP_ESC_SIZE) == 0)
+        esc_len = 0;
+    }
+    else if (strncmp(tmp, iso2022jp_escape_jisx0201_roman,
+                STATIC_STRLEN(iso2022jp_escape_jisx0201_roman)) == 0)
+    {
         mode = ISO2022JP_MODE_JISX0201_ROMAN;
-    else if (strncmp(tmp, iso2022jp_escape_jisx0201_kana, ISO2022JP_ESC_SIZE) == 0)
-        mode = ISO2022JP_MODE_JISX0201_KANA;
-    else if (strncmp(tmp, iso2022jp_escape_jisx0208_1978, ISO2022JP_ESC_SIZE) == 0)
-        mode = ISO2022JP_MODE_JISX0208;
-    else if (strncmp(tmp, iso2022jp_escape_jisx0208_1983, ISO2022JP_ESC_SIZE) == 0)
-        mode = ISO2022JP_MODE_JISX0208;
-
-    if (len > 4 && tmp[3] == iso2022jp_SO[0])
-        mode = ISO2022JP_MODE_JISX0201_KANA;
-
-    if (cv->codepage == 50222)
-    {
-        if (cv->mode != mode && mode == ISO2022JP_MODE_ASCII)
-        {
-            /* insert escape sequence */
-            if (cv->mode == ISO2022JP_MODE_JISX0201_KANA)
-            {
-                /* use SI */
-                memmove(tmp + 1, tmp, len);
-                memcpy(tmp, iso2022jp_SI, 1);
-                len += 1;
-            }
-            else
-            {
-                memmove(tmp + ISO2022JP_ESC_SIZE, tmp, len);
-                memcpy(tmp, iso2022jp_escape_ascii, ISO2022JP_ESC_SIZE);
-                len += ISO2022JP_ESC_SIZE;
-            }
-        }
-        else if (cv->mode != mode && cv->mode == ISO2022JP_MODE_JISX0201_KANA)
-        {
-            /* insert SI */
-            memmove(tmp + 1, tmp, len);
-            memcpy(tmp, iso2022jp_SI, 1);
-            len += 1;
-        }
-        else if (cv->mode == mode && mode != ISO2022JP_MODE_ASCII)
-        {
-            /* remove escape sequence */
-            len -= ISO2022JP_ESC_SIZE;
-            memmove(tmp, tmp + ISO2022JP_ESC_SIZE, len);
-            if (tmp[0] == iso2022jp_SO[0])
-            {
-                len -= 1;
-                memmove(tmp, tmp + 1, len);
-            }
-        }
+        esc_len = STATIC_STRLEN(iso2022jp_escape_jisx0201_roman);
     }
-    else
+    else if (strncmp(tmp, iso2022jp_escape_jisx0201_kana,
+                STATIC_STRLEN(iso2022jp_escape_jisx0201_kana)) == 0)
     {
-        if (cv->mode != mode && mode == ISO2022JP_MODE_ASCII)
-        {
-            /* insert escape sequence */
-            memmove(tmp + ISO2022JP_ESC_SIZE, tmp, len);
-            memcpy(tmp, iso2022jp_escape_ascii, ISO2022JP_ESC_SIZE);
-            len += ISO2022JP_ESC_SIZE;
-        }
-        else if (cv->mode == mode && mode != ISO2022JP_MODE_ASCII)
-        {
-            /* remove escape sequence */
-            len -= ISO2022JP_ESC_SIZE;
-            memmove(tmp, tmp + ISO2022JP_ESC_SIZE, len);
-        }
+        mode = ISO2022JP_MODE_JISX0201_KANA;
+        esc_len = STATIC_STRLEN(iso2022jp_escape_jisx0201_kana);
+    }
+    else if (strncmp(tmp, iso2022jp_escape_jisx0208_1978,
+                STATIC_STRLEN(iso2022jp_escape_jisx0208_1978)) == 0)
+    {
+        mode = ISO2022JP_MODE_JISX0208;
+        esc_len = STATIC_STRLEN(iso2022jp_escape_jisx0208_1978);
+    }
+    else if (strncmp(tmp, iso2022jp_escape_jisx0208_1983,
+                STATIC_STRLEN(iso2022jp_escape_jisx0208_1983)) == 0)
+    {
+        mode = ISO2022JP_MODE_JISX0208;
+        esc_len = STATIC_STRLEN(iso2022jp_escape_jisx0208_1983);
     }
 
-    if (bufsize < len)
+    if (tmp[esc_len] == iso2022jp_SO[0])
+    {
+        mode = ISO2022JP_MODE_JISX0201_KANA;
+        esc_len += 1;
+    }
+
+    len -= esc_len;
+
+    if (cv->mode != mode && mode == ISO2022JP_MODE_ASCII)
+    {
+        /* insert escape sequence */
+        if (cv->codepage == 50222 && cv->mode == ISO2022JP_MODE_JISX0201_KANA)
+        {
+            /* use SI */
+            esc_len = 1;
+            memmove(tmp + esc_len, tmp, len);
+            memcpy(tmp, iso2022jp_SI, esc_len);
+        }
+        else
+        {
+            esc_len = STATIC_STRLEN(iso2022jp_escape_ascii);
+            memmove(tmp + esc_len, tmp, len);
+            memcpy(tmp, iso2022jp_escape_ascii, esc_len);
+        }
+    }
+    else if (cv->codepage == 50222 && cv->mode != mode && cv->mode == ISO2022JP_MODE_JISX0201_KANA)
+    {
+        /* insert SI before changing to other mode */
+        memmove(tmp + 1, tmp, len);
+        memcpy(tmp, iso2022jp_SI, 1);
+        esc_len += 1;
+    }
+    else if (cv->mode == mode && mode != ISO2022JP_MODE_ASCII)
+    {
+        /* remove escape sequence */
+        memmove(tmp, tmp + esc_len, len);
+        esc_len = 0;
+    }
+
+    if (bufsize < len + esc_len)
         return_error(E2BIG);
-    memcpy(buf, tmp, len);
+    memcpy(buf, tmp, len + esc_len);
     cv->mode = mode;
-    return len;
+    return len + esc_len;
 }
 
 static int
 iso2022jp_flush(csconv_t *cv, uchar *buf, int bufsize)
 {
+    int esc_len;
+
     if (cv->mode != ISO2022JP_MODE_ASCII)
     {
-        if (bufsize < ISO2022JP_ESC_SIZE)
+        esc_len = STATIC_STRLEN(iso2022jp_escape_ascii);
+        if (bufsize < esc_len)
             return_error(E2BIG);
-        memcpy(buf, iso2022jp_escape_ascii, ISO2022JP_ESC_SIZE);
-        return ISO2022JP_ESC_SIZE;
+        memcpy(buf, iso2022jp_escape_ascii, esc_len);
+        return esc_len;
     }
     return 0;
 }
