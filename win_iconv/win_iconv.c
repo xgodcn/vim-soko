@@ -1167,7 +1167,7 @@ iso2022jp_wctomb(csconv_t *cv, ushort *wbuf, int wbufsize, uchar *buf, int bufsi
     if (len == 1 && wbuf[0] >= 0x80)
         return_error(EILSEQ);
 
-    if (tmp[0] != 0x1B)
+    if (len == 1)
     {
         mode = ISO2022JP_MODE_ASCII;
         esc_len = 0;
@@ -1195,6 +1195,11 @@ iso2022jp_wctomb(csconv_t *cv, ushort *wbuf, int wbufsize, uchar *buf, int bufsi
     {
         mode = ISO2022JP_MODE_JISX0208;
         esc_len = STATIC_STRLEN(iso2022jp_escape_jisx0208_1983);
+    }
+    else
+    {
+        /* not supported escape sequence */
+        return_error(EILSEQ);
     }
 
     if (tmp[esc_len] == iso2022jp_SO[0])
