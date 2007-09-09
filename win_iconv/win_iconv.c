@@ -86,7 +86,7 @@ struct rec_iconv_t {
     iconv_t cd;
     f_iconv_close iconv_close;
     f_iconv iconv;
-    f_errno xerrno;
+    f_errno _errno;
     csconv_t from;
     csconv_t to;
 };
@@ -657,7 +657,7 @@ iconv_open(const char *tocode, const char *fromcode)
         {
             cd->iconv_close = dyn_libiconv_close;
             cd->iconv = dyn_libiconv;
-            cd->xerrno = dyn_libiconv_errno;
+            cd->_errno = dyn_libiconv_errno;
             return (iconv_t)cd;
         }
         /* fallback */
@@ -680,7 +680,7 @@ iconv_close(iconv_t _cd)
 {
     rec_iconv_t *cd = (rec_iconv_t *)_cd;
     int r = cd->iconv_close(cd->cd);
-    int e = *(cd->xerrno());
+    int e = *(cd->_errno());
     free(cd);
     errno = e;
     return r;
@@ -691,7 +691,7 @@ iconv(iconv_t _cd, const char **inbuf, size_t *inbytesleft, char **outbuf, size_
 {
     rec_iconv_t *cd = (rec_iconv_t *)_cd;
     size_t r = cd->iconv(cd->cd, inbuf, inbytesleft, outbuf, outbytesleft);
-    errno = *(cd->xerrno());
+    errno = *(cd->_errno());
     return r;
 }
 
@@ -732,7 +732,7 @@ win_iconv_open(rec_iconv_t *cd, const char *tocode, const char *fromcode)
         return (iconv_t)(-1);
     cd->iconv_close = win_iconv_close;
     cd->iconv = win_iconv;
-    cd->xerrno = _errno;
+    cd->_errno = _errno;
     return (iconv_t)cd;
 }
 
