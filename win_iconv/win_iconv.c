@@ -115,7 +115,7 @@ static f_iconv_close dyn_libiconv_close;
 static f_iconv dyn_libiconv;
 static f_errno dyn_libiconv_errno;
 
-static const char *winiconv_dll;
+static HMODULE hwiniconv;
 #endif
 
 static int sbcs_mblen(csconv_t *cv, const uchar *buf, int bufsize);
@@ -999,20 +999,25 @@ load_libiconv()
     env = getenv("WINICONV_LIBICONV_DLL");
     if (env != NULL && env[0] != 0)
     {
-        if (winiconv_dll == NULL || strcmp(winiconv_dll, env) != 0)
-            hlibiconv = LoadLibrary(env);
+        hlibiconv = LoadLibrary(env);
+        if (hwiniconv != NULL && hlibiconv == hwiniconv)
+        {
+            FreeLibrary(hlibiconv);
+            hlibiconv = NULL;
+        }
     }
     else
     {
         for (i = 0; libiconv_names[i] != NULL; ++i)
         {
-            if (winiconv_dll == NULL
-                    || strcmp(winiconv_dll, libiconv_names[i]) != 0)
+            hlibiconv = LoadLibrary(libiconv_names[i]);
+            if (hwiniconv != NULL && hlibiconv == hwiniconv)
             {
-                hlibiconv = LoadLibrary(libiconv_names[i]);
-                if (hlibiconv != NULL)
-                    break;
+                FreeLibrary(hlibiconv);
+                hlibiconv = NULL;
             }
+            else if (hlibiconv != NULL)
+                break;
         }
     }
 
@@ -1593,13 +1598,10 @@ iso2022jp_flush(csconv_t *cv, uchar *buf, int bufsize)
 BOOL WINAPI
 DllMain(HINSTANCE hinstDLL, DWORD fdwReason, LPVOID lpReserved)
 {
-    static char dllpath[_MAX_PATH];
-
     switch( fdwReason )
     {
     case DLL_PROCESS_ATTACH:
-        GetModuleFileName((HMODULE)hinstDLL, dllpath, sizeof(dllpath));
-        winiconv_dll = strrchr(dllpath, '\\') + 1;
+        hwiniconv = (HMODULE)hinstDLL;
         break;
     case DLL_THREAD_ATTACH:
     case DLL_THREAD_DETACH:
