@@ -60,8 +60,8 @@ typedef int (*f_flush)(csconv_t *cv, uchar *buf, int bufsize);
 
 #define COMPAT_IN   1
 #define COMPAT_OUT  2
-/* unicode conversion table for compatibility with other conversion
- * table. */
+
+/* unicode mapping for compatibility with other conversion table. */
 struct compat_t {
     uint in;
     uint out;
@@ -1144,7 +1144,6 @@ utf32_wctomb(csconv_t *cv, ushort *wbuf, int wbufsize, uchar *buf, int bufsize)
     }
     return 4;
 }
-
 
 /*
  * 50220: ISO 2022 Japanese with no halfwidth Katakana; Japanese (JIS)
