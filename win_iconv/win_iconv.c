@@ -497,11 +497,12 @@ struct {
 };
 
 /*
- * SJIS Shift_JIS table             CP932 table
+ * SJIS SHIFTJIS table              CP932 table
  * ---- --------------------------- --------------------------------
  *   5C U+00A5 YEN SIGN             U+005C REVERSE SOLIDUS
  *   7E U+203E OVERLINE             U+007E TILDE
  * 815C U+2014 EM DASH              U+2015 HORIZONTAL BAR
+ * 815F U+005C REVERSE SOLIDUS      U+FF3C FULLWIDTH REVERSE SOLIDUS
  * 8160 U+301C WAVE DASH            U+FF5E FULLWIDTH TILDE
  * 8161 U+2016 DOUBLE VERTICAL LINE U+2225 PARALLEL TO
  * 817C U+2212 MINUS SIGN           U+FF0D FULLWIDTH HYPHEN-MINUS
@@ -509,7 +510,7 @@ struct {
  * 8192 U+00A3 POUND SIGN           U+FFE1 FULLWIDTH POUND SIGN
  * 81CA U+00AC NOT SIGN             U+FFE2 FULLWIDTH NOT SIGN
  *
- * EUC-JP and ISO-2022-JP should be CP932 compatible.
+ * EUC-JP and ISO-2022-JP should be compatible with CP932.
  */
 static compat_t cp932_compat[] = {
     {0x00A5, 0x005C, COMPAT_OUT},
@@ -524,8 +525,6 @@ static compat_t cp932_compat[] = {
     {0, 0, 0}
 };
 
-static compat_t *cp51932_compat = cp932_compat;
-
 static compat_t cp5022x_compat[] = {
     {0x00A5, 0x005C, COMPAT_OUT},
     {0x203E, 0x007E, COMPAT_OUT},
@@ -538,6 +537,9 @@ static compat_t cp5022x_compat[] = {
     {0xFFE2, 0x00AC, COMPAT_OUT|COMPAT_IN},
     {0, 0, 0}
 };
+
+static compat_t *cp51932_compat = cp932_compat;
+static compat_t *cp20932_compat = cp5022x_compat;
 
 typedef HRESULT (WINAPI *CONVERTINETSTRING)(
     LPDWORD lpdwMode,
@@ -774,7 +776,7 @@ make_csconv(const char *_name)
 {
     CPINFOEX cpinfoex;
     csconv_t cv;
-    int no_compat = FALSE;
+    int use_compat = TRUE;
     char name[512];
     char *p;
 
@@ -785,7 +787,7 @@ make_csconv(const char *_name)
     while ((p = strrstr(name, "//")) != NULL)
     {
         if (_stricmp(p + 2, "nocompat") == 0)
-            no_compat = TRUE;
+            use_compat = FALSE;
         *p = 0;
     }
 
@@ -815,14 +817,12 @@ make_csconv(const char *_name)
         cv.mbtowc = iso2022jp_mbtowc;
         cv.wctomb = iso2022jp_wctomb;
         cv.flush = iso2022jp_flush;
-        cv.compat = cp5022x_compat;
     }
     else if (cv.codepage == 51932 && load_mlang())
     {
         cv.mbtowc = mlang_mbtowc;
         cv.wctomb = mlang_wctomb;
         cv.mblen = eucjp_mblen;
-        cv.compat = cp51932_compat;
     }
     else if (IsValidCodePage(cv.codepage)
             && GetCPInfoEx(cv.codepage, 0, &cpinfoex) != 0
@@ -834,17 +834,22 @@ make_csconv(const char *_name)
             cv.mblen = sbcs_mblen;
         else
             cv.mblen = dbcs_mblen;
-
-        if (cv.codepage == 932)
-            cv.compat = cp932_compat;
     }
     else
     {
         /* not supported */
         cv.codepage = -1;
     }
-    if (no_compat)
-        cv.compat = NULL;
+    if (use_compat)
+    {
+        switch (cv.codepage)
+        {
+        case 932: cv.compat = cp932_compat; break;
+        case 20932: cv.compat = cp20932_compat; break;
+        case 51932: cv.compat = cp51932_compat; break;
+        case 50220: case 50221: case 50222: cv.compat = cp5022x_compat; break;
+        }
+    }
     return cv;
 }
 
