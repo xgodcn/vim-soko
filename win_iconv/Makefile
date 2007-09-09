@@ -1,5 +1,6 @@
 
 CFLAGS=-pedantic -Wall
+CFLAGS+=-DUSE_LIBICONV_DLL
 
 all: iconv.dll libiconv.a win_iconv.exe
 
@@ -15,3 +16,4 @@ win_iconv.exe: win_iconv.c
 
 clean:
 	rm win_iconv.exe win_iconv.o iconv.dll libiconv.a
+
