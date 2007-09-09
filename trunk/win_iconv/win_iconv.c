@@ -1,6 +1,10 @@
 /*
  * iconv library implemented with Win32 API.
  *
+ * When $WINICONV_LIBICONV_DLL environment variable is defined,
+ * win_iconv load the dll dynamically and use it.  If iconv_open()
+ * failed, falls back to internal conversion.
+ *
  * Win32 API does not support strict encoding conversion for some
  * codepage.  And MLang function drop or replace invalid bytes and does
  * not return useful error status as iconv.  This implementation cannot
@@ -16,6 +20,7 @@
 # define MAKE_EXE
 # define MAKE_DLL
 # define USE_LIBICONV_INTERFACE
+# define USE_LIBICONV_DLL
 #endif
 
 #if defined(MAKE_DLL) && defined(_MSC_VER)
@@ -44,13 +49,11 @@ DLL_EXPORT iconv_t iconv_open(const char *tocode, const char *fromcode);
 DLL_EXPORT int iconv_close(iconv_t cd);
 DLL_EXPORT size_t iconv(iconv_t cd, const char **inbuf, size_t *inbytesleft, char **outbuf, size_t *outbytesleft);
 
-static int win_iconv_close(iconv_t cd);
-static size_t win_iconv(iconv_t cd, const char **inbuf, size_t *inbytesleft, char **outbuf, size_t *outbytesleft);
-
 typedef struct csconv_t csconv_t;
 typedef struct compat_t compat_t;
 typedef struct rec_iconv_t rec_iconv_t;
 
+typedef iconv_t (*f_iconv_open)(const char *tocode, const char *fromcode);
 typedef int (*f_iconv_close)(iconv_t cd);
 typedef size_t (*f_iconv)(iconv_t cd, const char **inbuf, size_t *inbytesleft, char **outbuf, size_t *outbytesleft);
 typedef int (*f_mbtowc)(csconv_t *cv, const uchar *buf, int bufsize, ushort *wbuf, int *wbufsize);
@@ -79,12 +82,16 @@ struct csconv_t {
 };
 
 struct rec_iconv_t {
-    iconv_t self;
+    iconv_t cd;
     f_iconv_close iconv_close;
     f_iconv iconv;
     csconv_t from;
     csconv_t to;
 };
+
+static iconv_t *win_iconv_open(rec_iconv_t *cd, const char *tocode, const char *fromcode);
+static int win_iconv_close(iconv_t cd);
+static size_t win_iconv(iconv_t cd, const char **inbuf, size_t *inbytesleft, char **outbuf, size_t *outbytesleft);
 
 static int load_mlang();
 static csconv_t make_csconv(const char *name);
@@ -92,6 +99,24 @@ static int name_to_codepage(const char *name);
 static uint utf16_to_ucs4(const ushort *wbuf);
 static void ucs4_to_utf16(uint wc, ushort *wbuf, int *wbufsize);
 static char *strrstr(const char *str, const char *token);
+
+#if defined(USE_LIBICONV_DLL)
+typedef int* (*f_errno)(void);
+
+static int libiconv_iconv_close(iconv_t cd);
+static size_t libiconv_iconv(iconv_t cd, const char **inbuf, size_t *inbytesleft, char **outbuf, size_t *outbytesleft);
+
+static int load_libiconv();
+static PVOID MyImageDirectoryEntryToData(LPVOID pBase, BOOLEAN bMappedAsImage, USHORT DirectoryEntry, PULONG Size);
+static int find_imported_module_by_funcname(HMODULE hModule, const char *funcname, char *dllname);
+
+static f_iconv_open dyn_libiconv_open;
+static f_iconv_close dyn_libiconv_close;
+static f_iconv dyn_libiconv;
+static f_errno dyn_libiconv_errno;
+
+static const char *winiconv_dll;
+#endif
 
 static int sbcs_mblen(csconv_t *cv, const uchar *buf, int bufsize);
 static int dbcs_mblen(csconv_t *cv, const uchar *buf, int bufsize);
@@ -232,11 +257,6 @@ struct {
     {874, "CP874"},
     {874, "WINDOWS-874"},
 
-    /*
-     * what is different between 20932 and 51932
-     * CP20932: A1C1 -> U+301C
-     * CP51932: A1C1 -> U+FF5E
-     */
     /* !IsValidCodePage(51932) */
     {51932, "CP51932"},
     {51932, "MS51932"},
@@ -604,7 +624,6 @@ load_mlang()
     return TRUE;
 }
 
-/* XXX: load libiconv.dll if possible? */
 iconv_t
 iconv_open(const char *tocode, const char *fromcode)
 {
@@ -617,34 +636,56 @@ iconv_open(const char *tocode, const char *fromcode)
         return (iconv_t)(-1);
     }
 
-    cd->from = make_csconv(fromcode);
-    cd->to = make_csconv(tocode);
-    if (cd->from.codepage == -1 || cd->to.codepage == -1)
+#if defined(USE_LIBICONV_DLL)
+# if 1
+    /*
+     * TODO:
+     * Which the order of priority is useful?
+     *   1. libiconv.dll -> internal
+     *   2. internal -> libiconv.dll
+     * Also should we use default typical names to load libiconv.dll
+     * when $WINICONV_LIBICONV_DLL is not defined.
+     * Disable default typical names for now.
+     */
+    if (getenv("WINICONV_LIBICONV_DLL") == NULL
+            || getenv("WINICONV_LIBICONV_DLL")[0] == 0)
+        putenv("WINICONV_LIBICONV_DLL=DISABLED");
+# endif
+
+    if (load_libiconv())
+    {
+        cd->cd = dyn_libiconv_open(tocode, fromcode);
+        if (cd->cd != (iconv_t)(-1))
+        {
+            cd->iconv_close = libiconv_iconv_close;
+            cd->iconv = libiconv_iconv;
+            return (iconv_t)cd;
+        }
+        /* fallback */
+    }
+#endif
+
+    cd->cd = win_iconv_open(cd, tocode, fromcode);
+    if (cd->cd == (iconv_t)(-1))
     {
         free(cd);
         errno = EINVAL;
         return (iconv_t)(-1);
     }
 
-    cd->self = (iconv_t)cd;
-    cd->iconv_close = win_iconv_close;
-    cd->iconv = win_iconv;
-
     return (iconv_t)cd;
 }
 
 int
-iconv_close(iconv_t _cd)
+iconv_close(iconv_t cd)
 {
-    rec_iconv_t *cd = (rec_iconv_t *)_cd;
-    return cd->iconv_close(cd->self);
+    return ((rec_iconv_t *)cd)->iconv_close(cd);
 }
 
 size_t
-iconv(iconv_t _cd, const char **inbuf, size_t *inbytesleft, char **outbuf, size_t *outbytesleft)
+iconv(iconv_t cd, const char **inbuf, size_t *inbytesleft, char **outbuf, size_t *outbytesleft)
 {
-    rec_iconv_t *cd = (rec_iconv_t *)_cd;
-    return cd->iconv(cd->self, inbuf, inbytesleft, outbuf, outbytesleft);
+    return ((rec_iconv_t *)cd)->iconv(cd, inbuf, inbytesleft, outbuf, outbytesleft);
 }
 
 /* libiconv interface for vim */
@@ -674,6 +715,18 @@ libiconvctl (iconv_t cd, int request, void* argument)
     return 0;
 }
 #endif
+
+static iconv_t *
+win_iconv_open(rec_iconv_t *cd, const char *tocode, const char *fromcode)
+{
+    cd->from = make_csconv(fromcode);
+    cd->to = make_csconv(tocode);
+    if (cd->from.codepage == -1 || cd->to.codepage == -1)
+        return (iconv_t)(-1);
+    cd->iconv_close = win_iconv_close;
+    cd->iconv = win_iconv;
+    return (iconv_t)cd;
+}
 
 static int
 win_iconv_close(iconv_t cd)
@@ -907,6 +960,141 @@ strrstr(const char *str, const char *token)
             return (char *)p;
     return NULL;
 }
+
+#if defined(USE_LIBICONV_DLL)
+static int
+libiconv_iconv_close(iconv_t cd)
+{
+    int r = dyn_libiconv_close(((rec_iconv_t *)cd)->cd);
+    int e = *dyn_libiconv_errno();
+    free(cd);
+    errno = e;
+    return r;
+}
+
+static size_t
+libiconv_iconv(iconv_t cd, const char **inbuf, size_t *inbytesleft, char **outbuf, size_t *outbytesleft)
+{
+    size_t r = dyn_libiconv(((rec_iconv_t *)cd)->cd, inbuf, inbytesleft, outbuf, outbytesleft);
+    errno = *dyn_libiconv_errno();
+    return r;
+}
+
+static int
+load_libiconv()
+{
+    HMODULE hlibiconv = NULL;
+    HMODULE hmsvcrt = NULL;
+    int i;
+    const char *env;
+    char msvcrt_dll[_MAX_PATH];
+    char *libiconv_names[] = {
+        "iconv.dll", "libiconv.dll", "iconv-2.dll", "libiconv-2.dll",
+        NULL};
+
+    if (dyn_libiconv_open != NULL)
+        return TRUE;
+
+    /* Use $WINICONV_LIBICONV_DLL if defined. */
+    env = getenv("WINICONV_LIBICONV_DLL");
+    if (env != NULL && env[0] != 0)
+    {
+        if (winiconv_dll == NULL || strcmp(winiconv_dll, env) != 0)
+            hlibiconv = LoadLibrary(env);
+    }
+    else
+    {
+        for (i = 0; libiconv_names[i] != NULL; ++i)
+        {
+            if (winiconv_dll == NULL
+                    || strcmp(winiconv_dll, libiconv_names[i]) != 0)
+            {
+                hlibiconv = LoadLibrary(libiconv_names[i]);
+                if (hlibiconv != NULL)
+                    break;
+            }
+        }
+    }
+
+    if (hlibiconv != NULL
+            && find_imported_module_by_funcname(hlibiconv, "_errno", msvcrt_dll)
+            && (hmsvcrt = LoadLibrary(msvcrt_dll)) != NULL)
+    {
+        dyn_libiconv_open = (f_iconv_open)GetProcAddress(hlibiconv, "libiconv_open");
+        dyn_libiconv_close = (f_iconv_close)GetProcAddress(hlibiconv, "libiconv_close");
+        dyn_libiconv = (f_iconv)GetProcAddress(hlibiconv, "libiconv");
+        dyn_libiconv_errno = (f_errno)GetProcAddress(hmsvcrt, "_errno");
+        if (dyn_libiconv_open != NULL && dyn_libiconv_close != NULL
+                && dyn_libiconv != NULL && dyn_libiconv_errno != NULL)
+            return TRUE;
+    }
+
+    if (hlibiconv != NULL)
+        FreeLibrary(hlibiconv);
+    if (hmsvcrt != NULL)
+        FreeLibrary(hmsvcrt);
+    dyn_libiconv_open = NULL;
+    dyn_libiconv_close = NULL;
+    dyn_libiconv = NULL;
+    dyn_libiconv_errno = NULL;
+    return FALSE;
+}
+
+/*
+ * Reference:
+ * http://forums.belution.com/ja/vc/000/234/78s.shtml
+ * http://nienie.com/~masapico/api_ImageDirectoryEntryToData.html
+ */
+static PVOID
+MyImageDirectoryEntryToData(LPVOID pBase, BOOLEAN bMappedAsImage, USHORT DirectoryEntry, PULONG Size)
+{
+    PIMAGE_IMPORT_DESCRIPTOR pImportDescriptor;
+    PIMAGE_DOS_HEADER pDosHdr;
+    PIMAGE_NT_HEADERS pNTHdr;
+
+    pDosHdr = (PIMAGE_DOS_HEADER)pBase;
+    pNTHdr = (PIMAGE_NT_HEADERS)((LPBYTE)pBase + pDosHdr->e_lfanew);
+    pImportDescriptor = (PIMAGE_IMPORT_DESCRIPTOR)((LPBYTE)pBase + pNTHdr->OptionalHeader.DataDirectory[IMAGE_DIRECTORY_ENTRY_IMPORT].VirtualAddress);
+    /* TODO: *Size = ? */
+    return pImportDescriptor;
+}
+
+static int
+find_imported_module_by_funcname(HMODULE hModule, const char *funcname, char *dllname)
+{
+    DWORD BaseAddress;
+    ULONG Size;
+    PIMAGE_IMPORT_DESCRIPTOR pImportDescriptor;
+    PIMAGE_THUNK_DATA pThunkData;
+    PIMAGE_IMPORT_BY_NAME pImportByName;
+
+    BaseAddress = (DWORD)hModule;
+    pImportDescriptor = MyImageDirectoryEntryToData(
+            (LPVOID)BaseAddress,
+            TRUE,
+            IMAGE_DIRECTORY_ENTRY_IMPORT,
+            &Size);
+    for ( ; pImportDescriptor->OriginalFirstThunk != 0; ++pImportDescriptor)
+    {
+        pThunkData = (PIMAGE_THUNK_DATA)
+            (BaseAddress + pImportDescriptor->OriginalFirstThunk);
+        for ( ; pThunkData->u1.Ordinal != 0; ++pThunkData)
+        {
+            if (!IMAGE_SNAP_BY_ORDINAL(pThunkData->u1.Ordinal))
+            {
+                pImportByName = (PIMAGE_IMPORT_BY_NAME)
+                    (BaseAddress + (DWORD)pThunkData->u1.AddressOfData);
+                if (strcmp((char *)pImportByName->Name, funcname) == 0)
+                {
+                    strcpy(dllname, (char *)(BaseAddress + pImportDescriptor->Name));
+                    return TRUE;
+                }
+            }
+        }
+    }
+    return FALSE;
+}
+#endif
 
 static int
 sbcs_mblen(csconv_t *cv, const uchar *buf, int bufsize)
@@ -1400,6 +1588,27 @@ iso2022jp_flush(csconv_t *cv, uchar *buf, int bufsize)
     }
     return 0;
 }
+
+#if defined(MAKE_DLL) && defined(USE_LIBICONV_DLL)
+BOOL WINAPI
+DllMain(HINSTANCE hinstDLL, DWORD fdwReason, LPVOID lpReserved)
+{
+    static char dllpath[_MAX_PATH];
+
+    switch( fdwReason )
+    {
+    case DLL_PROCESS_ATTACH:
+        GetModuleFileName((HMODULE)hinstDLL, dllpath, sizeof(dllpath));
+        winiconv_dll = strrchr(dllpath, '\\') + 1;
+        break;
+    case DLL_THREAD_ATTACH:
+    case DLL_THREAD_DETACH:
+    case DLL_PROCESS_DETACH:
+        break;
+    }
+    return TRUE;
+}
+#endif
 
 #if defined(MAKE_EXE)
 #include <stdio.h>
