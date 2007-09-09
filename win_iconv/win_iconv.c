@@ -56,6 +56,7 @@ typedef struct rec_iconv_t rec_iconv_t;
 typedef iconv_t (*f_iconv_open)(const char *tocode, const char *fromcode);
 typedef int (*f_iconv_close)(iconv_t cd);
 typedef size_t (*f_iconv)(iconv_t cd, const char **inbuf, size_t *inbytesleft, char **outbuf, size_t *outbytesleft);
+typedef int* (*f_errno)(void);
 typedef int (*f_mbtowc)(csconv_t *cv, const uchar *buf, int bufsize, ushort *wbuf, int *wbufsize);
 typedef int (*f_wctomb)(csconv_t *cv, ushort *wbuf, int wbufsize, uchar *buf, int bufsize);
 typedef int (*f_mblen)(csconv_t *cv, const uchar *buf, int bufsize);
@@ -85,6 +86,7 @@ struct rec_iconv_t {
     iconv_t cd;
     f_iconv_close iconv_close;
     f_iconv iconv;
+    f_errno xerrno;
     csconv_t from;
     csconv_t to;
 };
@@ -101,10 +103,6 @@ static void ucs4_to_utf16(uint wc, ushort *wbuf, int *wbufsize);
 static char *strrstr(const char *str, const char *token);
 
 #if defined(USE_LIBICONV_DLL)
-typedef int* (*f_errno)(void);
-
-static int libiconv_iconv_close(iconv_t cd);
-static size_t libiconv_iconv(iconv_t cd, const char **inbuf, size_t *inbytesleft, char **outbuf, size_t *outbytesleft);
 
 static int load_libiconv();
 static PVOID MyImageDirectoryEntryToData(LPVOID pBase, BOOLEAN bMappedAsImage, USHORT DirectoryEntry, PULONG Size);
@@ -657,8 +655,9 @@ iconv_open(const char *tocode, const char *fromcode)
         cd->cd = dyn_libiconv_open(tocode, fromcode);
         if (cd->cd != (iconv_t)(-1))
         {
-            cd->iconv_close = libiconv_iconv_close;
-            cd->iconv = libiconv_iconv;
+            cd->iconv_close = dyn_libiconv_close;
+            cd->iconv = dyn_libiconv;
+            cd->xerrno = dyn_libiconv_errno;
             return (iconv_t)cd;
         }
         /* fallback */
@@ -677,15 +676,23 @@ iconv_open(const char *tocode, const char *fromcode)
 }
 
 int
-iconv_close(iconv_t cd)
+iconv_close(iconv_t _cd)
 {
-    return ((rec_iconv_t *)cd)->iconv_close(cd);
+    rec_iconv_t *cd = (rec_iconv_t *)_cd;
+    int r = cd->iconv_close(cd->cd);
+    int e = *(cd->xerrno());
+    free(cd);
+    errno = e;
+    return r;
 }
 
 size_t
-iconv(iconv_t cd, const char **inbuf, size_t *inbytesleft, char **outbuf, size_t *outbytesleft)
+iconv(iconv_t _cd, const char **inbuf, size_t *inbytesleft, char **outbuf, size_t *outbytesleft)
 {
-    return ((rec_iconv_t *)cd)->iconv(cd, inbuf, inbytesleft, outbuf, outbytesleft);
+    rec_iconv_t *cd = (rec_iconv_t *)_cd;
+    size_t r = cd->iconv(cd->cd, inbuf, inbytesleft, outbuf, outbytesleft);
+    errno = *(cd->xerrno());
+    return r;
 }
 
 /* libiconv interface for vim */
@@ -725,13 +732,13 @@ win_iconv_open(rec_iconv_t *cd, const char *tocode, const char *fromcode)
         return (iconv_t)(-1);
     cd->iconv_close = win_iconv_close;
     cd->iconv = win_iconv;
+    cd->xerrno = _errno;
     return (iconv_t)cd;
 }
 
 static int
 win_iconv_close(iconv_t cd)
 {
-    free(cd);
     return 0;
 }
 
@@ -962,24 +969,6 @@ strrstr(const char *str, const char *token)
 }
 
 #if defined(USE_LIBICONV_DLL)
-static int
-libiconv_iconv_close(iconv_t cd)
-{
-    int r = dyn_libiconv_close(((rec_iconv_t *)cd)->cd);
-    int e = *dyn_libiconv_errno();
-    free(cd);
-    errno = e;
-    return r;
-}
-
-static size_t
-libiconv_iconv(iconv_t cd, const char **inbuf, size_t *inbytesleft, char **outbuf, size_t *outbytesleft)
-{
-    size_t r = dyn_libiconv(((rec_iconv_t *)cd)->cd, inbuf, inbytesleft, outbuf, outbytesleft);
-    errno = *dyn_libiconv_errno();
-    return r;
-}
-
 static int
 load_libiconv()
 {
