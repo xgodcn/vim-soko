@@ -641,6 +641,7 @@ win_iconv(iconv_t _cd, const char **inbuf, size_t *inbytesleft, char **outbuf, s
             *outbuf += outsize;
             *outbytesleft -= outsize;
         }
+        cd->from.mode = 0;
         cd->to.mode = 0;
         return 0;
     }
