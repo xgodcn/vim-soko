@@ -36,6 +36,7 @@
 
 typedef unsigned char uchar;
 typedef unsigned short ushort;
+typedef unsigned int uint;
 
 typedef void* iconv_t;
 
@@ -47,6 +48,7 @@ static int win_iconv_close(iconv_t cd);
 static size_t win_iconv(iconv_t cd, const char **inbuf, size_t *inbytesleft, char **outbuf, size_t *outbytesleft);
 
 typedef struct csconv_t csconv_t;
+typedef struct compat_t compat_t;
 typedef struct rec_iconv_t rec_iconv_t;
 
 typedef int (*f_iconv_close)(iconv_t cd);
@@ -56,6 +58,16 @@ typedef int (*f_wctomb)(csconv_t *cv, ushort *wbuf, int wbufsize, uchar *buf, in
 typedef int (*f_mblen)(csconv_t *cv, const uchar *buf, int bufsize);
 typedef int (*f_flush)(csconv_t *cv, uchar *buf, int bufsize);
 
+#define COMPAT_IN   1
+#define COMPAT_OUT  2
+/* unicode conversion table for compatibility with other conversion
+ * table. */
+struct compat_t {
+    uint in;
+    uint out;
+    uint flag;
+};
+
 struct csconv_t {
     int codepage;
     f_mbtowc mbtowc;
@@ -63,6 +75,7 @@ struct csconv_t {
     f_mblen mblen;
     f_flush flush;
     DWORD mode;
+    compat_t *compat;
 };
 
 struct rec_iconv_t {
@@ -76,6 +89,9 @@ struct rec_iconv_t {
 static int load_mlang();
 static csconv_t make_csconv(const char *name);
 static int name_to_codepage(const char *name);
+static uint utf16_to_ucs4(const ushort *wbuf);
+static void ucs4_to_utf16(uint wc, ushort *wbuf, int *wbufsize);
+static char *strrstr(const char *str, const char *token);
 
 static int sbcs_mblen(csconv_t *cv, const uchar *buf, int bufsize);
 static int dbcs_mblen(csconv_t *cv, const uchar *buf, int bufsize);
@@ -480,6 +496,49 @@ struct {
     {0, NULL}
 };
 
+/*
+ * SJIS Shift_JIS table             CP932 table
+ * ---- --------------------------- --------------------------------
+ *   5C U+00A5 YEN SIGN             U+005C REVERSE SOLIDUS
+ *   7E U+203E OVERLINE             U+007E TILDE
+ * 815C U+2014 EM DASH              U+2015 HORIZONTAL BAR
+ * 8160 U+301C WAVE DASH            U+FF5E FULLWIDTH TILDE
+ * 8161 U+2016 DOUBLE VERTICAL LINE U+2225 PARALLEL TO
+ * 817C U+2212 MINUS SIGN           U+FF0D FULLWIDTH HYPHEN-MINUS
+ * 8191 U+00A2 CENT SIGN            U+FFE0 FULLWIDTH CENT SIGN
+ * 8192 U+00A3 POUND SIGN           U+FFE1 FULLWIDTH POUND SIGN
+ * 81CA U+00AC NOT SIGN             U+FFE2 FULLWIDTH NOT SIGN
+ *
+ * EUC-JP and ISO-2022-JP should be CP932 compatible.
+ */
+static compat_t cp932_compat[] = {
+    {0x00A5, 0x005C, COMPAT_OUT},
+    {0x203E, 0x007E, COMPAT_OUT},
+    {0x2014, 0x2015, COMPAT_OUT},
+    {0x301C, 0xFF5E, COMPAT_OUT},
+    {0x2016, 0x2225, COMPAT_OUT},
+    {0x2212, 0xFF0D, COMPAT_OUT},
+    {0x00A2, 0xFFE0, COMPAT_OUT},
+    {0x00A3, 0xFFE1, COMPAT_OUT},
+    {0x00AC, 0xFFE2, COMPAT_OUT},
+    {0, 0, 0}
+};
+
+static compat_t *cp51932_compat = cp932_compat;
+
+static compat_t cp5022x_compat[] = {
+    {0x00A5, 0x005C, COMPAT_OUT},
+    {0x203E, 0x007E, COMPAT_OUT},
+    {0x2014, 0x2015, COMPAT_OUT},
+    {0xFF5E, 0x301C, COMPAT_OUT|COMPAT_IN},
+    {0x2225, 0x2016, COMPAT_OUT|COMPAT_IN},
+    {0xFF0D, 0x2212, COMPAT_OUT|COMPAT_IN},
+    {0xFFE0, 0x00A2, COMPAT_OUT|COMPAT_IN},
+    {0xFFE1, 0x00A3, COMPAT_OUT|COMPAT_IN},
+    {0xFFE2, 0x00AC, COMPAT_OUT|COMPAT_IN},
+    {0, 0, 0}
+};
+
 typedef HRESULT (WINAPI *CONVERTINETSTRING)(
     LPDWORD lpdwMode,
     DWORD dwSrcEncoding,
@@ -630,6 +689,9 @@ win_iconv(iconv_t _cd, const char **inbuf, size_t *inbytesleft, char **outbuf, s
     int outsize;
     int wsize;
     DWORD mode;
+    uint wc;
+    compat_t *cp;
+    int i;
 
     if (inbuf == NULL || *inbuf == NULL)
     {
@@ -656,16 +718,46 @@ win_iconv(iconv_t _cd, const char **inbuf, size_t *inbytesleft, char **outbuf, s
             return (size_t)(-1);
 
         if (wsize == 0)
-            outsize = 0;
-        else
         {
-            outsize = cd->to.wctomb(&cd->to, wbuf, wsize, (uchar *)*outbuf, *outbytesleft);
-            if (outsize == -1)
+            *inbuf += insize;
+            *inbytesleft -= insize;
+            continue;
+        }
+
+        if (cd->from.compat != NULL)
+        {
+            wc = utf16_to_ucs4(wbuf);
+            cp = cd->from.compat;
+            for (i = 0; cp[i].in != 0; ++i)
             {
-                /* Restore the mode.  Is this safe for MLang function? */
-                cd->from.mode = mode;
-                return (size_t)(-1);
+                if ((cp[i].flag & COMPAT_IN) && cp[i].out == wc)
+                {
+                    ucs4_to_utf16(cp[i].in, wbuf, &wsize);
+                    break;
+                }
             }
+        }
+
+        if (cd->to.compat != NULL)
+        {
+            wc = utf16_to_ucs4(wbuf);
+            cp = cd->to.compat;
+            for (i = 0; cp[i].in != 0; ++i)
+            {
+                if ((cp[i].flag & COMPAT_OUT) && cp[i].in == wc)
+                {
+                    ucs4_to_utf16(cp[i].out, wbuf, &wsize);
+                    break;
+                }
+            }
+        }
+
+        outsize = cd->to.wctomb(&cd->to, wbuf, wsize, (uchar *)*outbuf, *outbytesleft);
+        if (outsize == -1)
+        {
+            /* Restore the mode.  Is this safe for MLang function? */
+            cd->from.mode = mode;
+            return (size_t)(-1);
         }
 
         *inbuf += insize;
@@ -678,47 +770,59 @@ win_iconv(iconv_t _cd, const char **inbuf, size_t *inbytesleft, char **outbuf, s
 }
 
 static csconv_t
-make_csconv(const char *name)
+make_csconv(const char *_name)
 {
     CPINFOEX cpinfoex;
     csconv_t cv;
+    int no_compat = FALSE;
+    char name[512];
+    char *p;
+
+    strncpy(name, _name, sizeof(name));
+    name[sizeof(name) - 1] = 0;
+
+    /* check for option "enc_name//opt1//opt2" */
+    while ((p = strrstr(name, "//")) != NULL)
+    {
+        if (_stricmp(p + 2, "nocompat") == 0)
+            no_compat = TRUE;
+        *p = 0;
+    }
 
     cv.mode = 0;
+    cv.mblen = NULL;
+    cv.flush = NULL;
+    cv.compat = NULL;
     cv.codepage = name_to_codepage(name);
     if (cv.codepage == 1200 || cv.codepage == 1201)
     {
         cv.mbtowc = utf16_mbtowc;
         cv.wctomb = utf16_wctomb;
-        cv.mblen = NULL;
-        cv.flush = NULL;
     }
     else if (cv.codepage == 12000 || cv.codepage == 12001)
     {
         cv.mbtowc = utf32_mbtowc;
         cv.wctomb = utf32_wctomb;
-        cv.mblen = NULL;
-        cv.flush = NULL;
     }
     else if (cv.codepage == 65001)
     {
         cv.mbtowc = kernel_mbtowc;
         cv.wctomb = kernel_wctomb;
         cv.mblen = utf8_mblen;
-        cv.flush = NULL;
     }
     else if (cv.codepage == 50220 || cv.codepage == 50221 || cv.codepage == 50222)
     {
         cv.mbtowc = iso2022jp_mbtowc;
         cv.wctomb = iso2022jp_wctomb;
-        cv.mblen = NULL;
         cv.flush = iso2022jp_flush;
+        cv.compat = cp5022x_compat;
     }
     else if (cv.codepage == 51932 && load_mlang())
     {
         cv.mbtowc = mlang_mbtowc;
         cv.wctomb = mlang_wctomb;
         cv.mblen = eucjp_mblen;
-        cv.flush = NULL;
+        cv.compat = cp51932_compat;
     }
     else if (IsValidCodePage(cv.codepage)
             && GetCPInfoEx(cv.codepage, 0, &cpinfoex) != 0
@@ -730,13 +834,17 @@ make_csconv(const char *name)
             cv.mblen = sbcs_mblen;
         else
             cv.mblen = dbcs_mblen;
-        cv.flush = NULL;
+
+        if (cv.codepage == 932)
+            cv.compat = cp932_compat;
     }
     else
     {
         /* not supported */
         cv.codepage = -1;
     }
+    if (no_compat)
+        cv.compat = NULL;
     return cv;
 }
 
@@ -745,17 +853,54 @@ name_to_codepage(const char *name)
 {
     int i;
 
-    if ((name[0] == 'c' || name[0] == 'C') && (name[1] == 'p' || name[1] == 'P'))
+    if (_strnicmp(name, "cp", 2) == 0)
         return atoi(name + 2); /* CP123 */
     else if ('0' <= name[0] && name[0] <= '9')
         return atoi(name);     /* 123 */
-    else if ((name[0] == 'x' || name[0] == 'X') && (name[1] == 'x' || name[1] == 'X'))
+    else if (_strnicmp(name, "xx", 2) == 0)
         return atoi(name + 2); /* XX123 for debug */
 
     for (i = 0; codepage_alias[i].name != NULL; ++i)
-        if (lstrcmpi(name, codepage_alias[i].name) == 0)
+        if (_stricmp(name, codepage_alias[i].name) == 0)
             return codepage_alias[i].codepage;
     return -1;
+}
+
+static uint
+utf16_to_ucs4(const ushort *wbuf)
+{
+    uint wc = wbuf[0];
+    if (0xD800 <= wbuf[0] && wbuf[0] <= 0xDBFF)
+        wc = ((wbuf[0] & 0x03C0) << 16) | ((wbuf[0] & 0x003F) << 10) | (wbuf[1] & 0x03FF);
+    return wc;
+}
+
+static void
+ucs4_to_utf16(uint wc, ushort *wbuf, int *wbufsize)
+{
+    if (0xFFFF < wc)
+    {
+        wbuf[0] = 0xD800 | ((wc & 0x1F0000) - 1) | (wc & 0x00FC00);
+        wbuf[1] = 0xDC00 | (wc & 0x0003FF);
+        *wbufsize = 2;
+    }
+    else
+    {
+        wbuf[0] = wc;
+        *wbufsize = 1;
+    }
+}
+
+static char *
+strrstr(const char *str, const char *token)
+{
+    int len = strlen(token);
+    const char *p = str + strlen(str);
+
+    while (str <= --p)
+        if (p[0] == token[0] && strncmp(p, token, len) == 0)
+            return (char *)p;
+    return NULL;
 }
 
 static int
@@ -961,7 +1106,7 @@ utf16_wctomb(csconv_t *cv, ushort *wbuf, int wbufsize, uchar *buf, int bufsize)
 static int
 utf32_mbtowc(csconv_t *cv, const uchar *buf, int bufsize, ushort *wbuf, int *wbufsize)
 {
-    unsigned int wc;
+    uint wc;
 
     if (bufsize < 4)
         return_error(EINVAL);
@@ -971,29 +1116,18 @@ utf32_mbtowc(csconv_t *cv, const uchar *buf, int bufsize, ushort *wbuf, int *wbu
         wc = (buf[0] << 24) | (buf[1] << 16) | (buf[2] << 8) | buf[3];
     if ((0xD800 <= wc && wc <= 0xDFFF) || 0x10FFFF < wc)
         return_error(EILSEQ);
-    if (0xFFFF < wc)
-    {
-        wbuf[0] = 0xD800 | ((wc & 0x1F0000) - 1) | (wc & 0x00FC00);
-        wbuf[1] = 0xDC00 | (wc & 0x0003FF);
-        *wbufsize = 2;
-    }
-    else
-    {
-        wbuf[0] = wc;
-        *wbufsize = 1;
-    }
+    ucs4_to_utf16(wc, wbuf, wbufsize);
     return 4;
 }
 
 static int
 utf32_wctomb(csconv_t *cv, ushort *wbuf, int wbufsize, uchar *buf, int bufsize)
 {
-    unsigned int wc = wbuf[0];
+    uint wc;
 
     if (bufsize < 4)
         return_error(E2BIG);
-    if (0xD800 <= wbuf[0] && wbuf[0] <= 0xDFFF)
-        wc = ((wbuf[0] & 0x03C0) << 16) | ((wbuf[0] & 0x003F) << 10) | (wbuf[1] & 0x03FF);
+    wc = utf16_to_ucs4(wbuf);
     if (cv->codepage == 12000) /* little endian */
     {
         buf[0] = wc & 0x000000FF;
@@ -1144,11 +1278,6 @@ iso2022jp_mbtowc(csconv_t *cv, const uchar *buf, int bufsize, ushort *wbuf, int 
     if (wbuf[0] == buf[0] && cv->mode != ISO2022JP_MODE_ASCII)
         return_error(EILSEQ);
 
-    /* XXX: U+301C is incompatible with other Japanese codepage.  Use
-     * U+FF5E instead. */
-    if (wbuf[0] == 0x301C)
-        wbuf[0] = 0xFF5E;
-
     return len;
 }
 
@@ -1159,12 +1288,6 @@ iso2022jp_wctomb(csconv_t *cv, ushort *wbuf, int wbufsize, uchar *buf, int bufsi
     int len;
     int esc_len;
     int mode = cv->mode;
-
-    /* XXX: Handle U+FF5E as U+301C for compatibility with other
-     * Japanese codepage.  Is this conversion behavior (U+301C <->
-     * JIS:2141) compatible with other Windows version? */
-    if (wbuf[0] == 0xFF5E)
-        wbuf[0] = 0x301C;
 
     /* defaultChar cannot be used for CP50220, CP50221 and CP50222 */
     len = WideCharToMultiByte(cv->codepage, 0,
