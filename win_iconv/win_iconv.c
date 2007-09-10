@@ -105,7 +105,7 @@ static char *strrstr(const char *str, const char *token);
 #if defined(USE_LIBICONV_DLL)
 
 static int load_libiconv();
-static PVOID MyImageDirectoryEntryToData(LPVOID pBase, BOOLEAN bMappedAsImage, USHORT DirectoryEntry, PULONG Size);
+static PVOID MyImageDirectoryEntryToData(LPVOID Base, BOOLEAN MappedAsImage, USHORT DirectoryEntry, PULONG Size);
 static HMODULE find_imported_module_by_funcname(HMODULE hModule, const char *funcname);
 
 static f_iconv_open dyn_libiconv_open;
@@ -1040,15 +1040,15 @@ load_libiconv()
  * http://nienie.com/~masapico/api_ImageDirectoryEntryToData.html
  */
 static PVOID
-MyImageDirectoryEntryToData(LPVOID pBase, BOOLEAN bMappedAsImage, USHORT DirectoryEntry, PULONG Size)
+MyImageDirectoryEntryToData(LPVOID Base, BOOLEAN MappedAsImage, USHORT DirectoryEntry, PULONG Size)
 {
     PIMAGE_IMPORT_DESCRIPTOR pImportDescriptor;
     PIMAGE_DOS_HEADER pDosHdr;
     PIMAGE_NT_HEADERS pNTHdr;
 
-    pDosHdr = (PIMAGE_DOS_HEADER)pBase;
-    pNTHdr = (PIMAGE_NT_HEADERS)((LPBYTE)pBase + pDosHdr->e_lfanew);
-    pImportDescriptor = (PIMAGE_IMPORT_DESCRIPTOR)((LPBYTE)pBase + pNTHdr->OptionalHeader.DataDirectory[IMAGE_DIRECTORY_ENTRY_IMPORT].VirtualAddress);
+    pDosHdr = (PIMAGE_DOS_HEADER)Base;
+    pNTHdr = (PIMAGE_NT_HEADERS)((LPBYTE)Base + pDosHdr->e_lfanew);
+    pImportDescriptor = (PIMAGE_IMPORT_DESCRIPTOR)((LPBYTE)Base + pNTHdr->OptionalHeader.DataDirectory[DirectoryEntry].VirtualAddress);
     /* TODO: *Size = ? */
     return pImportDescriptor;
 }
