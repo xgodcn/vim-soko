@@ -1042,15 +1042,15 @@ load_libiconv()
 static PVOID
 MyImageDirectoryEntryToData(LPVOID Base, BOOLEAN MappedAsImage, USHORT DirectoryEntry, PULONG Size)
 {
-    PIMAGE_IMPORT_DESCRIPTOR pImportDescriptor;
+    PVOID ptr;
     PIMAGE_DOS_HEADER pDosHdr;
     PIMAGE_NT_HEADERS pNTHdr;
 
     pDosHdr = (PIMAGE_DOS_HEADER)Base;
     pNTHdr = (PIMAGE_NT_HEADERS)((LPBYTE)Base + pDosHdr->e_lfanew);
-    pImportDescriptor = (PIMAGE_IMPORT_DESCRIPTOR)((LPBYTE)Base + pNTHdr->OptionalHeader.DataDirectory[DirectoryEntry].VirtualAddress);
+    ptr = (PVOID)((LPBYTE)Base + pNTHdr->OptionalHeader.DataDirectory[DirectoryEntry].VirtualAddress);
     /* TODO: *Size = ? */
-    return pImportDescriptor;
+    return ptr;
 }
 
 static HMODULE
