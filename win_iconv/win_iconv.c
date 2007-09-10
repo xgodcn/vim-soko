@@ -1025,8 +1025,7 @@ load_libiconv()
 
     if (hlibiconv != NULL)
         FreeLibrary(hlibiconv);
-    if (hmsvcrt != NULL)
-        FreeLibrary(hmsvcrt);
+    /* do not free hmsvcrt which is obtained by GetModuleHandle() */
     dyn_libiconv_open = NULL;
     dyn_libiconv_close = NULL;
     dyn_libiconv = NULL;
