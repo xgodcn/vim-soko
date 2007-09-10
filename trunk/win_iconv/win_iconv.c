@@ -1011,7 +1011,8 @@ load_libiconv(rec_iconv_t *cd)
         *cd = lastdll;
         return TRUE;
     }
-    else
+
+    if (lastdll.hlibiconv != NULL)
     {
         /* decrement reference count */
         FreeLibrary(lastdll.hlibiconv);
