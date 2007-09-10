@@ -89,6 +89,10 @@ struct rec_iconv_t {
     f_errno _errno;
     csconv_t from;
     csconv_t to;
+#if defined(USE_LIBICONV_DLL)
+    HMODULE hlibiconv;
+    f_iconv_open iconv_open;
+#endif
 };
 
 static iconv_t *win_iconv_open(rec_iconv_t *cd, const char *tocode, const char *fromcode);
@@ -103,17 +107,12 @@ static void ucs4_to_utf16(uint wc, ushort *wbuf, int *wbufsize);
 static char *strrstr(const char *str, const char *token);
 
 #if defined(USE_LIBICONV_DLL)
-
-static int load_libiconv();
+static int load_libiconv(rec_iconv_t *cd);
 static PVOID MyImageDirectoryEntryToData(LPVOID Base, BOOLEAN MappedAsImage, USHORT DirectoryEntry, PULONG Size);
 static HMODULE find_imported_module_by_funcname(HMODULE hModule, const char *funcname);
 
-static f_iconv_open dyn_libiconv_open;
-static f_iconv_close dyn_libiconv_close;
-static f_iconv dyn_libiconv;
-static f_errno dyn_libiconv_errno;
-
 static HMODULE hwiniconv;
+static rec_iconv_t lastdll; /* keep dll loaded for optimize */
 #endif
 
 static int sbcs_mblen(csconv_t *cv, const uchar *buf, int bufsize);
@@ -635,31 +634,17 @@ iconv_open(const char *tocode, const char *fromcode)
     }
 
 #if defined(USE_LIBICONV_DLL)
-# if 1
     /*
      * TODO:
      * Which the order of priority is useful?
      *   1. libiconv.dll -> internal
      *   2. internal -> libiconv.dll
-     * Also should we use default typical names to load libiconv.dll
-     * when $WINICONV_LIBICONV_DLL is not defined.
-     * Disable default typical names for now.
      */
-    if (getenv("WINICONV_LIBICONV_DLL") == NULL
-            || getenv("WINICONV_LIBICONV_DLL")[0] == 0)
-        putenv("WINICONV_LIBICONV_DLL=DISABLED");
-# endif
-
-    if (load_libiconv())
+    if (load_libiconv(cd))
     {
-        cd->cd = dyn_libiconv_open(tocode, fromcode);
+        cd->cd = cd->iconv_open(tocode, fromcode);
         if (cd->cd != (iconv_t)(-1))
-        {
-            cd->iconv_close = dyn_libiconv_close;
-            cd->iconv = dyn_libiconv;
-            cd->_errno = dyn_libiconv_errno;
             return (iconv_t)cd;
-        }
         /* fallback */
     }
 #endif
@@ -681,6 +666,9 @@ iconv_close(iconv_t _cd)
     rec_iconv_t *cd = (rec_iconv_t *)_cd;
     int r = cd->iconv_close(cd->cd);
     int e = *(cd->_errno());
+#if defined(USE_LIBICONV_DLL)
+    FreeLibrary(cd->hlibiconv);
+#endif
     free(cd);
     errno = e;
     return r;
@@ -970,24 +958,32 @@ strrstr(const char *str, const char *token)
 
 #if defined(USE_LIBICONV_DLL)
 static int
-load_libiconv()
+load_libiconv(rec_iconv_t *cd)
 {
     HMODULE hlibiconv = NULL;
     HMODULE hmsvcrt = NULL;
     int i;
-    const char *env;
+    const char *dllname;
     char *libiconv_names[] = {
+#if 0
+    /*
+     * Should we use default typical names to load libiconv.dll when
+     * $WINICONV_LIBICONV_DLL is not defined?
+     * Disable default typical names for now.
+     */
         "iconv.dll", "libiconv.dll", "iconv-2.dll", "libiconv-2.dll",
+#endif
         NULL};
 
-    if (dyn_libiconv_open != NULL)
-        return TRUE;
+    /*
+     * always try to load dll, so that we can switch dll in runtime.
+     */
 
     /* Use $WINICONV_LIBICONV_DLL if defined. */
-    env = getenv("WINICONV_LIBICONV_DLL");
-    if (env != NULL && env[0] != 0)
+    dllname = getenv("WINICONV_LIBICONV_DLL");
+    if (dllname != NULL && dllname[0] != 0)
     {
-        hlibiconv = LoadLibrary(env);
+        hlibiconv = LoadLibrary(dllname);
         if (hwiniconv != NULL && hlibiconv == hwiniconv)
         {
             FreeLibrary(hlibiconv);
@@ -998,7 +994,8 @@ load_libiconv()
     {
         for (i = 0; libiconv_names[i] != NULL; ++i)
         {
-            hlibiconv = LoadLibrary(libiconv_names[i]);
+            dllname = libiconv_names[i];
+            hlibiconv = LoadLibrary(dllname);
             if (hwiniconv != NULL && hlibiconv == hwiniconv)
             {
                 FreeLibrary(hlibiconv);
@@ -1009,33 +1006,47 @@ load_libiconv()
         }
     }
 
+    if (hlibiconv != NULL && hlibiconv == lastdll.hlibiconv)
+    {
+        *cd = lastdll;
+        return TRUE;
+    }
+    else
+    {
+        /* decrement reference count */
+        FreeLibrary(lastdll.hlibiconv);
+        lastdll.hlibiconv = NULL;
+    }
+
     if (hlibiconv != NULL)
         hmsvcrt = find_imported_module_by_funcname(hlibiconv, "_errno");
 
     if (hlibiconv != NULL && hmsvcrt != NULL)
     {
-        dyn_libiconv_open = (f_iconv_open)GetProcAddress(hlibiconv, "libiconv_open");
-        if (dyn_libiconv_open == NULL)
-            dyn_libiconv_open = (f_iconv_open)GetProcAddress(hlibiconv, "iconv_open");
-        dyn_libiconv_close = (f_iconv_close)GetProcAddress(hlibiconv, "libiconv_close");
-        if (dyn_libiconv_close == NULL)
-            dyn_libiconv_close = (f_iconv_close)GetProcAddress(hlibiconv, "iconv_close");
-        dyn_libiconv = (f_iconv)GetProcAddress(hlibiconv, "libiconv");
-        if (dyn_libiconv == NULL)
-            dyn_libiconv = (f_iconv)GetProcAddress(hlibiconv, "iconv");
-        dyn_libiconv_errno = (f_errno)GetProcAddress(hmsvcrt, "_errno");
-        if (dyn_libiconv_open != NULL && dyn_libiconv_close != NULL
-                && dyn_libiconv != NULL && dyn_libiconv_errno != NULL)
+        cd->hlibiconv = hlibiconv;
+        cd->iconv_open = (f_iconv_open)GetProcAddress(hlibiconv, "libiconv_open");
+        if (cd->iconv_open == NULL)
+            cd->iconv_open = (f_iconv_open)GetProcAddress(hlibiconv, "iconv_open");
+        cd->iconv_close = (f_iconv_close)GetProcAddress(hlibiconv, "libiconv_close");
+        if (cd->iconv_close == NULL)
+            cd->iconv_close = (f_iconv_close)GetProcAddress(hlibiconv, "iconv_close");
+        cd->iconv = (f_iconv)GetProcAddress(hlibiconv, "libiconv");
+        if (cd->iconv == NULL)
+            cd->iconv = (f_iconv)GetProcAddress(hlibiconv, "iconv");
+        cd->_errno = (f_errno)GetProcAddress(hmsvcrt, "_errno");
+        if (cd->iconv_open != NULL && cd->iconv_close != NULL
+                && cd->iconv != NULL && cd->_errno != NULL)
+        {
+            /* increment reference count */
+            LoadLibrary(dllname);
+            lastdll = *cd;
             return TRUE;
+        }
     }
 
     if (hlibiconv != NULL)
         FreeLibrary(hlibiconv);
     /* do not free hmsvcrt which is obtained by GetModuleHandle() */
-    dyn_libiconv_open = NULL;
-    dyn_libiconv_close = NULL;
-    dyn_libiconv = NULL;
-    dyn_libiconv_errno = NULL;
     return FALSE;
 }
 
