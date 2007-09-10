@@ -106,7 +106,7 @@ static char *strrstr(const char *str, const char *token);
 
 static int load_libiconv();
 static PVOID MyImageDirectoryEntryToData(LPVOID pBase, BOOLEAN bMappedAsImage, USHORT DirectoryEntry, PULONG Size);
-static int find_imported_module_by_funcname(HMODULE hModule, const char *funcname, char *dllname);
+static HMODULE find_imported_module_by_funcname(HMODULE hModule, const char *funcname);
 
 static f_iconv_open dyn_libiconv_open;
 static f_iconv_close dyn_libiconv_close;
@@ -976,7 +976,6 @@ load_libiconv()
     HMODULE hmsvcrt = NULL;
     int i;
     const char *env;
-    char msvcrt_dll[_MAX_PATH];
     char *libiconv_names[] = {
         "iconv.dll", "libiconv.dll", "iconv-2.dll", "libiconv-2.dll",
         NULL};
@@ -1010,9 +1009,10 @@ load_libiconv()
         }
     }
 
-    if (hlibiconv != NULL
-            && find_imported_module_by_funcname(hlibiconv, "_errno", msvcrt_dll)
-            && (hmsvcrt = LoadLibrary(msvcrt_dll)) != NULL)
+    if (hlibiconv != NULL)
+        hmsvcrt = find_imported_module_by_funcname(hlibiconv, "_errno");
+
+    if (hlibiconv != NULL && hmsvcrt != NULL)
     {
         dyn_libiconv_open = (f_iconv_open)GetProcAddress(hlibiconv, "libiconv_open");
         dyn_libiconv_close = (f_iconv_close)GetProcAddress(hlibiconv, "libiconv_close");
@@ -1053,8 +1053,8 @@ MyImageDirectoryEntryToData(LPVOID pBase, BOOLEAN bMappedAsImage, USHORT Directo
     return pImportDescriptor;
 }
 
-static int
-find_imported_module_by_funcname(HMODULE hModule, const char *funcname, char *dllname)
+static HMODULE
+find_imported_module_by_funcname(HMODULE hModule, const char *funcname)
 {
     DWORD BaseAddress;
     ULONG Size;
@@ -1079,14 +1079,11 @@ find_imported_module_by_funcname(HMODULE hModule, const char *funcname, char *dl
                 pImportByName = (PIMAGE_IMPORT_BY_NAME)
                     (BaseAddress + (DWORD)pThunkData->u1.AddressOfData);
                 if (strcmp((char *)pImportByName->Name, funcname) == 0)
-                {
-                    strcpy(dllname, (char *)(BaseAddress + pImportDescriptor->Name));
-                    return TRUE;
-                }
+                    return GetModuleHandle((char *)(BaseAddress + pImportDescriptor->Name));
             }
         }
     }
-    return FALSE;
+    return NULL;
 }
 #endif
 
