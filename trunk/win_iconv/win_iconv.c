@@ -49,8 +49,8 @@ DLL_EXPORT iconv_t iconv_open(const char *tocode, const char *fromcode);
 DLL_EXPORT int iconv_close(iconv_t cd);
 DLL_EXPORT size_t iconv(iconv_t cd, const char **inbuf, size_t *inbytesleft, char **outbuf, size_t *outbytesleft);
 
-typedef struct csconv_t csconv_t;
 typedef struct compat_t compat_t;
+typedef struct csconv_t csconv_t;
 typedef struct rec_iconv_t rec_iconv_t;
 
 typedef iconv_t (*f_iconv_open)(const char *tocode, const char *fromcode);
@@ -1015,8 +1015,14 @@ load_libiconv()
     if (hlibiconv != NULL && hmsvcrt != NULL)
     {
         dyn_libiconv_open = (f_iconv_open)GetProcAddress(hlibiconv, "libiconv_open");
+        if (dyn_libiconv_open == NULL)
+            dyn_libiconv_open = (f_iconv_open)GetProcAddress(hlibiconv, "iconv_open");
         dyn_libiconv_close = (f_iconv_close)GetProcAddress(hlibiconv, "libiconv_close");
+        if (dyn_libiconv_close == NULL)
+            dyn_libiconv_close = (f_iconv_close)GetProcAddress(hlibiconv, "iconv_close");
         dyn_libiconv = (f_iconv)GetProcAddress(hlibiconv, "libiconv");
+        if (dyn_libiconv == NULL)
+            dyn_libiconv = (f_iconv)GetProcAddress(hlibiconv, "iconv");
         dyn_libiconv_errno = (f_errno)GetProcAddress(hmsvcrt, "_errno");
         if (dyn_libiconv_open != NULL && dyn_libiconv_close != NULL
                 && dyn_libiconv != NULL && dyn_libiconv_errno != NULL)
