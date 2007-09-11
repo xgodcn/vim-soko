@@ -52,6 +52,34 @@ DLL_EXPORT iconv_t iconv_open(const char *tocode, const char *fromcode);
 DLL_EXPORT int iconv_close(iconv_t cd);
 DLL_EXPORT size_t iconv(iconv_t cd, const char **inbuf, size_t *inbytesleft, char **outbuf, size_t *outbytesleft);
 
+/* libiconv interface for vim */
+#if defined(USE_LIBICONV_INTERFACE)
+DLL_EXPORT iconv_t
+libiconv_open(const char *tocode, const char *fromcode)
+{
+    return iconv_open(tocode, fromcode);
+}
+
+DLL_EXPORT int
+libiconv_close(iconv_t cd)
+{
+    return iconv_close(cd);
+}
+
+DLL_EXPORT size_t
+libiconv(iconv_t cd, const char **inbuf, size_t *inbytesleft, char **outbuf, size_t *outbytesleft)
+{
+    return iconv(cd, inbuf, inbytesleft, outbuf, outbytesleft);
+}
+
+DLL_EXPORT int
+libiconvctl (iconv_t cd, int request, void* argument)
+{
+    /* not supported */
+    return 0;
+}
+#endif
+
 typedef struct compat_t compat_t;
 typedef struct csconv_t csconv_t;
 typedef struct rec_iconv_t rec_iconv_t;
@@ -687,34 +715,6 @@ iconv(iconv_t _cd, const char **inbuf, size_t *inbytesleft, char **outbuf, size_
     errno = *(cd->_errno());
     return r;
 }
-
-/* libiconv interface for vim */
-#if defined(USE_LIBICONV_INTERFACE)
-DLL_EXPORT iconv_t
-libiconv_open(const char *tocode, const char *fromcode)
-{
-    return iconv_open(tocode, fromcode);
-}
-
-DLL_EXPORT int
-libiconv_close(iconv_t cd)
-{
-    return iconv_close(cd);
-}
-
-DLL_EXPORT size_t
-libiconv(iconv_t cd, const char **inbuf, size_t *inbytesleft, char **outbuf, size_t *outbytesleft)
-{
-    return iconv(cd, inbuf, inbytesleft, outbuf, outbytesleft);
-}
-
-DLL_EXPORT int
-libiconvctl (iconv_t cd, int request, void* argument)
-{
-    /* not supported */
-    return 0;
-}
-#endif
 
 static iconv_t *
 win_iconv_open(rec_iconv_t *cd, const char *tocode, const char *fromcode)
