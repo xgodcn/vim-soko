@@ -1,5 +1,8 @@
 /*
  * iconv library implemented with Win32 API.
+ * Last Change: 2007-09-12
+ * Maintainer: Yukihiro Nakadaira <yukihiro.nakadaira@gmail.com>
+ * License: This file is placed in the public domain.
  *
  * When $WINICONV_LIBICONV_DLL environment variable is defined,
  * win_iconv load the dll dynamically and use it.  If iconv_open()
@@ -647,6 +650,7 @@ iconv_open(const char *tocode, const char *fromcode)
             return (iconv_t)cd;
         /* fallback */
     }
+    cd->hlibiconv = NULL;
 #endif
 
     cd->cd = win_iconv_open(cd, tocode, fromcode);
@@ -667,7 +671,8 @@ iconv_close(iconv_t _cd)
     int r = cd->iconv_close(cd->cd);
     int e = *(cd->_errno());
 #if defined(USE_LIBICONV_DLL)
-    FreeLibrary(cd->hlibiconv);
+    if (cd->hlibiconv != NULL)
+        FreeLibrary(cd->hlibiconv);
 #endif
     free(cd);
     errno = e;
@@ -919,28 +924,32 @@ name_to_codepage(const char *name)
     return -1;
 }
 
+/*
+ * http://www.faqs.org/rfcs/rfc2781.html
+ */
 static uint
 utf16_to_ucs4(const ushort *wbuf)
 {
     uint wc = wbuf[0];
     if (0xD800 <= wbuf[0] && wbuf[0] <= 0xDBFF)
-        wc = ((wbuf[0] & 0x03C0) << 16) | ((wbuf[0] & 0x003F) << 10) | (wbuf[1] & 0x03FF);
+        wc = ((wbuf[0] & 0x3FF) << 10) + (wbuf[1] & 0x3FF) + 0x10000;
     return wc;
 }
 
 static void
 ucs4_to_utf16(uint wc, ushort *wbuf, int *wbufsize)
 {
-    if (0xFFFF < wc)
-    {
-        wbuf[0] = 0xD800 | ((wc & 0x1F0000) - 1) | (wc & 0x00FC00);
-        wbuf[1] = 0xDC00 | (wc & 0x0003FF);
-        *wbufsize = 2;
-    }
-    else
+    if (wc < 0x10000)
     {
         wbuf[0] = wc;
         *wbufsize = 1;
+    }
+    else
+    {
+        wc -= 0x10000;
+        wbuf[0] = 0xD800 | ((wc >> 10) & 0x3FF);
+        wbuf[1] = 0xDC00 | (wc & 0x3FF);
+        *wbufsize = 2;
     }
 }
 
@@ -1203,6 +1212,8 @@ kernel_wctomb(csconv_t *cv, ushort *wbuf, int wbufsize, uchar *buf, int bufsize)
     }
     else if (usedDefaultChar)
         return_error(EILSEQ);
+    else if (cv->mblen(cv, buf, len) != len) /* validate result */
+        return_error(EILSEQ);
     return len;
 }
 
@@ -1238,6 +1249,8 @@ mlang_wctomb(csconv_t *cv, ushort *wbuf, int wbufsize, uchar *buf, int bufsize)
         return_error(EILSEQ);
     else if (bufsize < tmpsize)
         return_error(E2BIG);
+    else if (cv->mblen(cv, (uchar *)tmpbuf, tmpsize) != tmpsize)
+        return_error(EILSEQ);
     memcpy(buf, tmpbuf, tmpsize);
     return tmpsize;
 }
