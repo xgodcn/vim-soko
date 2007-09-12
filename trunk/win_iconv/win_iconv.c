@@ -4,9 +4,13 @@
  * Maintainer: Yukihiro Nakadaira <yukihiro.nakadaira@gmail.com>
  * License: This file is placed in the public domain.
  *
- * When $WINICONV_LIBICONV_DLL environment variable is defined,
- * win_iconv load the dll dynamically and use it.  If iconv_open()
- * failed, falls back to internal conversion.
+ * If $WINICONV_LIBICONV_DLL environment variable was defined, win_iconv
+ * loads the specified DLL dynamically and uses it.  If loading the DLL
+ * or iconv_open() failed, falls back to internal conversion.
+ * $WINICONV_LIBICONV_DLL is a comma separated list.  The first loadable
+ * DLL is used.  The specified DLL should have iconv_open(),
+ * iconv_close() and iconv() functions.  Or these functions can be
+ * libiconv_open(), libiconv_close() and libiconv().
  *
  * Win32 API does not support strict encoding conversion for some
  * codepage.  And MLang function drop or replace invalid bytes and does
@@ -26,6 +30,10 @@
 # define USE_LIBICONV_DLL
 #endif
 
+#if !defined(DEFAULT_LIBICONV_DLL)
+# define DEFAULT_LIBICONV_DLL ""
+#endif
+
 #if defined(MAKE_DLL) && defined(_MSC_VER)
 # define DLL_EXPORT __declspec(dllexport)
 #else
@@ -39,6 +47,15 @@
         errno = code;       \
         return -1;          \
     } while (0)
+
+#define xstrlcpy(dst, src, size)    \
+    do {                            \
+        strncpy(dst, src, size);    \
+        dst[size - 1] = 0;          \
+    } while (0)
+
+#define xmin(a, b) ((a) < (b) ? (a) : (b))
+#define xmax(a, b) ((a) > (b) ? (a) : (b))
 
 #define STATIC_STRLEN(arr) (sizeof(arr) - 1)
 
@@ -833,8 +850,7 @@ make_csconv(const char *_name)
     char name[512];
     char *p;
 
-    strncpy(name, _name, sizeof(name));
-    name[sizeof(name) - 1] = 0;
+    xstrlcpy(name, _name, sizeof(name));
 
     /* check for option "enc_name//opt1//opt2" */
     while ((p = strrstr(name, "//")) != NULL)
@@ -971,47 +987,36 @@ load_libiconv(rec_iconv_t *cd)
 {
     HMODULE hlibiconv = NULL;
     HMODULE hmsvcrt = NULL;
-    int i;
-    const char *dllname;
-    char *libiconv_names[] = {
-#if 0
-    /*
-     * Should we use default typical names to load libiconv.dll when
-     * $WINICONV_LIBICONV_DLL is not defined?
-     * Disable default typical names for now.
-     */
-        "iconv.dll", "libiconv.dll", "iconv-2.dll", "libiconv-2.dll",
-#endif
-        NULL};
+    char dllname[_MAX_PATH];
+    const char *p;
+    const char *e;
 
     /*
      * always try to load dll, so that we can switch dll in runtime.
      */
 
-    /* Use $WINICONV_LIBICONV_DLL if defined. */
-    dllname = getenv("WINICONV_LIBICONV_DLL");
-    if (dllname != NULL && dllname[0] != 0)
+    /* XXX: getenv() can't get variable set by SetEnvironmentVariable() */
+    p = getenv("WINICONV_LIBICONV_DLL");
+    if (p == NULL)
+        p = DEFAULT_LIBICONV_DLL;
+    for ( ; *p != 0; p = (*e == ',') ? e + 1 : e)
     {
+        e = strchr(p, ',');
+        if (p == e)
+            continue;
+        else if (e == NULL)
+            e = p + strlen(p);
+        xstrlcpy(dllname, p, xmin(e - p + 1, sizeof(dllname)));
         hlibiconv = LoadLibrary(dllname);
-        if (hwiniconv != NULL && hlibiconv == hwiniconv)
+        if (hlibiconv != NULL)
         {
-            FreeLibrary(hlibiconv);
-            hlibiconv = NULL;
-        }
-    }
-    else
-    {
-        for (i = 0; libiconv_names[i] != NULL; ++i)
-        {
-            dllname = libiconv_names[i];
-            hlibiconv = LoadLibrary(dllname);
-            if (hwiniconv != NULL && hlibiconv == hwiniconv)
+            if (hlibiconv == hwiniconv)
             {
                 FreeLibrary(hlibiconv);
                 hlibiconv = NULL;
+                continue;
             }
-            else if (hlibiconv != NULL)
-                break;
+            break;
         }
     }
 
