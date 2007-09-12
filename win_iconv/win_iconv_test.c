@@ -29,6 +29,8 @@ errstr(int errcode)
     return buf;
 }
 
+int use_dll;
+
 int
 setdll(const char *dllpath)
 {
@@ -38,9 +40,40 @@ setdll(const char *dllpath)
     sprintf(buf, "WINICONV_LIBICONV_DLL=%s", dllpath);
     putenv(buf);
     if (load_libiconv(&cd))
+    {
         FreeLibrary(cd.hlibiconv);
-    return (cd.hlibiconv != NULL);
+        use_dll = TRUE;
+        return TRUE;
+    }
+    use_dll = FALSE;
+    return FALSE;
 }
+
+/*
+ * We can test the codepage that is installed in the system.
+ */
+int
+check_enc(const char *encname, int codepage)
+{
+    iconv_t cd;
+    int cp;
+    cd = iconv_open("utf-8", encname);
+    if (cd == (iconv_t)(-1))
+    {
+        printf("%s(%d) IS NOT SUPPORTED: SKIP THE TEST\n", encname, codepage);
+        return FALSE;
+    }
+    cp = ((rec_iconv_t *)cd)->from.codepage;
+    if (cp != codepage)
+    {
+        printf("%s(%d) ALIAS IS MAPPED TO DIFFERENT CODEPAGE (%d)\n", encname, codepage, cp);
+        exit(1);
+    }
+    iconv_close(cd);
+    return TRUE;
+}
+
+int use_dll;
 
 void
 test(const char *from, const char *fromstr, int fromsize, const char *to, const char *tostr, int tosize, int errcode, int bufsize, int line)
@@ -52,11 +85,7 @@ test(const char *from, const char *fromstr, int fromsize, const char *to, const 
     size_t outbytesleft;
     iconv_t cd;
     size_t r;
-    const char *dllpath;
-
-    dllpath = getenv("WINICONV_LIBICONV_DLL");
-    if (dllpath != NULL && strcmp(dllpath, "none") == 0)
-        dllpath = NULL; /* none is used to disable dll loading in this test */
+    char dllpath[_MAX_PATH];
 
     cd = iconv_open(to, from);
     if (cd == (iconv_t)(-1))
@@ -64,9 +93,18 @@ test(const char *from, const char *fromstr, int fromsize, const char *to, const 
         printf("%s -> %s: NG: INVALID ENCODING NAME: line=%d\n", from, to, line);
         exit(1);
     }
-    if (dllpath != NULL && ((rec_iconv_t *)cd)->iconv == win_iconv)
+
+    if (((rec_iconv_t *)cd)->hlibiconv != NULL)
+        GetModuleFileName(((rec_iconv_t *)cd)->hlibiconv, dllpath, sizeof(dllpath));
+
+    if (use_dll && ((rec_iconv_t *)cd)->hlibiconv == NULL)
     {
         printf("%s: %s -> %s: NG: FAILED TO USE DLL: line=%d\n", dllpath, from, to, line);
+        exit(1);
+    }
+    else if (!use_dll && ((rec_iconv_t *)cd)->hlibiconv != NULL)
+    {
+        printf("%s: %s -> %s: NG: DLL IS LOADED UNEXPECTEDLY: line=%d\n", dllpath, from, to, line);
         exit(1);
     }
 
@@ -81,7 +119,7 @@ test(const char *from, const char *fromstr, int fromsize, const char *to, const 
         r = iconv(cd, NULL, NULL, &pout, &outbytesleft);
     *pout = 0;
 
-    if (dllpath != NULL)
+    if (use_dll)
         printf("%s: ", dllpath);
     printf("%s(%s) -> ", from, tohex(fromstr, fromsize));
     printf("%s(%s%s%s): ", to, tohex(tostr, tosize),
@@ -106,47 +144,65 @@ test(const char *from, const char *fromstr, int fromsize, const char *to, const 
 int
 main(int argc, char **argv)
 {
-    setdll("none");
-
-    /* ascii (CP20127) */
-    success("ascii", "ABC", "ascii", "ABC");
-    success("ascii", "\x80\xFF", "ascii", "\x00\x7F"); /* MSB is dropped.  Hmm... */
-
-    /* unicode (CP1200 CP1201 CP12000 CP12001 CP65001) */
-    success("utf-16", "\x01\x02", "utf-16be", "\x01\x02"); /* default is big endian */
-    success("utf-16be", "\x01\x02", "utf-16le", "\x02\x01");
-    success("utf-16le", "\x02\x01", "utf-16be", "\x01\x02");
-    success("utf-16be", "\xFF\xFE", "utf-16le", "\xFE\xFF");
-    success("utf-16le", "\xFE\xFF", "utf-16be", "\xFF\xFE");
-    success("utf-32be", "\x00\x00\x03\x04", "utf-32le", "\x04\x03\x00\x00");
-    success("utf-32le", "\x04\x03\x00\x00", "utf-32be", "\x00\x00\x03\x04");
-    success("utf-32be", "\x00\x00\xFF\xFF", "utf-16be", "\xFF\xFF");
-    success("utf-16be", "\xFF\xFF", "utf-32be", "\x00\x00\xFF\xFF");
-    success("utf-32be", "\x00\x01\x00\x00", "utf-16be", "\xD8\x00\xDC\x00");
-    success("utf-16be", "\xD8\x00\xDC\x00", "utf-32be", "\x00\x01\x00\x00");
-    success("utf-32be", "\x00\x10\xFF\xFF", "utf-16be", "\xDB\xFF\xDF\xFF");
-    success("utf-16be", "\xDB\xFF\xDF\xFF", "utf-32be", "\x00\x10\xFF\xFF");
-    eilseq("utf-32be", "\x00\x11\x00\x00", "utf-16be", "");
-    eilseq("utf-16be", "\xDB\xFF\xE0\x00", "utf-32be", "");
-    success("utf-8", "\xE3\x81\x82", "utf-16be", "\x30\x42");
-    einval("utf-8", "\xE3", "utf-16be", "");
-
-    /* Japanese (CP932 CP20932 CP50220 CP50221 CP50222 CP51932) */
-    success("utf-16be", "\xFF\x5E", "cp932", "\x81\x60");
-    success("utf-16be", "\x30\x1C", "cp932", "\x81\x60");
-    success("utf-16be", "\xFF\x5E", "cp932//nocompat", "\x81\x60");
-    eilseq("utf-16be", "\x30\x1C", "cp932//nocompat", "");
-    success("euc-jp", "\xA4\xA2", "utf-16be", "\x30\x42");
-    einval("euc-jp", "\xA4\xA2\xA4", "utf-16be", "\x30\x42");
-    eilseq("euc-jp", "\xA4\xA2\xFF\xFF", "utf-16be", "\x30\x42");
-    success("cp932", "\x81\x60", "iso-2022-jp", "\x1B\x24\x42\x21\x41\x1B\x28\x42");
-    eilseq("cp932", "\x81\x60", "iso-2022-jp//nocompat", "");
-
     /* test use of dll if $DEFAULT_LIBICONV_DLL was defined. */
     if (setdll(""))
     {
         success("ascii", "ABC", "ascii", "ABC");
-        setdll("none");
+    }
+    else
+    {
+        printf("\nDLL TEST IS SKIPPED\n\n");
+    }
+
+    setdll("none");
+
+    if (check_enc("ascii", 20127))
+    {
+        success("ascii", "ABC", "ascii", "ABC");
+        /* MSB is dropped.  Hmm... */
+        success("ascii", "\x80\xFF", "ascii", "\x00\x7F");
+    }
+
+    /* unicode (CP1200 CP1201 CP12000 CP12001 CP65001) */
+    if (check_enc("utf-8", 65001)
+            && check_enc("utf-16", 1201) && check_enc("utf-16le", 1200)
+            && check_enc("utf-32", 12001) && check_enc("utf-32le", 12000))
+    {
+        success("utf-16be", "\x01\x02", "utf-16le", "\x02\x01");
+        success("utf-16le", "\x02\x01", "utf-16be", "\x01\x02");
+        success("utf-16be", "\xFF\xFE", "utf-16le", "\xFE\xFF");
+        success("utf-16le", "\xFE\xFF", "utf-16be", "\xFF\xFE");
+        success("utf-32be", "\x00\x00\x03\x04", "utf-32le", "\x04\x03\x00\x00");
+        success("utf-32le", "\x04\x03\x00\x00", "utf-32be", "\x00\x00\x03\x04");
+        success("utf-32be", "\x00\x00\xFF\xFF", "utf-16be", "\xFF\xFF");
+        success("utf-16be", "\xFF\xFF", "utf-32be", "\x00\x00\xFF\xFF");
+        success("utf-32be", "\x00\x01\x00\x00", "utf-16be", "\xD8\x00\xDC\x00");
+        success("utf-16be", "\xD8\x00\xDC\x00", "utf-32be", "\x00\x01\x00\x00");
+        success("utf-32be", "\x00\x10\xFF\xFF", "utf-16be", "\xDB\xFF\xDF\xFF");
+        success("utf-16be", "\xDB\xFF\xDF\xFF", "utf-32be", "\x00\x10\xFF\xFF");
+        eilseq("utf-32be", "\x00\x11\x00\x00", "utf-16be", "");
+        eilseq("utf-16be", "\xDB\xFF\xE0\x00", "utf-32be", "");
+        success("utf-8", "\xE3\x81\x82", "utf-16be", "\x30\x42");
+        einval("utf-8", "\xE3", "utf-16be", "");
+    }
+
+    /* Japanese (CP932 CP20932 CP50220 CP50221 CP50222 CP51932) */
+    if (check_enc("cp932", 932)
+            && check_enc("cp20932", 20932) && check_enc("euc-jp", 51932)
+            && check_enc("cp50220", 50220) && check_enc("cp50221", 50221)
+            && check_enc("cp50222", 50222) && check_enc("iso-2022-jp", 50221))
+    {
+        /* Test the compatibility for each other Japanese codepage.
+         * And validate the escape sequence handling for iso-2022-jp. */
+        success("utf-16be", "\xFF\x5E", "cp932", "\x81\x60");
+        success("utf-16be", "\x30\x1C", "cp932", "\x81\x60");
+        success("utf-16be", "\xFF\x5E", "cp932//nocompat", "\x81\x60");
+        eilseq("utf-16be", "\x30\x1C", "cp932//nocompat", "");
+        success("euc-jp", "\xA4\xA2", "utf-16be", "\x30\x42");
+        einval("euc-jp", "\xA4\xA2\xA4", "utf-16be", "\x30\x42");
+        eilseq("euc-jp", "\xA4\xA2\xFF\xFF", "utf-16be", "\x30\x42");
+        success("cp932", "\x81\x60", "iso-2022-jp", "\x1B\x24\x42\x21\x41\x1B\x28\x42");
+        eilseq("cp932", "\x81\x60", "iso-2022-jp//nocompat", "");
     }
 
     /*
