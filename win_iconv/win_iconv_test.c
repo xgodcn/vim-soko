@@ -33,18 +33,13 @@ int
 setdll(const char *dllpath)
 {
     char buf[BUFSIZ];
+    rec_iconv_t cd;
+
     sprintf(buf, "WINICONV_LIBICONV_DLL=%s", dllpath);
     putenv(buf);
-    if (dllpath != NULL && dllpath[0] != 0)
-    {
-        HMODULE h = LoadLibrary(dllpath);
-        if (h != NULL)
-        {
-            FreeLibrary(h);
-            return TRUE;
-        }
-    }
-    return FALSE;
+    if (load_libiconv(&cd))
+        FreeLibrary(cd.hlibiconv);
+    return (cd.hlibiconv != NULL);
 }
 
 void
@@ -60,8 +55,8 @@ test(const char *from, const char *fromstr, int fromsize, const char *to, const 
     const char *dllpath;
 
     dllpath = getenv("WINICONV_LIBICONV_DLL");
-    if (dllpath != NULL && dllpath[0] == 0)
-        dllpath = NULL;
+    if (dllpath != NULL && strcmp(dllpath, "none") == 0)
+        dllpath = NULL; /* none is used to disable dll loading in this test */
 
     cd = iconv_open(to, from);
     if (cd == (iconv_t)(-1))
@@ -111,9 +106,7 @@ test(const char *from, const char *fromstr, int fromsize, const char *to, const 
 int
 main(int argc, char **argv)
 {
-    char *dllpath = argv[1];
-
-    setdll("");
+    setdll("none");
 
     /* ascii (CP20127) */
     success("ascii", "ABC", "ascii", "ABC");
@@ -149,12 +142,11 @@ main(int argc, char **argv)
     success("cp932", "\x81\x60", "iso-2022-jp", "\x1B\x24\x42\x21\x41\x1B\x28\x42");
     eilseq("cp932", "\x81\x60", "iso-2022-jp//nocompat", "");
 
-    /* test use of dll */
-    if (setdll(dllpath))
+    /* test use of dll if $DEFAULT_LIBICONV_DLL was defined. */
+    if (setdll(""))
     {
         success("ascii", "ABC", "ascii", "ABC");
-        eilseq("ascii", "\x80\xFF", "ascii", "");
-        setdll("");
+        setdll("none");
     }
 
     /*
