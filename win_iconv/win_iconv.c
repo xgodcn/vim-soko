@@ -174,9 +174,6 @@ struct {
     {1200, "CP1200"},
     {1200, "UTF16LE"},
     {1200, "UTF-16LE"},
-    /* use little endian by default. */
-    {1200, "UTF16"},
-    {1200, "UTF-16"},
 
     {1201, "CP1201"},
     {1201, "UTF16BE"},
@@ -186,13 +183,16 @@ struct {
     {12000, "CP12000"},
     {12000, "UTF32LE"},
     {12000, "UTF-32LE"},
-    /* use little endian by default. */
-    {12000, "UTF32"},
-    {12000, "UTF-32"},
 
     {12001, "CP12001"},
     {12001, "UTF32BE"},
     {12001, "UTF-32BE"},
+
+    /* Default is big endian.  Vim compatible. */
+    {1201, "UTF16"},
+    {1201, "UTF-16"},
+    {12001, "UTF32"},
+    {12001, "UTF-32"},
 
     /* copy from libiconv `iconv -l` */
     /* !IsValidCodePage(367) */

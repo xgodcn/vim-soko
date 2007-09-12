@@ -120,6 +120,7 @@ main(int argc, char **argv)
     success("ascii", "\x80\xFF", "ascii", "\x00\x7F"); /* MSB is dropped.  Hmm... */
 
     /* unicode (CP1200 CP1201 CP12000 CP12001 CP65001) */
+    success("utf-16", "\x01\x02", "utf-16be", "\x01\x02"); /* default is big endian */
     success("utf-16be", "\x01\x02", "utf-16le", "\x02\x01");
     success("utf-16le", "\x02\x01", "utf-16be", "\x01\x02");
     success("utf-16be", "\xFF\xFE", "utf-16le", "\xFE\xFF");
