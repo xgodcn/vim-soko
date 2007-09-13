@@ -1069,6 +1069,11 @@ load_libiconv(rec_iconv_t *cd)
  * Reference:
  * http://forums.belution.com/ja/vc/000/234/78s.shtml
  * http://nienie.com/~masapico/api_ImageDirectoryEntryToData.html
+ *
+ * The formal way is
+ *   imagehlp.h or dbghelp.h
+ *   imagehlp.lib or dbghelp.lib
+ *   ImageDirectoryEntryToData()
  */
 static PVOID
 MyImageDirectoryEntryToData(LPVOID Base, BOOLEAN MappedAsImage, USHORT DirectoryEntry, PULONG Size)
