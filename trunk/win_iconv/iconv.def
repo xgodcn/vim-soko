@@ -1,0 +1,24 @@
+LIBRARY ICONV
+EXPORTS
+  iconv
+  iconv_open
+  iconv_close
+  iconvctl
+  libiconv=iconv
+  libiconv_open=iconv_open
+  libiconv_close=iconv_close
+  libiconvctl=iconvctl
+;; libiconv-1.11.dll
+;; TODO for binary compatibility
+;  _libiconv_version @0
+;  aliases2_lookup @1
+;  aliases_lookup @2
+;  iconv_canonicalize @3
+;  libiconv @4
+;  libiconv_close @5
+;  libiconv_open @6
+;  libiconv_relocate @7
+;  libiconv_set_relocation_prefix @8
+;  libiconvctl @9
+;  libiconvlist @10
+;  locale_charset @11

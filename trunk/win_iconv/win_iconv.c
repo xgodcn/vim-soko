@@ -26,18 +26,11 @@
 #if 0
 # define MAKE_EXE
 # define MAKE_DLL
-# define USE_LIBICONV_INTERFACE
 # define USE_LIBICONV_DLL
 #endif
 
 #if !defined(DEFAULT_LIBICONV_DLL)
 # define DEFAULT_LIBICONV_DLL ""
-#endif
-
-#if defined(MAKE_DLL) && defined(_MSC_VER)
-# define DLL_EXPORT __declspec(dllexport)
-#else
-# define DLL_EXPORT
 #endif
 
 #define MB_CHAR_MAX 16
@@ -65,32 +58,14 @@ typedef unsigned int uint;
 
 typedef void* iconv_t;
 
-DLL_EXPORT iconv_t iconv_open(const char *tocode, const char *fromcode);
-DLL_EXPORT int iconv_close(iconv_t cd);
-DLL_EXPORT size_t iconv(iconv_t cd, const char **inbuf, size_t *inbytesleft, char **outbuf, size_t *outbytesleft);
+iconv_t iconv_open(const char *tocode, const char *fromcode);
+int iconv_close(iconv_t cd);
+size_t iconv(iconv_t cd, const char **inbuf, size_t *inbytesleft, char **outbuf, size_t *outbytesleft);
 
 /* libiconv interface for vim */
-#if defined(USE_LIBICONV_INTERFACE)
-DLL_EXPORT iconv_t
-libiconv_open(const char *tocode, const char *fromcode)
-{
-    return iconv_open(tocode, fromcode);
-}
-
-DLL_EXPORT int
-libiconv_close(iconv_t cd)
-{
-    return iconv_close(cd);
-}
-
-DLL_EXPORT size_t
-libiconv(iconv_t cd, const char **inbuf, size_t *inbytesleft, char **outbuf, size_t *outbytesleft)
-{
-    return iconv(cd, inbuf, inbytesleft, outbuf, outbytesleft);
-}
-
-DLL_EXPORT int
-libiconvctl (iconv_t cd, int request, void* argument)
+#if defined(MAKE_DLL)
+int
+iconvctl (iconv_t cd, int request, void* argument)
 {
     /* not supported */
     return 0;
