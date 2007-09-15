@@ -610,21 +610,21 @@ typedef HRESULT (WINAPI *ISCONVERTINETSTRINGAVAILABLE)(
     DWORD dwSrcEncoding,
     DWORD dwDstEncoding
 );
-typedef HRESULT (WINAPI *LCIDTORFC1766)(
+typedef HRESULT (WINAPI *LCIDTORFC1766A)(
     LCID Locale,
-    LPTSTR pszRfc1766,
+    LPSTR pszRfc1766,
     int nChar
 );
-typedef HRESULT (WINAPI *RFC1766TOLCID)(
+typedef HRESULT (WINAPI *RFC1766TOLCIDA)(
     LCID *pLocale,
-    LPTSTR pszRfc1766
+    LPSTR pszRfc1766
 );
 static CONVERTINETSTRING ConvertINetString;
 static CONVERTINETMULTIBYTETOUNICODE ConvertINetMultiByteToUnicode;
 static CONVERTINETUNICODETOMULTIBYTE ConvertINetUnicodeToMultiByte;
 static ISCONVERTINETSTRINGAVAILABLE IsConvertINetStringAvailable;
-static LCIDTORFC1766 LcidToRfc1766;
-static RFC1766TOLCID Rfc1766ToLcid;
+static LCIDTORFC1766A LcidToRfc1766A;
+static RFC1766TOLCIDA Rfc1766ToLcidA;
 
 static int
 load_mlang()
@@ -639,8 +639,8 @@ load_mlang()
     ConvertINetMultiByteToUnicode = (CONVERTINETMULTIBYTETOUNICODE)GetProcAddress(h, "ConvertINetMultiByteToUnicode");
     ConvertINetUnicodeToMultiByte = (CONVERTINETUNICODETOMULTIBYTE)GetProcAddress(h, "ConvertINetUnicodeToMultiByte");
     IsConvertINetStringAvailable = (ISCONVERTINETSTRINGAVAILABLE)GetProcAddress(h, "IsConvertINetStringAvailable");
-    LcidToRfc1766 = (LCIDTORFC1766)GetProcAddress(h, "LcidToRfc1766");
-    Rfc1766ToLcid = (RFC1766TOLCID)GetProcAddress(h, "Rfc1766ToLcid");
+    LcidToRfc1766A = (LCIDTORFC1766A)GetProcAddress(h, "LcidToRfc1766A");
+    Rfc1766ToLcidA = (RFC1766TOLCIDA)GetProcAddress(h, "Rfc1766ToLcidA");
     return TRUE;
 }
 
