@@ -1382,7 +1382,7 @@ static struct {
     {"\x1B\x28\x49", 3, 1, ISO2022JP_MODE_JISX0201_KANA},
     {"\x1B\x24\x40", 3, 2, ISO2022JP_MODE_JISX0208_1983}, /* unify 1978 with 1983 */
     {"\x1B\x24\x42", 3, 2, ISO2022JP_MODE_JISX0208_1983},
-    {"\x1B\x28\x24\x44", 4, 2, ISO2022JP_MODE_JISX0212},
+    {"\x1B\x24\x28\x44", 4, 2, ISO2022JP_MODE_JISX0212},
     {NULL, 0, 0, 0}
 };
 
