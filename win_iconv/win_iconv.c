@@ -551,6 +551,9 @@ static struct {
  * 81CA U+00AC NOT SIGN             U+FFE2 FULLWIDTH NOT SIGN
  *
  * EUC-JP and ISO-2022-JP should be compatible with CP932.
+ *
+ * Kernel and MLang have different Unicode mapping table.  Make sure
+ * which API is used.
  */
 static compat_t cp932_compat[] = {
     {0x00A5, 0x005C, COMPAT_OUT},
@@ -565,7 +568,7 @@ static compat_t cp932_compat[] = {
     {0, 0, 0}
 };
 
-static compat_t cp5022x_compat[] = {
+static compat_t cp20932_compat[] = {
     {0x00A5, 0x005C, COMPAT_OUT},
     {0x203E, 0x007E, COMPAT_OUT},
     {0x2014, 0x2015, COMPAT_OUT},
@@ -579,7 +582,9 @@ static compat_t cp5022x_compat[] = {
 };
 
 static compat_t *cp51932_compat = cp932_compat;
-static compat_t *cp20932_compat = cp5022x_compat;
+
+/* cp20932_compat for kernel.  cp932_compat for mlang. */
+static compat_t *cp5022x_compat = cp20932_compat;
 
 typedef HRESULT (WINAPI *CONVERTINETSTRING)(
     LPDWORD lpdwMode,
@@ -1359,56 +1364,69 @@ utf32_wctomb(csconv_t *cv, ushort *wbuf, int wbufsize, uchar *buf, int bufsize)
  *        Kana - SO/SI)
  */
 
-/* shift out (to kana) */
-static const char iso2022jp_SO[] = "\x0E";
-/* shift in (to ascii) */
-static const char iso2022jp_SI[] = "\x0F";
+#define ISO2022_MODE(cs, shift) (((cs) << 8) | (shift))
+#define ISO2022_MODE_CS(mode) (((mode) >> 8) & 0xFF)
+#define ISO2022_MODE_SHIFT(mode) ((mode) & 0xFF)
 
-#define ISO2022JP_MODE_ASCII            0
-#define ISO2022JP_MODE_JISX0201_ROMAN   1
-#define ISO2022JP_MODE_JISX0201_KANA    2
-#define ISO2022JP_MODE_JISX0208_1978    3
-#define ISO2022JP_MODE_JISX0208_1983    4
-#define ISO2022JP_MODE_JISX0212         5
+#define ISO2022_SI  0
+#define ISO2022_SO  1
 
-static struct {
+/* shift in */
+static const char iso2022_SI_seq[] = "\x0F";
+/* shift out */
+static const char iso2022_SO_seq[] = "\x0E";
+
+typedef struct iso2022_esc_t iso2022_esc_t;
+struct iso2022_esc_t {
     const char *esc;
     int esc_len;
     int len;
-    int mode;
-} iso2022jp_escape[] = {
-    {"\x1B\x28\x42", 3, 1, ISO2022JP_MODE_ASCII},
-    {"\x1B\x28\x4A", 3, 1, ISO2022JP_MODE_JISX0201_ROMAN},
-    {"\x1B\x28\x49", 3, 1, ISO2022JP_MODE_JISX0201_KANA},
-    {"\x1B\x24\x40", 3, 2, ISO2022JP_MODE_JISX0208_1983}, /* unify 1978 with 1983 */
-    {"\x1B\x24\x42", 3, 2, ISO2022JP_MODE_JISX0208_1983},
-    {"\x1B\x24\x28\x44", 4, 2, ISO2022JP_MODE_JISX0212},
+    int cs;
+};
+
+#define ISO2022JP_CS_ASCII            0
+#define ISO2022JP_CS_JISX0201_ROMAN   1
+#define ISO2022JP_CS_JISX0201_KANA    2
+#define ISO2022JP_CS_JISX0208_1978    3
+#define ISO2022JP_CS_JISX0208_1983    4
+#define ISO2022JP_CS_JISX0212         5
+
+static iso2022_esc_t iso2022jp_esc[] = {
+    {"\x1B\x28\x42", 3, 1, ISO2022JP_CS_ASCII},
+    {"\x1B\x28\x4A", 3, 1, ISO2022JP_CS_JISX0201_ROMAN},
+    {"\x1B\x28\x49", 3, 1, ISO2022JP_CS_JISX0201_KANA},
+    {"\x1B\x24\x40", 3, 2, ISO2022JP_CS_JISX0208_1983}, /* unify 1978 with 1983 */
+    {"\x1B\x24\x42", 3, 2, ISO2022JP_CS_JISX0208_1983},
+    {"\x1B\x24\x28\x44", 4, 2, ISO2022JP_CS_JISX0212},
     {NULL, 0, 0, 0}
 };
 
 static int
 iso2022jp_mbtowc(csconv_t *cv, const uchar *buf, int bufsize, ushort *wbuf, int *wbufsize)
 {
+    iso2022_esc_t *iesc = iso2022jp_esc;
     char tmp[MB_CHAR_MAX];
     int len;
     int esc_len;
-    int mode;
+    int cs;
+    int shift;
+    int i;
 
     if (buf[0] == 0x1B)
     {
-        for (mode = 0; iso2022jp_escape[mode].esc != NULL; ++mode)
+        for (i = 0; iesc[i].esc != NULL; ++i)
         {
-            esc_len = iso2022jp_escape[mode].esc_len;
+            esc_len = iesc[i].esc_len;
             if (bufsize < esc_len)
             {
-                if (strncmp((char *)buf, iso2022jp_escape[mode].esc, bufsize) == 0)
+                if (strncmp((char *)buf, iesc[i].esc, bufsize) == 0)
                     return_error(EINVAL);
             }
             else
             {
-                if (strncmp((char *)buf, iso2022jp_escape[mode].esc, esc_len) == 0)
+                if (strncmp((char *)buf, iesc[i].esc, esc_len) == 0)
                 {
-                    cv->mode = iso2022jp_escape[mode].mode;
+                    cv->mode = ISO2022_MODE(iesc[i].cs, ISO2022_SI);
                     *wbufsize = 0;
                     return esc_len;
                 }
@@ -1417,32 +1435,53 @@ iso2022jp_mbtowc(csconv_t *cv, const uchar *buf, int bufsize, ushort *wbuf, int 
         /* not supported escape sequence */
         return_error(EILSEQ);
     }
-    else if (buf[0] == iso2022jp_SO[0])
+    else if (buf[0] == iso2022_SO_seq[0])
     {
-        cv->mode = ISO2022JP_MODE_JISX0201_KANA;
+        cv->mode = ISO2022_MODE(ISO2022_MODE_CS(cv->mode), ISO2022_SO);
         *wbufsize = 0;
         return 1;
     }
-    else if (buf[0] == iso2022jp_SI[0])
+    else if (buf[0] == iso2022_SI_seq[0])
     {
-        cv->mode = ISO2022JP_MODE_ASCII;
+        cv->mode = ISO2022_MODE(ISO2022_MODE_CS(cv->mode), ISO2022_SI);
         *wbufsize = 0;
         return 1;
     }
 
-    mode = cv->mode;
+    cs = ISO2022_MODE_CS(cv->mode);
+    shift = ISO2022_MODE_SHIFT(cv->mode);
+
     /* reset the mode for informal sequence */
     if (buf[0] < 0x20)
-        mode = ISO2022JP_MODE_ASCII;
+    {
+        cs = ISO2022JP_CS_ASCII;
+        shift = ISO2022_SI;
+    }
 
-    len = iso2022jp_escape[mode].len;
+    len = iesc[cs].len;
     if (bufsize < len)
         return_error(EINVAL);
-    else if (!(buf[0] < 0x80) || (len == 2 && !(buf[1] < 0x80)))
-        return_error(EILSEQ);
-    esc_len = iso2022jp_escape[mode].esc_len;
-    memcpy(tmp, iso2022jp_escape[mode].esc, esc_len);
+    for (i = 0; i < len; ++i)
+        if (!(buf[i] < 0x80))
+            return_error(EILSEQ);
+    esc_len = iesc[cs].esc_len;
+    memcpy(tmp, iesc[cs].esc, esc_len);
+    if (shift == ISO2022_SO)
+    {
+        memcpy(tmp + esc_len, iso2022_SO_seq, 1);
+        esc_len += 1;
+    }
     memcpy(tmp + esc_len, buf, len);
+
+    if ((cv->codepage == 50220 || cv->codepage == 50221
+                || cv->codepage == 50222) && shift == ISO2022_SO)
+    {
+        /* XXX: shift-out cannot be used for mbtowc (both kernel and
+         * mlang) */
+        esc_len = iesc[ISO2022JP_CS_JISX0201_KANA].esc_len;
+        memcpy(tmp, iesc[ISO2022JP_CS_JISX0201_KANA].esc, esc_len);
+        memcpy(tmp + esc_len, buf, len);
+    }
 
     /* MB_ERR_INVALID_CHARS cannot be used for CP50220, CP50221 and
      * CP50222 */
@@ -1453,12 +1492,13 @@ iso2022jp_mbtowc(csconv_t *cv, const uchar *buf, int bufsize, ushort *wbuf, int 
 
     /* Check for conversion error.  Assuming defaultChar is 0x3F. */
     /* ascii should be converted from ascii */
-    if (wbuf[0] == buf[0] && cv->mode != ISO2022JP_MODE_ASCII)
+    if (wbuf[0] == buf[0]
+            && cv->mode != ISO2022_MODE(ISO2022JP_CS_ASCII, ISO2022_SI))
         return_error(EILSEQ);
 
     /* reset the mode for informal sequence */
-    if (cv->mode != mode)
-        cv->mode = mode;
+    if (cv->mode != ISO2022_MODE(cs, shift))
+        cv->mode = ISO2022_MODE(cs, shift);
 
     return len;
 }
@@ -1466,10 +1506,13 @@ iso2022jp_mbtowc(csconv_t *cv, const uchar *buf, int bufsize, ushort *wbuf, int 
 static int
 iso2022jp_wctomb(csconv_t *cv, ushort *wbuf, int wbufsize, uchar *buf, int bufsize)
 {
+    iso2022_esc_t *iesc = iso2022jp_esc;
     char tmp[MB_CHAR_MAX];
     int len;
     int esc_len;
-    int mode;
+    int cs;
+    int shift;
+    int i;
 
     /* defaultChar cannot be used for CP50220, CP50221 and CP50222 */
     len = WideCharToMultiByte(cv->codepage, 0,
@@ -1479,28 +1522,29 @@ iso2022jp_wctomb(csconv_t *cv, ushort *wbuf, int wbufsize, uchar *buf, int bufsi
 
     if (len == 1)
     {
-        mode = ISO2022JP_MODE_ASCII;
+        cs = ISO2022JP_CS_ASCII;
         esc_len = 0;
     }
     else
     {
-        for (mode = 1; iso2022jp_escape[mode].esc != NULL; ++mode)
+        for (i = 1; iesc[i].esc != NULL; ++i)
         {
-            esc_len = iso2022jp_escape[mode].esc_len;
-            if (strncmp(tmp, iso2022jp_escape[mode].esc, esc_len) == 0)
+            esc_len = iesc[i].esc_len;
+            if (strncmp(tmp, iesc[i].esc, esc_len) == 0)
             {
-                mode = iso2022jp_escape[mode].mode;
+                cs = iesc[i].cs;
                 break;
             }
         }
-        if (iso2022jp_escape[mode].esc == NULL)
+        if (iesc[i].esc == NULL)
             /* not supported escape sequence */
             return_error(EILSEQ);
     }
 
-    if (tmp[esc_len] == iso2022jp_SO[0])
+    shift = ISO2022_SI;
+    if (tmp[esc_len] == iso2022_SO_seq[0])
     {
-        mode = ISO2022JP_MODE_JISX0201_KANA;
+        shift = ISO2022_SO;
         esc_len += 1;
     }
 
@@ -1508,12 +1552,12 @@ iso2022jp_wctomb(csconv_t *cv, ushort *wbuf, int wbufsize, uchar *buf, int bufsi
 
     /* Check for converting error.  Assuming defaultChar is 0x3F. */
     /* ascii should be converted from ascii */
-    if (mode == ISO2022JP_MODE_ASCII && !(wbuf[0] < 0x80))
+    if (cs == ISO2022JP_CS_ASCII && !(wbuf[0] < 0x80))
         return_error(EILSEQ);
-    else if (len != iso2022jp_escape[mode].len)
+    else if (len != iesc[cs].len)
         return_error(EILSEQ);
 
-    if (cv->mode == mode)
+    if (cv->mode == ISO2022_MODE(cs, shift))
     {
         /* remove escape sequence */
         if (esc_len != 0)
@@ -1522,28 +1566,17 @@ iso2022jp_wctomb(csconv_t *cv, ushort *wbuf, int wbufsize, uchar *buf, int bufsi
     }
     else
     {
-        if (mode == ISO2022JP_MODE_ASCII)
+        if (cs == ISO2022JP_CS_ASCII)
         {
-            /* insert escape sequence */
-            if (cv->codepage == 50222 && cv->mode == ISO2022JP_MODE_JISX0201_KANA)
-            {
-                /* use SI */
-                esc_len = 1;
-                memmove(tmp + esc_len, tmp, len);
-                memcpy(tmp, iso2022jp_SI, esc_len);
-            }
-            else
-            {
-                esc_len = iso2022jp_escape[ISO2022JP_MODE_ASCII].esc_len;
-                memmove(tmp + esc_len, tmp, len);
-                memcpy(tmp, iso2022jp_escape[ISO2022JP_MODE_ASCII].esc, esc_len);
-            }
+            esc_len = iesc[ISO2022JP_CS_ASCII].esc_len;
+            memmove(tmp + esc_len, tmp, len);
+            memcpy(tmp, iesc[ISO2022JP_CS_ASCII].esc, esc_len);
         }
-        else if (cv->codepage == 50222 && cv->mode == ISO2022JP_MODE_JISX0201_KANA)
+        if (ISO2022_MODE_SHIFT(cv->mode) == ISO2022_SO)
         {
-            /* insert SI before changing to other mode */
-            memmove(tmp + 1, tmp, len);
-            memcpy(tmp, iso2022jp_SI, 1);
+            /* shift-in before changing to other mode */
+            memmove(tmp + 1, tmp, len + esc_len);
+            memcpy(tmp, iso2022_SI_seq, 1);
             esc_len += 1;
         }
     }
@@ -1551,21 +1584,38 @@ iso2022jp_wctomb(csconv_t *cv, ushort *wbuf, int wbufsize, uchar *buf, int bufsi
     if (bufsize < len + esc_len)
         return_error(E2BIG);
     memcpy(buf, tmp, len + esc_len);
-    cv->mode = mode;
+    cv->mode = ISO2022_MODE(cs, shift);
     return len + esc_len;
 }
 
 static int
 iso2022jp_flush(csconv_t *cv, uchar *buf, int bufsize)
 {
+    iso2022_esc_t *iesc = iso2022jp_esc;
     int esc_len;
 
-    if (cv->mode != ISO2022JP_MODE_ASCII)
+    if (cv->mode != ISO2022_MODE(ISO2022JP_CS_ASCII, ISO2022_SI))
     {
-        esc_len = iso2022jp_escape[ISO2022JP_MODE_ASCII].esc_len;
+        esc_len = 0;
+        if (ISO2022_MODE_SHIFT(cv->mode) != ISO2022_SI)
+            esc_len += 1;
+        if (ISO2022_MODE_CS(cv->mode) != ISO2022JP_CS_ASCII)
+            esc_len += iesc[ISO2022JP_CS_ASCII].esc_len;
         if (bufsize < esc_len)
             return_error(E2BIG);
-        memcpy(buf, iso2022jp_escape[ISO2022JP_MODE_ASCII].esc, esc_len);
+
+        esc_len = 0;
+        if (ISO2022_MODE_SHIFT(cv->mode) != ISO2022_SI)
+        {
+            memcpy(buf, iso2022_SI_seq, 1);
+            esc_len += 1;
+        }
+        if (ISO2022_MODE_CS(cv->mode) != ISO2022JP_CS_ASCII)
+        {
+            memcpy(buf + esc_len, iesc[ISO2022JP_CS_ASCII].esc,
+                    iesc[ISO2022JP_CS_ASCII].esc_len);
+            esc_len += iesc[ISO2022JP_CS_ASCII].esc_len;
+        }
         return esc_len;
     }
     return 0;
