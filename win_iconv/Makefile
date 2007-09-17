@@ -21,10 +21,18 @@ libiconv.a: win_iconv.c
 win_iconv.exe: win_iconv.c
 	gcc $(CFLAGS) -s -o win_iconv.exe win_iconv.c -DMAKE_EXE
 
+libmlang.a: mlang.def
+	dlltool --kill-at --dllname mlang.dll --input-def mlang.def --output-lib libmlang.a
+
 test:
 	gcc $(CFLAGS) -s -o win_iconv_test.exe win_iconv_test.c
 	win_iconv_test.exe
 
 clean:
-	rm win_iconv.exe win_iconv.o iconv.dll libiconv.a win_iconv_test.exe 2>/dev/null || :
+	rm -f win_iconv.exe
+	rm -f win_iconv.o
+	rm -f iconv.dll
+	rm -f libiconv.a
+	rm -f win_iconv_test.exe
+	rm -f libmlang.a
 
