@@ -22,7 +22,7 @@ win_iconv.exe: win_iconv.c
 	gcc $(CFLAGS) -s -o win_iconv.exe win_iconv.c -DMAKE_EXE
 
 libmlang.a: mlang.def
-	dlltool --kill-at --dllname mlang.dll --input-def mlang.def --output-lib libmlang.a
+	dlltool --kill-at --input-def mlang.def --output-lib libmlang.a
 
 test:
 	gcc $(CFLAGS) -s -o win_iconv_test.exe win_iconv_test.c
