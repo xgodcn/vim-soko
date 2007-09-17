@@ -1,4 +1,4 @@
-LIBRARY ICONV
+LIBRARY ICONV.DLL
 EXPORTS
   iconv
   iconv_open

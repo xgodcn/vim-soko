@@ -620,9 +620,18 @@ typedef HRESULT (WINAPI *LCIDTORFC1766A)(
     LPSTR pszRfc1766,
     int nChar
 );
+typedef HRESULT (WINAPI *LCIDTORFC1766W)(
+    LCID Locale,
+    LPWSTR pszRfc1766,
+    int nChar
+);
 typedef HRESULT (WINAPI *RFC1766TOLCIDA)(
     LCID *pLocale,
     LPSTR pszRfc1766
+);
+typedef HRESULT (WINAPI *RFC1766TOLCIDW)(
+    LCID *pLocale,
+    LPWSTR pszRfc1766
 );
 static CONVERTINETSTRING ConvertINetString;
 static CONVERTINETMULTIBYTETOUNICODE ConvertINetMultiByteToUnicode;
