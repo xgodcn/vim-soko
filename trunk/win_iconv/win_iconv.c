@@ -1,8 +1,9 @@
 /*
  * iconv library implemented with Win32 API.
- * Last Change: 2007-09-16
+ *
+ * This file is placed in the public domain.
+ *
  * Maintainer: Yukihiro Nakadaira <yukihiro.nakadaira@gmail.com>
- * License: This file is placed in the public domain.
  *
  * If $WINICONV_LIBICONV_DLL environment variable was defined, win_iconv
  * loads the specified DLL dynamically and uses it.  If loading the DLL
@@ -663,7 +664,7 @@ iconv_open(const char *tocode, const char *fromcode)
 {
     rec_iconv_t *cd;
 
-    cd = (rec_iconv_t *)malloc(sizeof(rec_iconv_t));
+    cd = (rec_iconv_t *)calloc(1, sizeof(rec_iconv_t));
     if (cd == NULL)
     {
         errno = ENOMEM;
@@ -683,19 +684,18 @@ iconv_open(const char *tocode, const char *fromcode)
         if (cd->cd != (iconv_t)(-1))
             return (iconv_t)cd;
         /* fallback */
+        FreeLibrary(cd->hlibiconv);
+        cd->hlibiconv = NULL;
     }
-    cd->hlibiconv = NULL;
 #endif
 
     cd->cd = win_iconv_open(cd, tocode, fromcode);
-    if (cd->cd == (iconv_t)(-1))
-    {
-        free(cd);
-        errno = EINVAL;
-        return (iconv_t)(-1);
-    }
+    if (cd->cd != (iconv_t)(-1))
+        return (iconv_t)cd;
 
-    return (iconv_t)cd;
+    free(cd);
+    errno = EINVAL;
+    return (iconv_t)(-1);
 }
 
 int
@@ -987,6 +987,7 @@ load_libiconv(rec_iconv_t *cd)
     p = getenv("WINICONV_LIBICONV_DLL");
     if (p == NULL)
         p = DEFAULT_LIBICONV_DLL;
+    /* parse comma separated value */
     for ( ; *p != 0; p = (*e == ',') ? e + 1 : e)
     {
         e = strchr(p, ',');
@@ -1026,7 +1027,6 @@ load_libiconv(rec_iconv_t *cd)
 
     if (hlibiconv != NULL && hmsvcrt != NULL)
     {
-        cd->hlibiconv = hlibiconv;
         cd->iconv_open = (f_iconv_open)GetProcAddress(hlibiconv, "libiconv_open");
         if (cd->iconv_open == NULL)
             cd->iconv_open = (f_iconv_open)GetProcAddress(hlibiconv, "iconv_open");
@@ -1040,6 +1040,7 @@ load_libiconv(rec_iconv_t *cd)
         if (cd->iconv_open != NULL && cd->iconv_close != NULL
                 && cd->iconv != NULL && cd->_errno != NULL)
         {
+            cd->hlibiconv = hlibiconv;
             /* increment reference count */
             LoadLibrary(dllname);
             lastdll = *cd;
