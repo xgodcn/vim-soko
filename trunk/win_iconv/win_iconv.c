@@ -48,6 +48,9 @@
         dst[size - 1] = 0;          \
     } while (0)
 
+#define xstrlcpyn(dst, src, srclen, size) \
+    xstrlcpy(dst, src, xmin((srclen) + 1, size))
+
 #define xmin(a, b) ((a) < (b) ? (a) : (b))
 #define xmax(a, b) ((a) > (b) ? (a) : (b))
 
@@ -115,11 +118,10 @@ struct rec_iconv_t {
     csconv_t to;
 #if defined(USE_LIBICONV_DLL)
     HMODULE hlibiconv;
-    f_iconv_open iconv_open;
 #endif
 };
 
-static iconv_t *win_iconv_open(rec_iconv_t *cd, const char *tocode, const char *fromcode);
+static int win_iconv_open(rec_iconv_t *cd, const char *tocode, const char *fromcode);
 static int win_iconv_close(iconv_t cd);
 static size_t win_iconv(iconv_t cd, const char **inbuf, size_t *inbytesleft, char **outbuf, size_t *outbytesleft);
 
@@ -131,7 +133,7 @@ static void ucs4_to_utf16(uint wc, ushort *wbuf, int *wbufsize);
 static char *strrstr(const char *str, const char *token);
 
 #if defined(USE_LIBICONV_DLL)
-static int load_libiconv(rec_iconv_t *cd);
+static int libiconv_iconv_open(rec_iconv_t *cd, const char *tocode, const char *fromcode);
 static PVOID MyImageDirectoryEntryToData(LPVOID Base, BOOLEAN MappedAsImage, USHORT DirectoryEntry, PULONG Size);
 static HMODULE find_imported_module_by_funcname(HMODULE hModule, const char *funcname);
 
@@ -672,25 +674,11 @@ iconv_open(const char *tocode, const char *fromcode)
     }
 
 #if defined(USE_LIBICONV_DLL)
-    /*
-     * TODO:
-     * Which the order of priority is useful?
-     *   1. libiconv.dll -> internal
-     *   2. internal -> libiconv.dll
-     */
-    if (load_libiconv(cd))
-    {
-        cd->cd = cd->iconv_open(tocode, fromcode);
-        if (cd->cd != (iconv_t)(-1))
-            return (iconv_t)cd;
-        /* fallback */
-        FreeLibrary(cd->hlibiconv);
-        cd->hlibiconv = NULL;
-    }
+    if (libiconv_iconv_open(cd, tocode, fromcode))
+        return (iconv_t)cd;
 #endif
 
-    cd->cd = win_iconv_open(cd, tocode, fromcode);
-    if (cd->cd != (iconv_t)(-1))
+    if (win_iconv_open(cd, tocode, fromcode))
         return (iconv_t)cd;
 
     free(cd);
@@ -722,17 +710,18 @@ iconv(iconv_t _cd, const char **inbuf, size_t *inbytesleft, char **outbuf, size_
     return r;
 }
 
-static iconv_t *
+static int
 win_iconv_open(rec_iconv_t *cd, const char *tocode, const char *fromcode)
 {
     cd->from = make_csconv(fromcode);
     cd->to = make_csconv(tocode);
     if (cd->from.codepage == -1 || cd->to.codepage == -1)
-        return (iconv_t)(-1);
+        return FALSE;
     cd->iconv_close = win_iconv_close;
     cd->iconv = win_iconv;
     cd->_errno = _errno;
-    return (iconv_t)cd;
+    cd->cd = (iconv_t)cd;
+    return TRUE;
 }
 
 static int
@@ -835,7 +824,7 @@ make_csconv(const char *_name)
     CPINFOEX cpinfoex;
     csconv_t cv;
     int use_compat = TRUE;
-    char name[512];
+    char name[128];
     char *p;
 
     xstrlcpy(name, _name, sizeof(name));
@@ -971,13 +960,14 @@ strrstr(const char *str, const char *token)
 
 #if defined(USE_LIBICONV_DLL)
 static int
-load_libiconv(rec_iconv_t *cd)
+libiconv_iconv_open(rec_iconv_t *cd, const char *fromcode, const char *tocode)
 {
     HMODULE hlibiconv = NULL;
     HMODULE hmsvcrt = NULL;
     char dllname[_MAX_PATH];
     const char *p;
     const char *e;
+    f_iconv_open _iconv_open;
 
     /*
      * always try to load dll, so that we can switch dll in runtime.
@@ -995,7 +985,7 @@ load_libiconv(rec_iconv_t *cd)
             continue;
         else if (e == NULL)
             e = p + strlen(p);
-        xstrlcpy(dllname, p, xmin(e - p + 1, sizeof(dllname)));
+        xstrlcpyn(dllname, p, e - p, sizeof(dllname));
         hlibiconv = LoadLibrary(dllname);
         if (hlibiconv != NULL)
         {
@@ -1009,45 +999,51 @@ load_libiconv(rec_iconv_t *cd)
         }
     }
 
-    if (hlibiconv != NULL && hlibiconv == lastdll.hlibiconv)
-    {
-        *cd = lastdll;
-        return TRUE;
-    }
-
-    if (lastdll.hlibiconv != NULL)
+    if (lastdll.hlibiconv != NULL && lastdll.hlibiconv != hlibiconv)
     {
         /* decrement reference count */
         FreeLibrary(lastdll.hlibiconv);
         lastdll.hlibiconv = NULL;
     }
 
-    if (hlibiconv != NULL)
-        hmsvcrt = find_imported_module_by_funcname(hlibiconv, "_errno");
+    if (hlibiconv == NULL)
+        goto failed;
 
-    if (hlibiconv != NULL && hmsvcrt != NULL)
+    if (hlibiconv == lastdll.hlibiconv)
     {
-        cd->iconv_open = (f_iconv_open)GetProcAddress(hlibiconv, "libiconv_open");
-        if (cd->iconv_open == NULL)
-            cd->iconv_open = (f_iconv_open)GetProcAddress(hlibiconv, "iconv_open");
-        cd->iconv_close = (f_iconv_close)GetProcAddress(hlibiconv, "libiconv_close");
-        if (cd->iconv_close == NULL)
-            cd->iconv_close = (f_iconv_close)GetProcAddress(hlibiconv, "iconv_close");
-        cd->iconv = (f_iconv)GetProcAddress(hlibiconv, "libiconv");
-        if (cd->iconv == NULL)
-            cd->iconv = (f_iconv)GetProcAddress(hlibiconv, "iconv");
-        cd->_errno = (f_errno)GetProcAddress(hmsvcrt, "_errno");
-        if (cd->iconv_open != NULL && cd->iconv_close != NULL
-                && cd->iconv != NULL && cd->_errno != NULL)
-        {
-            cd->hlibiconv = hlibiconv;
-            /* increment reference count */
-            LoadLibrary(dllname);
-            lastdll = *cd;
-            return TRUE;
-        }
+        *cd = lastdll;
+        return TRUE;
     }
 
+    hmsvcrt = find_imported_module_by_funcname(hlibiconv, "_errno");
+    if (hmsvcrt == NULL)
+        goto failed;
+
+    _iconv_open = (f_iconv_open)GetProcAddress(hlibiconv, "libiconv_open");
+    if (_iconv_open == NULL)
+        _iconv_open = (f_iconv_open)GetProcAddress(hlibiconv, "iconv_open");
+    cd->iconv_close = (f_iconv_close)GetProcAddress(hlibiconv, "libiconv_close");
+    if (cd->iconv_close == NULL)
+        cd->iconv_close = (f_iconv_close)GetProcAddress(hlibiconv, "iconv_close");
+    cd->iconv = (f_iconv)GetProcAddress(hlibiconv, "libiconv");
+    if (cd->iconv == NULL)
+        cd->iconv = (f_iconv)GetProcAddress(hlibiconv, "iconv");
+    cd->_errno = (f_errno)GetProcAddress(hmsvcrt, "_errno");
+    if (_iconv_open == NULL || cd->iconv_close == NULL
+            || cd->iconv == NULL || cd->_errno == NULL)
+        goto failed;
+
+    cd->cd = _iconv_open(tocode, fromcode);
+    if (cd->cd == (iconv_t)(-1))
+        goto failed;
+
+    cd->hlibiconv = hlibiconv;
+    /* increment reference count */
+    LoadLibrary(dllname);
+    lastdll = *cd;
+    return TRUE;
+
+failed:
     if (hlibiconv != NULL)
         FreeLibrary(hlibiconv);
     /* do not free hmsvcrt which is obtained by GetModuleHandle() */

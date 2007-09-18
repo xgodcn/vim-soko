@@ -39,7 +39,7 @@ setdll(const char *dllpath)
 
     sprintf(buf, "WINICONV_LIBICONV_DLL=%s", dllpath);
     putenv(buf);
-    if (load_libiconv(&cd))
+    if (libiconv_iconv_open(&cd, "ascii", "ascii"))
     {
         FreeLibrary(cd.hlibiconv);
         use_dll = TRUE;
