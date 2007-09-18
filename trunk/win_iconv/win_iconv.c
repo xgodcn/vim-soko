@@ -138,7 +138,6 @@ static PVOID MyImageDirectoryEntryToData(LPVOID Base, BOOLEAN MappedAsImage, USH
 static HMODULE find_imported_module_by_funcname(HMODULE hModule, const char *funcname);
 
 static HMODULE hwiniconv;
-static rec_iconv_t lastdll; /* keep dll loaded for optimize */
 #endif
 
 static int sbcs_mblen(csconv_t *cv, const uchar *buf, int bufsize);
@@ -999,21 +998,8 @@ libiconv_iconv_open(rec_iconv_t *cd, const char *fromcode, const char *tocode)
         }
     }
 
-    if (lastdll.hlibiconv != NULL && lastdll.hlibiconv != hlibiconv)
-    {
-        /* decrement reference count */
-        FreeLibrary(lastdll.hlibiconv);
-        lastdll.hlibiconv = NULL;
-    }
-
     if (hlibiconv == NULL)
         goto failed;
-
-    if (hlibiconv == lastdll.hlibiconv)
-    {
-        *cd = lastdll;
-        return TRUE;
-    }
 
     hmsvcrt = find_imported_module_by_funcname(hlibiconv, "_errno");
     if (hmsvcrt == NULL)
@@ -1038,9 +1024,6 @@ libiconv_iconv_open(rec_iconv_t *cd, const char *fromcode, const char *tocode)
         goto failed;
 
     cd->hlibiconv = hlibiconv;
-    /* increment reference count */
-    LoadLibrary(dllname);
-    lastdll = *cd;
     return TRUE;
 
 failed:
