@@ -138,7 +138,7 @@ static PVOID MyImageDirectoryEntryToData(LPVOID Base, BOOLEAN MappedAsImage, USH
 static HMODULE find_imported_module_by_funcname(HMODULE hModule, const char *funcname);
 
 static HMODULE hwiniconv;
-static HMODULE hlastdll; /* keep dll loaded for efficiency */
+static HMODULE hlastdll; /* keep dll loaded for efficiency (unnecessary?) */
 #endif
 
 static int sbcs_mblen(csconv_t *cv, const uchar *buf, int bufsize);
@@ -1027,13 +1027,14 @@ libiconv_iconv_open(rec_iconv_t *cd, const char *fromcode, const char *tocode)
             || cd->iconv == NULL || cd->_errno == NULL)
         goto failed;
 
+    /* increment reference count */
+    hlastdll = LoadLibrary(dllname);
+
     cd->cd = _iconv_open(tocode, fromcode);
     if (cd->cd == (iconv_t)(-1))
         goto failed;
 
     cd->hlibiconv = hlibiconv;
-    /* increment reference count */
-    hlastdll = LoadLibrary(dllname);
     return TRUE;
 
 failed:
