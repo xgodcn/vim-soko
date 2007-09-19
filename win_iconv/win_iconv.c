@@ -999,7 +999,7 @@ libiconv_iconv_open(rec_iconv_t *cd, const char *fromcode, const char *tocode)
         }
     }
 
-    if (hlastdll != NULL && hlastdll != hlibiconv)
+    if (hlastdll != NULL)
     {
         /* decrement reference count */
         FreeLibrary(hlastdll);
