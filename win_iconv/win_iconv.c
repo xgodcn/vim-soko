@@ -1062,6 +1062,10 @@ MyImageDirectoryEntryToData(LPVOID Base, BOOLEAN MappedAsImage, USHORT Directory
     /* TODO: MappedAsImage? */
     PIMAGE_DATA_DIRECTORY p;
     p = TO_NT_HEADERS(Base)->OptionalHeader.DataDirectory + DirectoryEntry;
+    if (p->VirtualAddress == 0) {
+      *Size = 0;
+      return NULL;
+    }
     *Size = p->Size;
     return (PVOID)((LPBYTE)Base + p->VirtualAddress);
 }
@@ -1069,30 +1073,31 @@ MyImageDirectoryEntryToData(LPVOID Base, BOOLEAN MappedAsImage, USHORT Directory
 static HMODULE
 find_imported_module_by_funcname(HMODULE hModule, const char *funcname)
 {
-    DWORD BaseAddress;
+    DWORD Base;
     ULONG Size;
-    PIMAGE_IMPORT_DESCRIPTOR pImportDescriptor;
-    PIMAGE_THUNK_DATA pThunkData;
-    PIMAGE_IMPORT_BY_NAME pImportByName;
+    PIMAGE_IMPORT_DESCRIPTOR Imp;
+    PIMAGE_THUNK_DATA Name;         /* Import Name Table */
+    PIMAGE_IMPORT_BY_NAME ImpName;
 
-    BaseAddress = (DWORD)hModule;
-    pImportDescriptor = MyImageDirectoryEntryToData(
-            (LPVOID)BaseAddress,
+    Base = (DWORD)hModule;
+    Imp = MyImageDirectoryEntryToData(
+            (LPVOID)Base,
             TRUE,
             IMAGE_DIRECTORY_ENTRY_IMPORT,
             &Size);
-    for ( ; pImportDescriptor->OriginalFirstThunk != 0; ++pImportDescriptor)
+    if (Imp == NULL)
+        return NULL;
+    for ( ; Imp->OriginalFirstThunk != 0; ++Imp)
     {
-        pThunkData = (PIMAGE_THUNK_DATA)
-            (BaseAddress + pImportDescriptor->OriginalFirstThunk);
-        for ( ; pThunkData->u1.Ordinal != 0; ++pThunkData)
+        Name = (PIMAGE_THUNK_DATA)(Base + Imp->OriginalFirstThunk);
+        for ( ; Name->u1.Ordinal != 0; ++Name)
         {
-            if (!IMAGE_SNAP_BY_ORDINAL(pThunkData->u1.Ordinal))
+            if (!IMAGE_SNAP_BY_ORDINAL(Name->u1.Ordinal))
             {
-                pImportByName = (PIMAGE_IMPORT_BY_NAME)
-                    (BaseAddress + (DWORD)pThunkData->u1.AddressOfData);
-                if (strcmp((char *)pImportByName->Name, funcname) == 0)
-                    return GetModuleHandle((char *)(BaseAddress + pImportDescriptor->Name));
+                ImpName = (PIMAGE_IMPORT_BY_NAME)
+                    (Base + (DWORD)Name->u1.AddressOfData);
+                if (strcmp((char *)ImpName->Name, funcname) == 0)
+                    return GetModuleHandle((char *)(Base + Imp->Name));
             }
         }
     }
