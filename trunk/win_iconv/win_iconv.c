@@ -1054,18 +1054,16 @@ failed:
  *   imagehlp.lib or dbghelp.lib
  *   ImageDirectoryEntryToData()
  */
+#define TO_DOS_HEADER(base) ((PIMAGE_DOS_HEADER)(base))
+#define TO_NT_HEADERS(base) ((PIMAGE_NT_HEADERS)((LPBYTE)(base) + TO_DOS_HEADER(base)->e_lfanew))
 static PVOID
 MyImageDirectoryEntryToData(LPVOID Base, BOOLEAN MappedAsImage, USHORT DirectoryEntry, PULONG Size)
 {
-    PVOID ptr;
-    PIMAGE_DOS_HEADER pDosHdr;
-    PIMAGE_NT_HEADERS pNTHdr;
-
-    pDosHdr = (PIMAGE_DOS_HEADER)Base;
-    pNTHdr = (PIMAGE_NT_HEADERS)((LPBYTE)Base + pDosHdr->e_lfanew);
-    ptr = (PVOID)((LPBYTE)Base + pNTHdr->OptionalHeader.DataDirectory[DirectoryEntry].VirtualAddress);
-    /* TODO: *Size = ? */
-    return ptr;
+    /* TODO: MappedAsImage? */
+    PIMAGE_DATA_DIRECTORY p;
+    p = TO_NT_HEADERS(Base)->OptionalHeader.DataDirectory + DirectoryEntry;
+    *Size = p->Size;
+    return (PVOID)((LPBYTE)Base + p->VirtualAddress);
 }
 
 static HMODULE
