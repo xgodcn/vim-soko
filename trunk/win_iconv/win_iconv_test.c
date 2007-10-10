@@ -202,7 +202,9 @@ main(int argc, char **argv)
         einval("euc-jp", "\xA4\xA2\xA4", "utf-16be", "\x30\x42");
         eilseq("euc-jp", "\xA4\xA2\xFF\xFF", "utf-16be", "\x30\x42");
         success("cp932", "\x81\x60", "iso-2022-jp", "\x1B\x24\x42\x21\x41\x1B\x28\x42");
-        eilseq("cp932", "\x81\x60", "iso-2022-jp//nocompat", "");
+        success("UTF-16BE", "\xFF\x5E", "iso-2022-jp", "\x1B\x24\x42\x21\x41\x1B\x28\x42");
+        eilseq("UTF-16BE", "\x30\x1C", "iso-2022-jp//nocompat", "");
+        success("iso-2022-jp", "\x1B\x24\x42\x21\x41\x1B\x28\x42", "UTF-16BE", "\xFF\x5E");
     }
 
     /*

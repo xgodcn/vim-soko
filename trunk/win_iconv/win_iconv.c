@@ -587,7 +587,7 @@ static compat_t cp20932_compat[] = {
 static compat_t *cp51932_compat = cp932_compat;
 
 /* cp20932_compat for kernel.  cp932_compat for mlang. */
-static compat_t *cp5022x_compat = cp20932_compat;
+static compat_t *cp5022x_compat = cp932_compat;
 
 typedef HRESULT (WINAPI *CONVERTINETSTRING)(
     LPDWORD lpdwMode,
@@ -858,7 +858,7 @@ make_csconv(const char *_name)
         cv.wctomb = kernel_wctomb;
         cv.mblen = utf8_mblen;
     }
-    else if (cv.codepage == 50220 || cv.codepage == 50221 || cv.codepage == 50222)
+    else if ((cv.codepage == 50220 || cv.codepage == 50221 || cv.codepage == 50222) && load_mlang())
     {
         cv.mbtowc = iso2022jp_mbtowc;
         cv.wctomb = iso2022jp_wctomb;
@@ -1365,6 +1365,11 @@ utf32_wctomb(csconv_t *cv, ushort *wbuf, int wbufsize, uchar *buf, int bufsize)
  *        1 byte Kana)
  * 50222: ISO 2022 Japanese JIS X 0201-1989; Japanese (JIS-Allow 1 byte
  *        Kana - SO/SI)
+ *
+ * MultiByteToWideChar() and WideCharToMultiByte() behave differently
+ * depending on Windows version.  On XP, WideCharToMultiByte() doesn't
+ * terminate result sequence with ascii escape.  But Vista does.
+ * Use MLang instead.
  */
 
 #define ISO2022_MODE(cs, shift) (((cs) << 8) | (shift))
@@ -1409,6 +1414,8 @@ iso2022jp_mbtowc(csconv_t *cv, const uchar *buf, int bufsize, ushort *wbuf, int 
 {
     iso2022_esc_t *iesc = iso2022jp_esc;
     char tmp[MB_CHAR_MAX];
+    int insize;
+    HRESULT hr;
     int len;
     int esc_len;
     int cs;
@@ -1486,11 +1493,10 @@ iso2022jp_mbtowc(csconv_t *cv, const uchar *buf, int bufsize, ushort *wbuf, int 
         memcpy(tmp + esc_len, buf, len);
     }
 
-    /* MB_ERR_INVALID_CHARS cannot be used for CP50220, CP50221 and
-     * CP50222 */
-    *wbufsize = MultiByteToWideChar(cv->codepage, 0,
-            tmp, len + esc_len, (wchar_t *)wbuf, *wbufsize);
-    if (*wbufsize == 0)
+    insize = len + esc_len;
+    hr = ConvertINetMultiByteToUnicode(&cv->mode, cv->codepage,
+            (const char *)tmp, &insize, (wchar_t *)wbuf, wbufsize);
+    if (hr != S_OK || insize != len + esc_len)
         return_error(EILSEQ);
 
     /* Check for conversion error.  Assuming defaultChar is 0x3F. */
@@ -1511,17 +1517,23 @@ iso2022jp_wctomb(csconv_t *cv, ushort *wbuf, int wbufsize, uchar *buf, int bufsi
 {
     iso2022_esc_t *iesc = iso2022jp_esc;
     char tmp[MB_CHAR_MAX];
+    int tmpsize = MB_CHAR_MAX;
+    int insize = wbufsize;
+    HRESULT hr;
     int len;
     int esc_len;
     int cs;
     int shift;
     int i;
 
-    /* defaultChar cannot be used for CP50220, CP50221 and CP50222 */
-    len = WideCharToMultiByte(cv->codepage, 0,
-            (const wchar_t *)wbuf, wbufsize, tmp, sizeof(tmp), NULL, NULL);
-    if (len == 0)
+    hr = ConvertINetUnicodeToMultiByte(&cv->mode, cv->codepage,
+            (const wchar_t *)wbuf, &wbufsize, tmp, &tmpsize);
+    if (hr != S_OK || insize != wbufsize)
         return_error(EILSEQ);
+    else if (bufsize < tmpsize)
+        return_error(E2BIG);
+
+    len = tmpsize;
 
     if (len == 1)
     {
@@ -1552,6 +1564,13 @@ iso2022jp_wctomb(csconv_t *cv, ushort *wbuf, int wbufsize, uchar *buf, int bufsi
     }
 
     len -= esc_len;
+    if (cs != ISO2022JP_CS_ASCII)
+    {
+        /* remove trailing escape sequence */
+        if (len <= iesc[cs].len)
+            return_error(EILSEQ);
+        len = iesc[cs].len;
+    }
 
     /* Check for converting error.  Assuming defaultChar is 0x3F. */
     /* ascii should be converted from ascii */

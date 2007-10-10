@@ -26,7 +26,7 @@ libmlang.a: mlang.def
 
 test:
 	gcc $(CFLAGS) -s -o win_iconv_test.exe win_iconv_test.c
-	win_iconv_test.exe
+	./win_iconv_test.exe
 
 clean:
 	rm -f win_iconv.exe
