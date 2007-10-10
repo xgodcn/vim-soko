@@ -1416,6 +1416,7 @@ iso2022jp_mbtowc(csconv_t *cv, const uchar *buf, int bufsize, ushort *wbuf, int 
     char tmp[MB_CHAR_MAX];
     int insize;
     HRESULT hr;
+    DWORD dummy = 0;
     int len;
     int esc_len;
     int cs;
@@ -1494,7 +1495,7 @@ iso2022jp_mbtowc(csconv_t *cv, const uchar *buf, int bufsize, ushort *wbuf, int 
     }
 
     insize = len + esc_len;
-    hr = ConvertINetMultiByteToUnicode(&cv->mode, cv->codepage,
+    hr = ConvertINetMultiByteToUnicode(&dummy, cv->codepage,
             (const char *)tmp, &insize, (wchar_t *)wbuf, wbufsize);
     if (hr != S_OK || insize != len + esc_len)
         return_error(EILSEQ);
@@ -1520,13 +1521,14 @@ iso2022jp_wctomb(csconv_t *cv, ushort *wbuf, int wbufsize, uchar *buf, int bufsi
     int tmpsize = MB_CHAR_MAX;
     int insize = wbufsize;
     HRESULT hr;
+    DWORD dummy = 0;
     int len;
     int esc_len;
     int cs;
     int shift;
     int i;
 
-    hr = ConvertINetUnicodeToMultiByte(&cv->mode, cv->codepage,
+    hr = ConvertINetUnicodeToMultiByte(&dummy, cv->codepage,
             (const wchar_t *)wbuf, &wbufsize, tmp, &tmpsize);
     if (hr != S_OK || insize != wbufsize)
         return_error(EILSEQ);
