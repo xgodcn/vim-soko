@@ -130,6 +130,7 @@ static csconv_t make_csconv(const char *name);
 static int name_to_codepage(const char *name);
 static uint utf16_to_ucs4(const ushort *wbuf);
 static void ucs4_to_utf16(uint wc, ushort *wbuf, int *wbufsize);
+static int is_unicode(int codepage);
 static char *strrstr(const char *str, const char *token);
 
 #if defined(USE_LIBICONV_DLL)
@@ -774,6 +775,21 @@ win_iconv(iconv_t _cd, const char **inbuf, size_t *inbytesleft, char **outbuf, s
             continue;
         }
 
+        /*
+         * Remove BOM.  Use mode as flag.
+         * TODO: To do this even if "to" is unicode?
+         */
+        if (wbuf[0] == 0xFEFF &&
+                is_unicode(cd->from.codepage) &&
+                cd->from.mode == 0 &&
+                !is_unicode(cd->to.codepage))
+        {
+            *inbuf += insize;
+            *inbytesleft -= insize;
+            cd->from.mode = 1;
+            continue;
+        }
+
         if (cd->from.compat != NULL)
         {
             wc = utf16_to_ucs4(wbuf);
@@ -944,6 +960,14 @@ ucs4_to_utf16(uint wc, ushort *wbuf, int *wbufsize)
         wbuf[1] = 0xDC00 | (wc & 0x3FF);
         *wbufsize = 2;
     }
+}
+
+static int
+is_unicode(int codepage)
+{
+    return (codepage == 1200 || codepage == 1201 ||
+            codepage == 12000 || codepage == 12001 ||
+            codepage == 65000 || codepage == 65001);
 }
 
 static char *
