@@ -1532,7 +1532,7 @@ iso2022jp_wctomb(csconv_t *cv, ushort *wbuf, int wbufsize, uchar *buf, int bufsi
      * MultiByte = [escape sequence] + character + [escape sequence]
      *
      * Whether trailing escape sequence is added depends on which API is
-     * used (kernel or MLang, and it's version).
+     * used (kernel or MLang, and its version).
      */
     hr = ConvertINetUnicodeToMultiByte(&dummy, cv->codepage,
             (const wchar_t *)wbuf, &wbufsize, tmp, &tmpsize);
