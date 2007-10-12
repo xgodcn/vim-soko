@@ -1528,6 +1528,12 @@ iso2022jp_wctomb(csconv_t *cv, ushort *wbuf, int wbufsize, uchar *buf, int bufsi
     int shift;
     int i;
 
+    /*
+     * MultiByte = [escape sequence] + character + [escape sequence]
+     *
+     * Whether trailing escape sequence is added depends on which API is
+     * used (kernel or MLang, and it's version).
+     */
     hr = ConvertINetUnicodeToMultiByte(&dummy, cv->codepage,
             (const wchar_t *)wbuf, &wbufsize, tmp, &tmpsize);
     if (hr != S_OK || insize != wbufsize)
@@ -1535,9 +1541,7 @@ iso2022jp_wctomb(csconv_t *cv, ushort *wbuf, int wbufsize, uchar *buf, int bufsi
     else if (bufsize < tmpsize)
         return_error(E2BIG);
 
-    len = tmpsize;
-
-    if (len == 1)
+    if (tmpsize == 1)
     {
         cs = ISO2022JP_CS_ASCII;
         esc_len = 0;
@@ -1565,20 +1569,13 @@ iso2022jp_wctomb(csconv_t *cv, ushort *wbuf, int wbufsize, uchar *buf, int bufsi
         esc_len += 1;
     }
 
-    len -= esc_len;
-    if (cs != ISO2022JP_CS_ASCII)
-    {
-        /* remove trailing escape sequence */
-        if (len <= iesc[cs].len)
-            return_error(EILSEQ);
-        len = iesc[cs].len;
-    }
+    len = iesc[cs].len;
 
     /* Check for converting error.  Assuming defaultChar is 0x3F. */
     /* ascii should be converted from ascii */
     if (cs == ISO2022JP_CS_ASCII && !(wbuf[0] < 0x80))
         return_error(EILSEQ);
-    else if (len != iesc[cs].len)
+    else if (tmpsize < esc_len + len)
         return_error(EILSEQ);
 
     if (cv->mode == ISO2022_MODE(cs, shift))
