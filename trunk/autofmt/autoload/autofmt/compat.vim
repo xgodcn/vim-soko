@@ -572,18 +572,8 @@ function s:lib.char_width(c, ...)
     return 0
   elseif a:c == "\t"
     return self.tab_width(vcol)
-  elseif len(a:c) == 1  " quick check
-    return 1
-  else
-    let w = self.uni.prop_east_asian_width(a:c)
-    if w == "A"
-      return (&ambiwidth == "double") ? 2 : 1
-    elseif w =~ '[WF]'
-      return 2
-    else
-      return 1
-    endif
   endif
+  return (a:c =~ '^.\%2v') ? 1 : 2
 endfunction
 
 function s:lib.tab_width(vcol)
