@@ -21,8 +21,9 @@ function! s:SPToHtml(line1, line2, ...)
 endfunction
 
 function! s:DoConvert()
-  call append(line('.') - 1, s:ToTag(foldclosed('.'), foldclosedend('.')))
-  silent execute printf("%d,%ddelete _", foldclosed('.'), foldclosedend('.'))
+  " foldclosed('.') may be different with line('.'), and line('.') is correct.
+  call append(line('.') - 1, s:ToTag(line('.'), foldclosedend('.')))
+  silent execute printf("%d,%ddelete _", line('.'), foldclosedend('.'))
 endfunction
 
 function! s:ToTag(start, end)
