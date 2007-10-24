@@ -27,7 +27,7 @@ endfunction
 
 function! s:ToTag(start, end)
   let lines = getline(a:start + 1, a:end - 1)
-  let [_0, punct, name, ft, color, opt; _] = matchlist(getline(a:start), '\v^(.)(\w+)%(\s+(\w+)\_s@=)?%(\s+(\w+)\_s@=)?%(\s+set:(.*))?')
+  let [_0, punct, name, ft, color, opt; _] = matchlist(getline(a:start), '\v^(.)(\w+)%(\s+(\w+)%(\s|\_$)@=)?%(\s+(\w+)%(\s|\_$)@=)?%(\s+set:(.*))?')
   return s:ToHtml(lines, name, ft, color, opt)
 endfunction
 
