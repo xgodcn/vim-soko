@@ -23,17 +23,19 @@ Spre Syntax:
 
   ## comment
 
-  #pre [filetype] [colorscheme]
+  #pre [filetype] [colorscheme] [set:modeline]
     ...
   #end
 
   !! comment
 
-  !pre [filetype] [colorscheme]
+  !pre [filetype] [colorscheme] [set:modeline]
     ...
   !end
 
   #div and #span are also can be used.
+
+  modeline is used as "execute 'setl ' . modeline".
 
 Example:
 

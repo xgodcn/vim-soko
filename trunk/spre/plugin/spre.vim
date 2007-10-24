@@ -27,11 +27,11 @@ endfunction
 
 function! s:ToTag(start, end)
   let lines = getline(a:start + 1, a:end - 1)
-  let [_0, punct, name, ft, color; _] = matchlist(getline(a:start), '\v^(.)(\w+)%(\s+(\w+))?%(\s+(\w+))?')
-  return s:ToHtml(lines, name, ft, color)
+  let [_0, punct, name, ft, color, opt; _] = matchlist(getline(a:start), '\v^(.)(\w+)%(\s+(\w+)\_s@=)?%(\s+(\w+)\_s@=)?%(\s+set:(.*))?')
+  return s:ToHtml(lines, name, ft, color, opt)
 endfunction
 
-function! s:ToHtml(lines, tag, ft, color)
+function! s:ToHtml(lines, tag, ft, color, opt)
   let save_colors_name = get(g:, "colors_name", "")
   if a:color != ""
     execute "colorscheme " . a:color
@@ -40,6 +40,10 @@ function! s:ToHtml(lines, tag, ft, color)
   new         " open tmp buffer
   call setline(1, a:lines)
   let &ft = a:ft
+
+  if a:opt =~ '\S'
+    execute "setl " . a:opt
+  endif
 
   " let lines = s:tohtml_2html(1, line('$'))
   let lines = s:tohtml_internal(1, line('$'))
