@@ -82,9 +82,6 @@ int func(int n) {
 </body>
 </html>
 
-If you want to highlight HTML tag outside of spre macro, set the
-filetype to 'html' and source spre.vim.
-  :set ft=html
-  :unlet b:current_syntax
-  :runtime syntax/spre.vim
+If you want to highlight HTML tag outside of spre macro:
+  :set ft=html.spre
 

@@ -1,7 +1,9 @@
 
-if exists("b:current_syntax")
-  finish
-endif
+" Do not check b:current_syntax, so that spre can be combined with other
+" syntax (e.g. set ft=html.spre)
+" if exists("b:current_syntax")
+"   finish
+" endif
 
 let s:cpo_save = &cpo
 set cpo&vim
@@ -31,7 +33,9 @@ function! s:Setup()
   unlet! b:current_syntax
   syntax region MacroSpre matchgroup=MacroTag start=/\v^\z([#!])%(pre|div|span)\s+spre>.*$/ end=/^\z1end\>/ contains=MacroComment,MacroPre,MacroSpre keepend extend fold
 
-  let b:current_syntax = "spre"
+  if !exists("b:current_syntax")
+    let b:current_syntax = "spre"
+  endif
 endfunction
 
 call s:Setup()
