@@ -148,6 +148,12 @@ function! s:getsynline(lnum)
     let c = matchstr(&listchars, 'eol:\zs.')
     call add(lst, [c, style])
   endif
+  if &number
+    let w = max([&numberwidth, len(line('$'))])
+    let str = printf('%' . w . 'd ', a:lnum)
+    let style = s:syn_to_style(hlID("LineNr"))
+    call insert(lst, [str, style])
+  endif
   " group with same attribute
   if len(lst) >= 2
     let i = 1
