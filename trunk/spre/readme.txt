@@ -33,6 +33,8 @@ Spre Syntax:
     ...
   !end
 
+  #div and #span are also can be used.
+
 Example:
 
 ## comment
