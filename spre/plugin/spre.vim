@@ -15,89 +15,106 @@ endfunction
 
 function! s:SPToHtml(line1, line2, ...)
   let colorscheme = get(a:000, 0, "")
-  let lines = s:ToHtml(getline(a:line1, a:line2), "pre", &ft, colorscheme)
+  let attr = {}
+  let attr["filetype"] = &ft
+  let attr["tag"] = "pre"
+  if colorscheme != ""
+    let attr["colorscheme"] = colorscheme
+  endif
+  let lines = s:ToHtml(getline(a:line1, a:line2), attr)
   new
   call setline(1, lines)
 endfunction
 
 function! s:DoConvert()
   " foldclosed('.') may be different with line('.'), and line('.') is correct.
-  call append(line('.') - 1, s:ToTag(line('.'), foldclosedend('.')))
+  if getline('.') =~ '^.macro\>'
+    let expr = join(getline(line('.') + 1, foldclosedend('.') - 1), "\n")
+    call append(line('.') - 1, s:ExecMacro(expr))
+  else
+    call append(line('.') - 1, s:ToTag(line('.'), foldclosedend('.')))
+  endif
   silent execute printf("%d,%ddelete _", line('.'), foldclosedend('.'))
+endfunction
+
+function! s:ExecMacro(expr)
+  " execute "augroup Group\nau!\naugroup END\n" will fail.
+  " use temporary function to avoid such a problem.
+  execute "function! s:__tmpfunc()\n" . a:expr . "\nreturn []\nendfunction"
+  return s:__tmpfunc()
 endfunction
 
 function! s:ToTag(start, end)
   let lines = getline(a:start + 1, a:end - 1)
-  let [_0, punct, name, ft, color, opt; _] = matchlist(getline(a:start), '\v^(.)(\w+)%(\s+(\w+)%(\s|\_$)@=)?%(\s+(\w+)%(\s|\_$)@=)?%(\s+set:(.*))?')
-  return s:ToHtml(lines, name, ft, color, opt)
-endfunction
-
-function! s:ToHtml(lines, tag, ft, color, opt)
-  let save_colors_name = get(g:, "colors_name", "")
-  if a:color != ""
-    execute "colorscheme " . a:color
+  let [_0, punct, name, ft, attr_str; _] = matchlist(getline(a:start), '\v^(.)(\w+)%(\s+(\w+)>)?%(\s+(.+))?')
+  if attr_str == ""
+    let attr = {}
+  else
+    let attr = eval(attr_str)
   endif
-
-  new         " open tmp buffer
-  call setline(1, a:lines)
-  let &ft = a:ft
-
-  if a:opt =~ '\S'
-    execute "setl " . a:opt
+  let attr["filetype"] = ft
+  let attr["tag"] = get(attr, "tag", "pre")
+  let attr["class"] = get(attr, "class", ft)
+  let attr["point"] = get(attr, "point", [])
+  " BOGUS: protect global option
+  if has_key(attr, "option")
+    let save = {}
+    let save["&listchars"] = &listchars
   endif
-
-  " let lines = s:tohtml_2html(1, line('$'))
-  let lines = s:tohtml_internal(1, line('$'))
-
-  bwipeout!   " close tmp buffer
-
-  if a:color != "" && save_colors_name != ""
-    execute "colorscheme " . save_colors_name
+  let lines = s:ToHtml(lines, attr)
+  if has_key(attr, "option")
+    for [name, value] in items(save)
+      if eval(name) != value
+        execute printf("let %s = value", name)
+      endif
+    endfor
   endif
-
-  let class = (a:ft == "") ? "" : printf(' class="%s"', a:ft)
-  let style = (a:color == "") ? "" :  printf(' style="color: %s; background-color: %s;"',fg, bg)
-  let lines[0] = printf('<%s%s%s>', a:tag, class, style) . lines[0]
-  let lines[-1] = lines[-1] . printf('</%s>', a:tag)
   return lines
 endfunction
 
-function! s:tohtml_2html(start, end)
-  if exists("g:html_use_css")
-    let html_use_css_save = g:html_use_css
-    unlet g:html_use_css
+function! s:ToHtml(lines, attr)
+  let save_colors_name = get(g:, "colors_name", "")
+  if has_key(a:attr, "colorscheme")
+    execute "colorscheme " . a:attr["colorscheme"]
   endif
-  if exists("g:html_no_pre")
-    let html_no_pre_save = g:html_no_pre
-    unlet g:html_no_pre
+
+  let style = s:syn_to_style(hlID("Normal"))
+
+  new         " open tmp buffer
+  call setline(1, a:lines)
+  let &ft = a:attr["filetype"]
+
+  if has_key(a:attr, "option")
+    execute "setl " . a:attr["option"]
   endif
-  execute printf("%d,%dTOhtml", a:start, a:end)
-  if exists("html_use_css_save")
-    let g:html_use_css = html_use_css_save
+
+  if has_key(a:attr, "macro")
+    call a:attr.macro()
   endif
-  if exists("html_no_pre_save")
-    let g:html_no_pre = html_no_pre_save
+
+  let lines = s:tohtml_internal(1, line('$'), a:attr)
+
+  bwipeout!   " close tmp buffer
+
+  if has_key(a:attr, "colorscheme") && save_colors_name != ""
+    execute "colorscheme " . save_colors_name
   endif
-  let [_0, bg, fg; _] = matchlist(getline(search('<body')), 'bgcolor="\([^"]*\)" text="\([^"]*\)"')
-  silent 1,/<body/delete _
-  silent /<\/body>/,$delete _
-  silent %s@<font color="\([^"]*\)">@<span style="color: \1">@ge
-  silent %s@</font>@</span>@ge
-  silent %s@<br\s*/\?>@@ge
-  silent %s@&nbsp;@ @ge
-  let lines = getline(1, '$')
-  bwipeout!   " close TOhtml buffer
+
+  let class = (get(a:attr, "class", "") == "") ? "" : printf(' class="%s"', a:attr["class"])
+  let style = (!has_key(a:attr, "colorscheme") || style == "") ? "" :  printf(' style="%s"', style)
+  let lines[0] = printf('<%s%s%s>', get(a:attr, "tag"), class, style) . lines[0]
+  let lines[-1] = lines[-1] . printf('</%s>', get(a:attr, "tag"))
   return lines
 endfunction
 
 let s:whatterm = "gui"
 
 " reinventing the wheel
-function! s:tohtml_internal(start, end)
+function! s:tohtml_internal(start, end, attr)
   let lines = []
   for lnum in range(a:start, a:end)
     let line = ""
-    for [str, style] in s:getsynline(lnum)
+    for [str, style] in s:getsynline(lnum, a:attr)
       let str = s:escape_html(str)
       if style == ""
         let line .= str
@@ -111,7 +128,7 @@ function! s:tohtml_internal(start, end)
   return lines
 endfunction
 
-function! s:getsynline(lnum)
+function! s:getsynline(lnum, attr)
   let lst = []
   let vcol = 1
   let col = 1
@@ -119,18 +136,24 @@ function! s:getsynline(lnum)
     if c == "\t" && &list
       if &listchars =~ 'tab:'
         let _ = matchlist(&listchars, 'tab:\(.\)\(.\)')
-        let c = _[1] . repeat(_[2], s:tabwidth(vcol) - 1)
+        let str = _[1] . repeat(_[2], s:tabwidth(vcol) - 1)
       else
-        let c = "^I"
+        let str = "^I"
       endif
-      let style = s:syn_to_style(hlID("SpecialKey"))
-      let vcol += len(c)
+      for c in split(str, '\zs')
+        let style = s:syn_to_style(hlID("SpecialKey"))
+        let style = s:point_merge(a:lnum, vcol, style, a:attr["point"])
+        call add(lst, [c, style])
+        let vcol += 1
+      endfor
+      let col += 1
     else
       let style = s:syn_to_style(synIDtrans(synID(a:lnum, col, 1)))
-      let vcol += s:wcwidth(c)
+      let style = s:point_merge(a:lnum, vcol, style, a:attr["point"])
+      call add(lst, [c, style])
+      let vcol += (c == "\t") ? s:tabwidth(vcol) : s:wcwidth(c)
+      let col += len(c)
     endif
-    let col += len(c)
-    call add(lst, [c, style])
   endfor
   if &list && &listchars =~ 'trail:'
     let i = len(lst) - 1
@@ -149,6 +172,16 @@ function! s:getsynline(lnum)
     let c = matchstr(&listchars, 'eol:\zs.')
     call add(lst, [c, style])
   endif
+  for p in a:attr["point"]
+    if a:lnum == p[0] && vcol <= p[1]
+      if !(vcol == p[0] && &list && &listchars =~ 'eol:')
+        for i in range(p[1] - vcol + 1)
+          call add(lst, [" ", ""])
+        endfor
+      endif
+      let lst[-1][1] = s:point_merge_style(lst[-1][1], p[2], p[3])
+    endif
+  endfor
   if &number
     let w = max([&numberwidth, len(line('$'))])
     let str = printf('%' . w . 'd ', a:lnum)
@@ -197,6 +230,32 @@ function! s:syn_to_style(id)
   if synIDattr(a:id, "italic") | let a = a . "font-style: italic; " | endif
   if synIDattr(a:id, "underline") | let a = a . "text-decoration: underline; " | endif
   return a
+endfunction
+
+function! s:point_merge(lnum, vcol, style, points)
+  for p in a:points
+    if a:lnum == p[0] && a:vcol == p[1]
+      return s:point_merge_style(a:style, p[2], p[3])
+    endif
+  endfor
+  return a:style
+endfunction
+
+function! s:point_merge_style(style, width, hlname)
+  if a:width == 0
+    return s:syn_to_style(hlID(a:hlname))
+  elseif a:hlname == "Cursor" || a:hlname == "CursorIM"
+    let color = matchstr(s:syn_to_style(hlID(a:hlname)), 'background-color:\s*\zs\(\S\+\)\ze;')
+    if color != ""
+      return a:style . printf("border-left: %dpx solid %s;", a:width, color)
+    endif
+  else
+    let color = matchstr(s:syn_to_style(hlID(a:hlname)), 'color:\s*\zs\(\S\+\)\ze;')
+    if color != ""
+      return a:style . printf("border-left: %dpx solid %s;", a:width, color)
+    endif
+  endif
+  return a:style
 endfunction
 
 function! s:escape_html(str)
