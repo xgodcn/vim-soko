@@ -1,10 +1,9 @@
 
-The spre (SuperPre) is a syntax plugin for the text that contains
-several programing language.  The text can be converted to HTML using
-2html.vim.  This is useful for writing programming notes or creating web
-pages.
+The spre (SuperPre) is a syntax plugin for the text that contains several
+programing language.  The text can be converted to HTML.  This is useful for
+writing programming notes or creating web pages.
 
-Installing:
+Installation:
   :set runtimepath+=/path/to/spre
 
 Usage:
@@ -16,26 +15,62 @@ Usage:
 
   To convert non spre (normal) file to HTML
     :SPToHtml
-  This is same as TOHtml but <html> header is removed and <font> is
-  replaced with <style>.
+  (<html> header is not added)
 
 Spre Syntax:
 
   ## comment
 
-  #pre [filetype] [colorscheme] [set:modeline]
+  #pre [filetype] [attr]
     ...
+  #end
+
+  #macro
+    vim script
   #end
 
   !! comment
 
-  !pre [filetype] [colorscheme] [set:modeline]
+  !pre [filetype] [attr]
     ...
   !end
 
-  #div and #span are also can be used.
+  !macro
+    vim script
+  !end
 
-  modeline is used as "execute 'setl ' . modeline".
+  #macro block is executed when converting HTML.  This block is executed as
+  function and the block is replaced with the result of the function.  The
+  result should be string or list (argument for append()).  If no value is
+  returned, block is just deleted.  #macro block can also be used to create
+  attr dictionary for #pre block.
+
+  [attr] is VimL dictionary, used for HTML conversion.
+  Following key can be used:
+    'macro' : function()
+      Preprocessor for this block.
+      Used as "call attr.macro()" in the temporary block buffer.
+
+    'tag' : 'name'    (default 'pre')
+      Tag name for this block.
+
+    'colorscheme' : 'name'
+      Used as "execute 'colorscheme ' . name"
+
+    'option' : 'modeline'
+      Used as "execute 'setl ' . modeline".
+
+    'point' : [[lnum, vcol, width, hlname], ...]
+      Highlight the character (e.g. for Cursor) "width" is width of beam
+      cursor (vertical line).  0 for block cursor.
+      e.g. {'point':[[3,4,2,"Cursor"]]} (2px)
+           {'point':[[3,4,0,"Cursor"]]} (block)
+
+    'class' : 'css class' (default 'filetype')
+      Class attribute for this tag.
+
+    'filetype' : 'filetype' [readonly]
+      This attribute is set by spre.
 
 Example:
 
@@ -49,7 +84,7 @@ int main() {
 }
 #end
 
-#pre python desert
+#pre python {"colorscheme":"desert"}
 # specifying colorscheme will effect when converting HTML.
 def func():
   print "This is Python!"
@@ -71,12 +106,30 @@ macro.  Example to make HTML:
 <title>example</title>
 </head>
 <body>
-<h1>Example to make HTML</h1>
+#macro
+return "<h1>Example to make HTML</h1>"
+#end
+
 ## comment is removed from result.
+
 #pre c
 /* This section become <pre class="c">...</pre> */
 int func(int n) {
   return func(n);
+}
+#end
+
+#macro
+let s:attr = {}
+let s:attr.colorscheme = "desert"
+let s:attr.tag = "div"
+let s:attr.class = "c main"
+let s:attr.option = "number"
+#end
+#pre c s:attr
+/* This section become <div class="c main">...</div> */
+int main(int argc, char **argv) {
+  return 0;
 }
 #end
 </body>
@@ -84,4 +137,5 @@ int func(int n) {
 
 If you want to highlight HTML tag outside of spre macro:
   :set ft=html.spre
+Spre will work as additional syntax.
 
