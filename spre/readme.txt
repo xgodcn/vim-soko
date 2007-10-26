@@ -114,7 +114,7 @@ return "<h1>Example to make HTML</h1>"
 
 ## comment is removed from result.
 
-#pre c
+#pre c {"colorscheme":"evening"}
 /* This section will be <pre class="c">...</pre> */
 int func(int n) {
   return func(n);
@@ -136,7 +136,7 @@ int main(int argc, char **argv) {
 #end
 
 #macro
-return readfile("footer.txt")
+return readfile(expand("%:p:h") . "/footer.txt")
 #end
 </body>
 </html>
