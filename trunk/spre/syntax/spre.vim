@@ -19,27 +19,34 @@ function! s:Setup()
   " comment
   syntax match MacroComment /^[#!]\{2}.*$/
 
-  let ft_list = {}
-  let ft_list["vim"] = 1
+  let syn_list = {}
+  let syn_list["spre"] = 1
+  let syn_list["vim"] = 1
+  let loaded = {}
+
+  let pos = getpos('.')
+  silent g/\v^[#!]%(pre)\s+\w+>/let syn_list[matchstr(getline('.'), '\v^[#!]%(pre)\s+\zs[0-9A-Za-z_.]+>')] = 1
+  call setpos('.', pos)
 
   " pre
-  let pos = getpos('.')
-  silent g/\v^[#!]%(pre)\s+\w+>/let ft_list[matchstr(getline('.'), '\v^[#!]%(pre)\s+\zs\w+>')] = 1
-  call setpos('.', pos)
   syntax region MacroPre matchgroup=MacroTag start=/\v^\z([#!])%(pre)>.*$/ end=/^\z1end\>/ keepend extend fold
-  for ft in keys(ft_list)
-    if ft == "spre"
-      continue
-    endif
-    unlet! b:current_syntax
-    silent! execute printf('syntax include @G%s syntax/%s.vim', ft, ft)
-    execute printf('syntax region MacroPre matchgroup=MacroTag start=/\v^\z([#!])%(pre)\s+%s>.*$/ end=/^\z1end\>/ contains=@G%s keepend extend fold', ft, ft)
+  for syn in keys(syn_list)
+    let group = []
+    for ft in split(syn, '\.')
+      if ft == "spre"
+        call extend(group, ["MacroComment", "MacroPre", "MacroSpre"])
+      elseif !has_key(loaded, ft)
+        unlet! b:current_syntax
+        silent! execute printf('syntax include @G%s syntax/%s.vim', ft, ft)
+        call add(group, "@G" . ft)
+        let loaded[ft] = 1
+      endif
+    endfor
+    execute printf('syntax region MacroPre matchgroup=MacroTag start=/\v^\z([#!])%(pre)\s+%s>.*$/ end=/^\z1end\>/ contains=%s keepend extend fold', escape(syn, "."), join(group, ","))
   endfor
 
   " macro
   syntax region MacroPre matchgroup=MacroTag start=/\v^\z([#!])%(macro)>.*$/ end=/^\z1end\>/ contains=@Gvim keepend extend fold
-
-  syntax region MacroSpre matchgroup=MacroTag start=/\v^\z([#!])%(pre)\s+spre>.*$/ end=/^\z1end\>/ contains=MacroComment,MacroPre,MacroSpre keepend extend fold
 
   let b:current_syntax = "spre"
 

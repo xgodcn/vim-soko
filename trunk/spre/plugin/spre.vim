@@ -4,13 +4,45 @@ command! -bar -range=% -nargs=? SPToHtml call s:SPToHtml(<line1>, <line2>, <f-ar
 
 function! s:SPHtml(line1, line2)
   let lines = getline(a:line1, a:line2)
+  " use tmp spre buffer to parse syntax
   new
   call setline(1, lines)
   setl ft=spre foldmethod=syntax
-  " remove comment
-  folddoopen if getline('.') =~ '^[#!]\{2}' | delete _ | endif
-  " convert spre text
-  folddoclosed call s:DoConvert()
+  let mark = []
+  for lnum in range(1, line('$'))
+    if foldclosed(lnum) == -1 && getline(lnum) =~ '^[#!]\{2}'
+      call add(mark, [lnum - 1, lnum - 1])
+    elseif foldclosed(lnum) == lnum
+      call add(mark, [lnum - 1, foldclosedend(lnum) - 1])
+    endif
+  endfor
+  bwipeout!
+  " preprocess the spre macro in the current file context
+  let offset = 0
+  for [start, end] in mark
+    let start += offset
+    let end += offset
+    let offset -= len(lines)
+    let sub = remove(lines, start, end)
+    if sub[0] =~ '^.macro\>'
+      call remove(sub, 0)
+      call remove(sub, -1)
+      let r = s:ExecMacro(join(sub, "\n"))
+      if type(r) == type("")
+        call insert(lines, r, start)
+      elseif type(r) == type([])
+        call extend(lines, r, start)
+      endif
+      unlet r
+    elseif sub[0] =~ '^.pre\>'
+      call extend(lines, s:ToTag(sub), start)
+    endif
+    let offset += len(lines)
+  endfor
+  " create result buffer
+  new
+  set ft=html
+  call setline(1, lines)
 endfunction
 
 function! s:SPToHtml(line1, line2, ...)
@@ -18,23 +50,13 @@ function! s:SPToHtml(line1, line2, ...)
   let attr = {}
   let attr["filetype"] = &ft
   let attr["tag"] = "pre"
+  let attr["point"] = []
   if colorscheme != ""
     let attr["colorscheme"] = colorscheme
   endif
   let lines = s:ToHtml(getline(a:line1, a:line2), attr)
   new
   call setline(1, lines)
-endfunction
-
-function! s:DoConvert()
-  " foldclosed('.') may be different with line('.'), and line('.') is correct.
-  if getline('.') =~ '^.macro\>'
-    let expr = join(getline(line('.') + 1, foldclosedend('.') - 1), "\n")
-    call append(line('.') - 1, s:ExecMacro(expr))
-  else
-    call append(line('.') - 1, s:ToTag(line('.'), foldclosedend('.')))
-  endif
-  silent execute printf("%d,%ddelete _", line('.'), foldclosedend('.'))
 endfunction
 
 function! s:ExecMacro(expr)
@@ -44,9 +66,8 @@ function! s:ExecMacro(expr)
   return s:__tmpfunc()
 endfunction
 
-function! s:ToTag(start, end)
-  let lines = getline(a:start + 1, a:end - 1)
-  let [_0, punct, name, ft, attr_str; _] = matchlist(getline(a:start), '\v^(.)(\w+)%(\s+(\w+)>)?%(\s+(.+))?')
+function! s:ToTag(lines)
+  let [_0, punct, name, ft, attr_str; _] = matchlist(a:lines[0], '\v^(.)(\w+)%(\s+([0-9A-Za-z_.]+)>)?%(\s+(.+))?')
   if attr_str == ""
     let attr = {}
   else
@@ -54,15 +75,17 @@ function! s:ToTag(start, end)
   endif
   let attr["filetype"] = ft
   let attr["tag"] = get(attr, "tag", "pre")
-  let attr["class"] = get(attr, "class", ft)
+  let attr["class"] = get(attr, "class", substitute(ft, '\.', ' ', 'g'))
   let attr["point"] = get(attr, "point", [])
   " BOGUS: protect global option
-  if has_key(attr, "option")
+  if has_key(attr, "modeline")
     let save = {}
     let save["&listchars"] = &listchars
   endif
-  let lines = s:ToHtml(lines, attr)
-  if has_key(attr, "option")
+  call remove(a:lines, 0)
+  call remove(a:lines, -1)
+  let lines = s:ToHtml(a:lines, attr)
+  if has_key(attr, "modeline")
     for [name, value] in items(save)
       if eval(name) != value
         execute printf("let %s = value", name)
@@ -84,8 +107,8 @@ function! s:ToHtml(lines, attr)
   call setline(1, a:lines)
   let &ft = a:attr["filetype"]
 
-  if has_key(a:attr, "option")
-    execute "setl " . a:attr["option"]
+  if has_key(a:attr, "modeline")
+    execute "setl " . a:attr["modeline"]
   endif
 
   if has_key(a:attr, "macro")
@@ -244,16 +267,15 @@ endfunction
 function! s:point_merge_style(style, width, hlname)
   if a:width == 0
     return s:syn_to_style(hlID(a:hlname))
-  elseif a:hlname == "Cursor" || a:hlname == "CursorIM"
-    let color = matchstr(s:syn_to_style(hlID(a:hlname)), 'background-color:\s*\zs\(\S\+\)\ze;')
-    if color != ""
-      return a:style . printf("border-left: %dpx solid %s;", a:width, color)
-    endif
+  endif
+  let s = s:syn_to_style(hlID(a:hlname))
+  if a:hlname == "Cursor" || a:hlname == "CursorIM"
+    let color = matchstr(s, 'background-color:\s*\zs\(\S\+\)\ze;')
   else
-    let color = matchstr(s:syn_to_style(hlID(a:hlname)), 'color:\s*\zs\(\S\+\)\ze;')
-    if color != ""
-      return a:style . printf("border-left: %dpx solid %s;", a:width, color)
-    endif
+    let color = matchstr(s, 'color:\s*\zs\(\S\+\)\ze;')
+  endif
+  if color != ""
+    return a:style . printf("border-left: %dpx solid %s;", a:width, color)
   endif
   return a:style
 endfunction
