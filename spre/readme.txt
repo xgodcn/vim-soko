@@ -41,9 +41,9 @@ Spre Syntax:
 
   #macro block is executed when converting HTML.  This block is executed as
   function and the block is replaced with the result of the function.  The
-  result should be string or list (argument for append()).  If no value is
-  returned, block is just deleted.  #macro block can also be used to create
-  attr dictionary for #pre block.
+  result should be string or list.  If no value is returned, block is just
+  deleted.  #macro block can also be used to create attr dictionary for #pre
+  block.
 
   [attr] is VimL dictionary, used for HTML conversion.
   Following key can be used:
@@ -57,11 +57,12 @@ Spre Syntax:
     'colorscheme' : 'name'
       Used as "execute 'colorscheme ' . name"
 
-    'option' : 'modeline'
-      Used as "execute 'setl ' . modeline".
+    'modeline' : 'options'
+      Used as "execute 'setl ' . options".
+      e.g. {'modeline':'list number'}
 
     'point' : [[lnum, vcol, width, hlname], ...]
-      Highlight the character (e.g. for Cursor) "width" is width of beam
+      Highlight the character (e.g. for Cursor).  "width" is width of beam
       cursor (vertical line).  0 for block cursor.
       e.g. {'point':[[3,4,2,"Cursor"]]} (2px)
            {'point':[[3,4,0,"Cursor"]]} (block)
@@ -107,13 +108,14 @@ macro.  Example to make HTML:
 </head>
 <body>
 #macro
+" You can use Vim script as embedded macro.
 return "<h1>Example to make HTML</h1>"
 #end
 
 ## comment is removed from result.
 
 #pre c
-/* This section become <pre class="c">...</pre> */
+/* This section will be <pre class="c">...</pre> */
 int func(int n) {
   return func(n);
 }
@@ -124,13 +126,17 @@ let s:attr = {}
 let s:attr.colorscheme = "desert"
 let s:attr.tag = "div"
 let s:attr.class = "c main"
-let s:attr.option = "number"
+let s:attr.modeline = "list number"
 #end
 #pre c s:attr
-/* This section become <div class="c main">...</div> */
+/* This section will be <div class="c main">...</div> */
 int main(int argc, char **argv) {
   return 0;
 }
+#end
+
+#macro
+return readfile("footer.txt")
 #end
 </body>
 </html>
