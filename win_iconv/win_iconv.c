@@ -36,6 +36,11 @@
 
 #define MB_CHAR_MAX 16
 
+#define UNICODE_MODE_BOM_DONE 1
+#define UNICODE_MODE_SWAPPED 2
+
+#define UNICODE_FLAG_USE_BOM_ENDIAN 1
+
 #define return_error(code)  \
     do {                    \
         errno = code;       \
@@ -101,6 +106,7 @@ struct compat_t {
 
 struct csconv_t {
     int codepage;
+    int flags;
     f_mbtowc mbtowc;
     f_wctomb wctomb;
     f_mblen mblen;
@@ -131,6 +137,7 @@ static int name_to_codepage(const char *name);
 static uint utf16_to_ucs4(const ushort *wbuf);
 static void ucs4_to_utf16(uint wc, ushort *wbuf, int *wbufsize);
 static int is_unicode(int codepage);
+static void check_utf_bom(rec_iconv_t *cd, ushort *wbuf, int *wbufsize);
 static char *strrstr(const char *str, const char *token);
 
 #if defined(USE_LIBICONV_DLL)
@@ -184,11 +191,22 @@ static struct {
     {12001, "UTF32BE"},
     {12001, "UTF-32BE"},
 
-    /* Default is big endian.  Vim compatible. */
+#ifndef GLIB_COMPILATION
+    /*
+     * Default is big endian.
+     * See rfc2781 4.3 Interpreting text labelled as UTF-16.
+     */
     {1201, "UTF16"},
     {1201, "UTF-16"},
     {12001, "UTF32"},
     {12001, "UTF-32"},
+#else
+    /* Default is little endian, because the platform is */
+    {1200, "UTF16"},
+    {1200, "UTF-16"},
+    {12000, "UTF32"},
+    {12000, "UTF-32"},
+#endif
 
     /* copy from libiconv `iconv -l` */
     /* !IsValidCodePage(367) */
@@ -302,6 +320,8 @@ static struct {
     {50221, "CP50221"},
     {50221, "ISO-2022-JP"},
     {50221, "ISO-2022-JP-MS"},
+    {50221, "ISO2022-JP"},
+    {50221, "ISO2022-JP-MS"},
     {50221, "MS50221"},
     {50221, "WINDOWS-50221"},
 
@@ -495,22 +515,35 @@ static struct {
     /* 21027 		(deprecated) */
     {21866, "koi8-u"}, /* Ukrainian (KOI8-U); Cyrillic (KOI8-U) */
     {28591, "iso-8859-1"}, /* ISO 8859-1 Latin 1; Western European (ISO) */
+    {28591, "iso8859-1"}, /* ISO 8859-1 Latin 1; Western European (ISO) */
     {28592, "iso-8859-2"}, /* ISO 8859-2 Central European; Central European (ISO) */
+    {28592, "iso8859-2"}, /* ISO 8859-2 Central European; Central European (ISO) */
     {28593, "iso-8859-3"}, /* ISO 8859-3 Latin 3 */
+    {28593, "iso8859-3"}, /* ISO 8859-3 Latin 3 */
     {28594, "iso-8859-4"}, /* ISO 8859-4 Baltic */
+    {28594, "iso8859-4"}, /* ISO 8859-4 Baltic */
     {28595, "iso-8859-5"}, /* ISO 8859-5 Cyrillic */
+    {28595, "iso8859-5"}, /* ISO 8859-5 Cyrillic */
     {28596, "iso-8859-6"}, /* ISO 8859-6 Arabic */
+    {28596, "iso8859-6"}, /* ISO 8859-6 Arabic */
     {28597, "iso-8859-7"}, /* ISO 8859-7 Greek */
+    {28597, "iso8859-7"}, /* ISO 8859-7 Greek */
     {28598, "iso-8859-8"}, /* ISO 8859-8 Hebrew; Hebrew (ISO-Visual) */
+    {28598, "iso8859-8"}, /* ISO 8859-8 Hebrew; Hebrew (ISO-Visual) */
     {28599, "iso-8859-9"}, /* ISO 8859-9 Turkish */
+    {28599, "iso8859-9"}, /* ISO 8859-9 Turkish */
     {28603, "iso-8859-13"}, /* ISO 8859-13 Estonian */
+    {28603, "iso8859-13"}, /* ISO 8859-13 Estonian */
     {28605, "iso-8859-15"}, /* ISO 8859-15 Latin 9 */
+    {28605, "iso8859-15"}, /* ISO 8859-15 Latin 9 */
     {29001, "x-Europa"}, /* Europa 3 */
     {38598, "iso-8859-8-i"}, /* ISO 8859-8 Hebrew; Hebrew (ISO-Logical) */
+    {38598, "iso8859-8-i"}, /* ISO 8859-8 Hebrew; Hebrew (ISO-Logical) */
     {50220, "iso-2022-jp"}, /* ISO 2022 Japanese with no halfwidth Katakana; Japanese (JIS) */
     {50221, "csISO2022JP"}, /* ISO 2022 Japanese with halfwidth Katakana; Japanese (JIS-Allow 1 byte Kana) */
     {50222, "iso-2022-jp"}, /* ISO 2022 Japanese JIS X 0201-1989; Japanese (JIS-Allow 1 byte Kana - SO/SI) */
     {50225, "iso-2022-kr"}, /* ISO 2022 Korean */
+    {50225, "iso2022-kr"}, /* ISO 2022 Korean */
     {50227, "x-cp50227"}, /* ISO 2022 Simplified Chinese; Chinese Simplified (ISO 2022) */
     /* 50229 		ISO 2022 Traditional Chinese */
     /* 50930 		EBCDIC Japanese (Katakana) Extended */
@@ -754,6 +787,8 @@ win_iconv(iconv_t _cd, const char **inbuf, size_t *inbytesleft, char **outbuf, s
             *outbuf += outsize;
             *outbytesleft -= outsize;
         }
+        if (is_unicode(cd->from.codepage) && (cd->from.mode & UNICODE_MODE_SWAPPED))
+            cd->from.codepage ^= 1;
         cd->from.mode = 0;
         cd->to.mode = 0;
         return 0;
@@ -768,25 +803,16 @@ win_iconv(iconv_t _cd, const char **inbuf, size_t *inbytesleft, char **outbuf, s
         if (insize == -1)
             return (size_t)(-1);
 
+        if (is_unicode(cd->from.codepage) && !(cd->from.mode & UNICODE_MODE_BOM_DONE))
+        {
+            check_utf_bom(cd, wbuf, &wsize);
+            cd->from.mode |= UNICODE_MODE_BOM_DONE;
+        }
+
         if (wsize == 0)
         {
             *inbuf += insize;
             *inbytesleft -= insize;
-            continue;
-        }
-
-        /*
-         * Remove BOM.  Use mode as flag.
-         * TODO: To do this even if "to" is unicode?
-         */
-        if (wbuf[0] == 0xFEFF &&
-                is_unicode(cd->from.codepage) &&
-                cd->from.mode == 0 &&
-                !is_unicode(cd->to.codepage))
-        {
-            *inbuf += insize;
-            *inbytesleft -= insize;
-            cd->from.mode = 1;
             continue;
         }
 
@@ -854,6 +880,7 @@ make_csconv(const char *_name)
     }
 
     cv.mode = 0;
+    cv.flags = 0;
     cv.mblen = NULL;
     cv.flush = NULL;
     cv.compat = NULL;
@@ -862,11 +889,15 @@ make_csconv(const char *_name)
     {
         cv.mbtowc = utf16_mbtowc;
         cv.wctomb = utf16_wctomb;
+        if (_stricmp(name, "UTF-16") == 0 || _stricmp(name, "UTF16") == 0)
+            cv.flags |= UNICODE_FLAG_USE_BOM_ENDIAN;
     }
     else if (cv.codepage == 12000 || cv.codepage == 12001)
     {
         cv.mbtowc = utf32_mbtowc;
         cv.wctomb = utf32_wctomb;
+        if (_stricmp(name, "UTF-32") == 0 || _stricmp(name, "UTF32") == 0)
+            cv.flags |= UNICODE_FLAG_USE_BOM_ENDIAN;
     }
     else if (cv.codepage == 65001)
     {
@@ -968,6 +999,27 @@ is_unicode(int codepage)
     return (codepage == 1200 || codepage == 1201 ||
             codepage == 12000 || codepage == 12001 ||
             codepage == 65000 || codepage == 65001);
+}
+
+static void
+check_utf_bom(rec_iconv_t *cd, ushort *wbuf, int *wbufsize)
+{
+    /* If we have a BOM, trust it, despite what the caller said */
+    if (wbuf[0] == 0xFFFE && (cd->from.flags & UNICODE_FLAG_USE_BOM_ENDIAN))
+    {
+        /* swap endian: 1200 <-> 1201 or 12000 <-> 12001 */
+        cd->from.codepage ^= 1;
+        cd->from.mode |= UNICODE_MODE_SWAPPED;
+        wbuf[0] = 0xFEFF;
+    }
+
+    /*
+     * Remove BOM.
+     * Don't do this if "to" is Unicode,
+     * except if "to" is UTF-8.
+     */
+    if (wbuf[0] == 0xFEFF && (!is_unicode(cd->to.codepage) || cd->to.codepage == 65001))
+        *wbufsize = 0;
 }
 
 static char *
