@@ -168,10 +168,13 @@ main(int argc, char **argv)
             && check_enc("utf-16", 1201) && check_enc("utf-16le", 1200)
             && check_enc("utf-32", 12001) && check_enc("utf-32le", 12000))
     {
+        success("utf-16", "\xFE\xFF\x01\x02", "utf-16be", "\xFE\xFF\x01\x02");
+        success("utf-16", "\xFF\xFE\x02\x01", "utf-16be", "\xFE\xFF\x01\x02");
+        success("utf-16", "\xFE\xFF\x00\x01", "utf-8", "\x01");
         success("utf-16be", "\x01\x02", "utf-16le", "\x02\x01");
         success("utf-16le", "\x02\x01", "utf-16be", "\x01\x02");
-        success("utf-16be", "\xFF\xFE", "utf-16le", "\xFE\xFF");
-        success("utf-16le", "\xFE\xFF", "utf-16be", "\xFF\xFE");
+        success("utf-16be", "\xFE\xFF", "utf-16le", "\xFF\xFE");
+        success("utf-16le", "\xFF\xFE", "utf-16be", "\xFE\xFF");
         success("utf-32be", "\x00\x00\x03\x04", "utf-32le", "\x04\x03\x00\x00");
         success("utf-32le", "\x04\x03\x00\x00", "utf-32be", "\x00\x00\x03\x04");
         success("utf-32be", "\x00\x00\xFF\xFF", "utf-16be", "\xFF\xFF");
