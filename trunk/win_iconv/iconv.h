@@ -1,3 +1,4 @@
+#include <stddef.h>
 typedef void* iconv_t;
 iconv_t iconv_open(const char *tocode, const char *fromcode);
 int iconv_close(iconv_t cd);
