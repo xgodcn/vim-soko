@@ -1,0 +1,48 @@
+
+This allows you to input text with the scim as keymap.
+
+Maintainer: Yukihiro Nakadaira <yukihiro.nakadaira@gmail.com>
+License: public domain
+
+About scim:
+  http://www.scim-im.org/
+
+
+Usage:
+  $ make
+  $ vim -c "set runtimepath+=/path/to/scim-vim/" -c "set keymap=scim"
+
+  Note:
+  FreeBSD:
+    $ g++ -shared -fPIC -o scim-vim.so -I/usr/local/include/scim-1.0 \
+        -D__STDC_ISO_10646__ scim-vim.cpp -L/usr/local/lib -lscim-1.0
+
+  Fedora Core 5: You need to install scim-devel pkg and use libstdc++.so.7
+    $ g++-libstdc++-so_7 -shared -fPIC -o scim-vim.so \
+        `pkg-config --cflags --libs scim` scim-vim.cpp
+
+  To show Input Method status while inputting
+  :set statusline=%k
+
+  To show available Input Method
+  :call scim#info()
+
+  To select Input Method (buffer local)
+  :call scim#select()
+
+
+Options:
+
+let g:scim_lang = ""
+let b:scim_lang = ""
+  Set your language. (e.g. "ja_JP")
+  b:scim_lang is always used if defined.
+
+let g:scim_method = ""
+let b:scim_method = ""
+  Set your Input Method name. (e.g. "Anthy")
+  b:scim_method is always used if defined.
+
+
+BUG:
+

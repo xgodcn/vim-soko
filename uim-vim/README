@@ -1,0 +1,40 @@
+
+This allows you to input text with the uim as keymap.
+
+Maintainer: Yukihiro Nakadaira <yukihiro.nakadaira@gmail.com>
+License: public domain
+
+About uim:
+  http://uim.freedesktop.org/wiki/FrontPage
+  http://anthy.sourceforge.jp/cgi-bin/hikija/hiki.cgi
+
+
+Usage:
+  $ make
+  $ vim -c "set runtimepath+=/path/to/uim-vim/" -c "set keymap=uim"
+
+  To show Input Method status while inputting
+  :set statusline=%k
+
+  To show available Input Method
+  :call uim#info()
+
+  To select Input Method (buffer local)
+  :call uim#select()
+
+
+Options:
+
+let g:uim_lang = ""
+let b:uim_lang = ""
+  Set your language. (e.g. "ja")
+  b:uim_lang is always used if defined.
+
+let g:uim_method = ""
+let b:uim_method = ""
+  Set your Input Method name. (e.g. "anthy")
+  b:uim_method is always used if defined.
+
+
+BUG:
+

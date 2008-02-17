@@ -1,0 +1,15 @@
+
+uim コントロール補助プラグイン
+
+Vim の、IM を on/off する機能を補助するプラグインです。Unix 上では、Vim
+は IM をコントロールできませんが、このプラグインを使えばできるようになり
+ます。uim を使っている場合のみ機能します。GUI でも CUI (xterm や uim-fep
+など) でも使えます。CUI ではタイムラグがあるので、挿入モードから抜けた直
+後のキー入力がおかしくなるかもしれません。その場合は、:set ttimeoutlen=0
+と設定してみてください。
+
+使い方:
+
+  $ make
+  $ vim --cmd "set runtimepath+=/path/to/uim-ctl/"
+

@@ -1,0 +1,144 @@
+
+This allows you to input text with the iiimf as keymap.
+
+Maintainer: Yukihiro Nakadaira <yukihiro.nakadaira@gmail.com>
+License: public domain
+
+About iiimf:
+  http://www.openi18n.org/subgroups/im/IIIMF/
+
+
+Usage:
+  $ make
+  $ vim -c "set runtimepath+=/path/to/iiimf-vim/" -c "set keymap=iiimf"
+
+  To show Input Method status while inputting
+  :set statusline=%k
+
+  To show available Input Method
+  :call iiimf#info()
+
+  To select Input Method (buffer local)
+  :call iiimf#select()
+
+
+Options:
+
+let g:iiimf_lang = ""
+let b:iiimf_lang = ""
+  Set your language. (e.g. "ja")
+  b:iiimf_lang is always used if defined.
+
+let g:iiimf_method = ""
+let b:iiimf_method = ""
+  Set your Input Method name. (e.g. "CannaLE")
+  b:iiimf_method is always used if defined.
+
+
+BUG:
+
+Can't be used with iiim gtk_im_module.  State of iiimf-vim will be
+changed by iiim gtk module.
+
+iiimcf_create_handle() get timeout sometimes.  Should I retry to do it?
+
+Can't get number of all candidate.
+
+
+For FreeBSD user:
+  If you want to use CannaLE you should use following patch and
+  re-install ports/japanese/iiimf-le-canna.
+
+--- /usr/ports/japanese/iiimf-le-canna/work/iiimf-12.2/leif/canna/CannaLE.c.orig	Thu Feb  8 20:46:33 2007
++++ /usr/ports/japanese/iiimf-le-canna/work/iiimf-12.2/leif/canna/CannaLE.c	Thu Feb  8 20:46:34 2007
+@@ -587,6 +587,20 @@
+ 	p = (UTFCHAR *)pout;
+     }
+     *p = 0;
++    p[1] = 0;
++    {
++        /*
++         * change utf-16 byte-order because in little endian system
++         * (char*)short_ptr changes its byte-order
++         */
++        char *pp = (char *)ustr;
++        char tmp;
++        for ( ; pp[0] || pp[1]; pp += 2) {
++            tmp = pp[0];
++            pp[0] = pp[1];
++            pp[1] = tmp;
++        }
++    }
+     uidx = p - ustr;
+     idices[nseg] = uidx;
+     pit = create_IMText(s, uidx);
+
+
+
+  Also ports/textproc/iiimf-gtk should be fixed.
+
+--- /usr/ports/textproc/iiimf-gtk/files/patch-iiimgcf_gtkimcontextiiim.c.orig	Thu Feb  8 21:06:25 2007
++++ /usr/ports/textproc/iiimf-gtk/files/patch-iiimgcf_gtkimcontextiiim.c	Thu Feb  8 21:06:33 2007
+@@ -82,62 +82,6 @@
+    gtk_frame_set_shadow_type (GTK_FRAME (w->frame), GTK_SHADOW_ETCHED_OUT);
+  
+    w->tree = gtk_tree_view_new ();
+-@@ -1539,14 +1544,52 @@
+- }
+- 
+- static gchar *
+-+iconv_utf16_to_utf8(const gunichar2 *utf16, int length)
+-+{
+-+  if (!utf16 || 0 >= length) return g_strdup("");
+-+
+-+  if ((iconv_t)-1 == ic_u16_to_u8) {
+-+    ic_u16_to_u8 = iconv_open("UTF-8", "UTF-16");
+-+
+-+    if ((iconv_t)-1 == ic_u16_to_u8) {
+-+      fprintf(stderr, "iiimgcf: Unable to open UTF-16 -> UTF-8 converter.");
+-+      return NULL;
+-+    }
+-+  }
+-+
+-+  int inlen = length * sizeof(gunichar2);
+-+  int outlen = (length +1) * 4;
+-+  const char *inbuf = (char*)utf16;
+-+  char *outbuf = g_malloc0(outlen + 4);
+-+  gchar *utf8 = (gchar*)outbuf;
+-+
+-+  if (!outbuf) {
+-+    fprintf(stderr, "iiimgcf: Out of memory error.");
+-+    return NULL;
+-+  }
+-+
+-+  if ((size_t)-1 == iconv(ic_u16_to_u8, &inbuf, &inlen, &outbuf, &outlen)) {
+-+    fprintf(stderr, "iiimgcf: Unable to convert the string.");
+-+    g_free(utf8);
+-+    return NULL;
+-+  }
+-+
+-+  return utf8;
+-+}
+-+
+-+static gchar *
+- utf16_to_utf8 (IIIMCF_text text)
+- {
+-   IIIMF_status st;
+-+
+-+  int len = 0;
+-   IIIMP_card16 *u16str = NULL;
+-   st = iiimcf_get_text_utf16string (text, (const IIIMP_card16 **) &u16str);
+--  return (u16str != NULL ?
+--	  g_utf16_to_utf8 ((const gunichar2 *) u16str, -1, NULL, NULL, NULL) :
+--	  NULL);
+-+  st = iiimcf_get_text_length(text, &len);
+-+
+-+  if (st != IIIMF_STATUS_SUCCESS) return NULL;
+-+
+-+  return iconv_utf16_to_utf8((const gunichar2 *)u16str, len);
+- }
+- 
+- static void
+ @@ -2094,7 +2137,7 @@
+      goto Error;
+    utf8 = utf16_to_utf8 (text);
