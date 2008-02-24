@@ -1,0 +1,167 @@
+#labels Vim,XIM,Gtk
+#Vim and XIM
+
+= Introduction =
+
+Vim の日本語入力をなんとかしたい。
+
+
+= X11 Athena =
+
+テスト環境
+  * FreeBSD-7 uim-1.4.1 scim-1.4.7 vim-7.1.251
+  * OpenBSD-4.2 uim-1.4.1 vim-7.1.251
+
+||input style||  uim  ||  scim  || uim+vim ||scim+vim||
+||       Root||   o   ||   o    ||    o    ||   o    ||
+||  OnTheSpot||   o   ||   o    ||    -    ||   -    ||
+|| OffTheSpot||   x   ||   o    ||    x    ||   x    ||
+||OverTheSpot||   o   ||   o    ||    x    ||   o    ||
+
+  * Athena 版 Vim は OnTheSpot 非対応
+
+X での日本語入力は Athena 版が一番安定している気がする(少し直せば)。
+
+ポイントは
+  # XNInputStyle の指定
+  # フォーカス制御
+
+Root, OnTheSpot, OffTheSpot, OverTheSpot というのは目安であって、それによっ
+て XNInputStyle のフラグの組み合わが決まっているわけではないらしい。
+
+uim は OffTheSpot 非対応。
+
+scim には OnTheSpot と OverTheSpot しかない。Root と OffTheSpot は
+OverTheSpot の入力ウィンドウの位置が変わるだけ。
+
+Root のときはどちらも IM 制御が利く。XSetICFocus() と XUnsetICFocus() によっ
+て IM の on/off を切り替えてるらしい。
+
+Root 以外でも同様に制御できるが、なにか問題があるらしく、無効になっている。
+以下の行をなくせば制御が利くようになる。
+
+vim7/src/mbyte.c:im_set_active()
+{{{
+4429 #if !defined (FEAT_GUI_GTK)
+4430     else if (input_style & XIMPreeditPosition)
+4431         /* There is a problem in switching XIM off when preediting is used,
+4432          * and it is not clear how this can be solved.  For now, keep XIM on
+4433          * all the time, like it was done in Vim 5.8. */
+4434         active = TRUE;
+4435 #endif
+}}}
+
+focus の変更で IM を on/off できるのは XIM の仕様か実装依存か？
+
+最低限の設定 (see :h mbyte.txt)
+フォントと input style を設定する。
+
+~/.vimrc
+{{{
+set guifontset=-misc-fixed-medium-r-normal--14-*
+" または
+set guifont=-misc-fixed-medium-r-normal--15-140-75-75-c-90-iso10646-1
+" guifontset の方がきれいっぽい。
+" guifont もちゃんとせっていすればきれいに表示されるんだろうけど、この設定
+" (by mbyte.txt) だと文字が横長になる。
+}}}
+
+~/.Xresources
+{{{
+*.preeditType: Root
+! または
+!*.preeditType: OverTheSpot
+! Vim はデフォルトで OverTheSpot を使うみたいなので必要ないかも
+! リソースでもフォントの設定ができるらしいが、うまくいかなかった。
+!Vim.font: -misc-fixed-medium-r-normal--14-*
+!Vim*fontSet: -misc-fixed-medium-r-normal--14-*
+!Vim*fontList: -misc-fixed-medium-r-normal--14-*
+}}}
+
+vim が使用するスタイル
+
+vim7/src/mbyte.c:
+{{{
+5097         if (!strcmp(s, "OverTheSpot"))
+5098             this_input_style = (XIMPreeditPosition | XIMStatusArea);
+5099         else if (!strcmp(s, "OffTheSpot"))
+5100             this_input_style = (XIMPreeditArea | XIMStatusArea);
+5101         else if (!strcmp(s, "Root"))
+5102             this_input_style = (XIMPreeditNothing | XIMStatusNothing);
+}}}
+
+vim は XNQueryInputStyle で対応しているスタイルを問い合わせるが、IM が対応
+していないスタイルで XCreateIC() を呼び出すことがある。
+{{{
+# OffTheSpot の場合
+style = (XIMPreeditPosition | XIMStatusArea)
+if style in supported:
+  XCreateIC(style)
+elif (style ^ XIMStatusArea) in supported:
+  XCreateIC(style ^ XIMStatusArea)
+}}}
+その場合、uim-xim はハングする。
+{{{
+XCreateIC((style ^ XIMStatusArea) | XIMStatusNothing)
+}}}
+とする必要があるか？それ以前に、おそらく IM が対応していないスタイルを指定す
+べきではない。
+
+uim の対応 input style。XNInputStyle に uim が対応している値を設定すれば Vim
+でも OverTheSpot が使えた。
+
+uim-1.4.2/xim/ximim.cpp
+{{{
+ 54 // tables
+ 55 static input_style input_style_tab_with_over_the_spot[] = {
+ 56     {XIMPreeditNothing|XIMStatusNothing, IS_ROOT_WINDOW},
+ 57     //{XIMPreeditPosition|XIMStatusArea, IS_OVER_THE_SPOT},// emacs
+ 58     {XIMPreeditPosition|XIMStatusNothing, IS_OVER_THE_SPOT},
+ 59     //{XIMPreeditCallbacks|XIMStatusCallbacks, IS_ON_THE_SPOT},// OOo
+ 60     //{XIMPreeditArea|XIMStatusArea, IS_ROOT_WINDOW},
+ 61     {XIMPreeditCallbacks|XIMStatusNothing, IS_ON_THE_SPOT},
+ 62     {0, 0},
+ 63 };
+ 64 static input_style input_style_tab_without_over_the_spot[] = {
+ 65     {XIMPreeditNothing|XIMStatusNothing, IS_ROOT_WINDOW},
+ 66     //{XIMPreeditPosition|XIMStatusArea, IS_OVER_THE_SPOT},// emacs
+ 67     //{XIMPreeditPosition|XIMStatusNothing, IS_OVER_THE_SPOT},
+ 68     //{XIMPreeditCallbacks|XIMStatusCallbacks, IS_ON_THE_SPOT},// OOo
+ 69     //{XIMPreeditArea|XIMStatusArea, IS_ROOT_WINDOW},
+ 70     {XIMPreeditCallbacks|XIMStatusNothing, IS_ON_THE_SPOT},
+ 71     {0, 0},
+ 72 };
+}}}
+
+scim の対応 input style。
+
+scim-1.4.7/modules/FrontEnd/scim_x11_frontend.cpp
+{{{
+ 539     XIMStyle ims_styles_overspot [] = {
+ 540         XIMPreeditPosition  | XIMStatusNothing,
+ 541         XIMPreeditNothing   | XIMStatusNothing,
+ 542         XIMPreeditPosition  | XIMStatusCallbacks,
+ 543         XIMPreeditNothing   | XIMStatusCallbacks,
+ 544         0
+ 545     };
+ 546
+ 547     XIMStyle ims_styles_onspot [] = {
+ 548         XIMPreeditPosition  | XIMStatusNothing,
+ 549         XIMPreeditCallbacks | XIMStatusNothing,
+ 550         XIMPreeditNothing   | XIMStatusNothing,
+ 551         XIMPreeditPosition  | XIMStatusCallbacks,
+ 552         XIMPreeditCallbacks | XIMStatusCallbacks,
+ 553         XIMPreeditNothing   | XIMStatusCallbacks,
+ 554         0
+ 555     };
+}}}
+
+
+= GTK1 =
+
+...
+
+
+= GTK2 =
+
+...
