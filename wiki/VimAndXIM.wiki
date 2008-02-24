@@ -1,6 +1,4 @@
 #labels Vim,XIM,Gtk
-#Vim and XIM
-
 = Introduction =
 
 Vim の日本語入力をなんとかしたい。
@@ -71,7 +69,8 @@ set guifont=-misc-fixed-medium-r-normal--15-140-75-75-c-90-iso10646-1
 *.preeditType: Root
 ! または
 !*.preeditType: OverTheSpot
-! Vim はデフォルトで OverTheSpot を使うみたいなので必要ないかも
+! 設定がないときは OverTheSpot,OffTheSpot,Root の優先順で IM がサポートし
+! ているものが使われるので必要ないかも。
 ! リソースでもフォントの設定ができるらしいが、うまくいかなかった。
 !Vim.font: -misc-fixed-medium-r-normal--14-*
 !Vim*fontSet: -misc-fixed-medium-r-normal--14-*
