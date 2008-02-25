@@ -46,99 +46,1032 @@ Can't get number of all candidate.
 
 
 For FreeBSD user:
-  If you want to use CannaLE you should use following patch and
-  re-install ports/japanese/iiimf-le-canna.
+  There is UTF-16 endian problem.  iiimf expect UTF-16 is native endian.
+  To fix it, remove
+    /usr/ports/textproc/iiimf-gtk/files/patch-iiimgcf_gtkimcontextiiim.c
+  and add two patch
 
---- /usr/ports/japanese/iiimf-le-canna/work/iiimf-12.2/leif/canna/CannaLE.c.orig	Thu Feb  8 20:46:33 2007
-+++ /usr/ports/japanese/iiimf-le-canna/work/iiimf-12.2/leif/canna/CannaLE.c	Thu Feb  8 20:46:34 2007
-@@ -587,6 +587,20 @@
- 	p = (UTFCHAR *)pout;
-     }
-     *p = 0;
-+    p[1] = 0;
-+    {
-+        /*
-+         * change utf-16 byte-order because in little endian system
-+         * (char*)short_ptr changes its byte-order
-+         */
-+        char *pp = (char *)ustr;
-+        char tmp;
-+        for ( ; pp[0] || pp[1]; pp += 2) {
-+            tmp = pp[0];
-+            pp[0] = pp[1];
-+            pp[1] = tmp;
-+        }
-+    }
-     uidx = p - ustr;
-     idices[nseg] = uidx;
-     pit = create_IMText(s, uidx);
+/usr/ports/textproc/iiimf-x-lib/files/patch-iiimxcf_xiiimp.so_iiimp_Makefile.am
+------------------------------------------------------------
+--- iiimxcf/xiiimp.so/iiimp/Makefile.am.orig	2008-02-25 14:02:21.000000000 +0900
++++ iiimxcf/xiiimp.so/iiimp/Makefile.am	2008-02-25 14:04:03.000000000 +0900
+@@ -1,15 +1,16 @@
+ moduledir = $(IMDIR)
+ xiiimp_la_CFLAGS = $(X_CFLAGS) -I$(X_PRIVATEINC) \
+                    $(SHLIBCFLAGS) $(THREAD_CXX_CFLAGS) \
+-                   -I$(CSCONV_DIR)
++                   -I$(CSCONV_DIR) \
++                   -DUSE_CSCONV
+ xiiimp_la_LDFLAGS = -rpath $(moduledir) -version-info $(XIIIMP_SOX18N_VERSION) \
+                     -module -export-dynamic -no-undefined
+ # On GNU/Linux system, libtool does not take care of -no-undefined so that
+ # you have to add the following by yourself to check undefined symbols.
+ #                   -Wl,-z -Wl,defs
+ xiiimp_la_LIBADD = $(X_LIBS)  \
+-		   $(IM_LIBDIR)/iiimcf/libiiimcf.la \
+-		   $(IM_LIBDIR)/iiimp/libiiimp.la \
++		   -liiimcf \
++		   -liiimp \
+                    $(DLOPEN_LIBS) $(THREAD_LIBS)
+ xiiimp_la_SOURCES = \
+ 	KeyMap.c \
+------------------------------------------------------------
 
+/usr/ports/textproc/iiimf-csconv/files/patch-lib_CSConv_encoding.norm
+------------------------------------------------------------
+--- lib/CSConv/encoding.norm.orig	2008-02-25 14:27:14.000000000 +0900
++++ lib/CSConv/encoding.norm	2008-02-25 14:27:30.000000000 +0900
+@@ -13,250 +13,250 @@
+ 
+ -	ja          CompoundText CompoundText ja          ct_ja     ct_ja
+ -	ja          CompoundText MultiByte    ja          ct_ja     eucJP
+--	ja          CompoundText UTF-16       ja          ct_ja     UTF-8%UTF-16
++-	ja          CompoundText UTF-16       ja          ct_ja     UTF-8%UTF-16LE
+ -	ja          CompoundText WideChar     ja          ct_ja     eucJP
+ 
+ -	ja          MultiByte    CompoundText ja          eucJP     ct_ja
+ -	ja          MultiByte    MultiByte    ja          eucJP     eucJP
+--	ja          MultiByte    UTF-16       ja          eucJP     UTF-8%UTF-16
++-	ja          MultiByte    UTF-16       ja          eucJP     UTF-8%UTF-16LE
+ -	ja          MultiByte    WideChar     ja          eucJP     eucJP
+ 
+--	ja          UTF-16       CompoundText ja          UTF-16    ct_ja
+--	ja          UTF-16       MultiByte    ja          UTF-16    UTF-8%eucJP
+--	ja          UTF-16       UTF-16       ja          UTF-16    UTF-16
+--	ja          UTF-16       WideChar     ja          UTF-16    UTF-8%eucJP
++-	ja          UTF-16       CompoundText ja          UTF-16LE    ct_ja
++-	ja          UTF-16       MultiByte    ja          UTF-16LE    UTF-8%eucJP
++-	ja          UTF-16       UTF-16       ja          UTF-16LE    UTF-16LE
++-	ja          UTF-16       WideChar     ja          UTF-16LE    UTF-8%eucJP
+ 
+ -	ja          WideChar     CompoundText ja          eucJP     ct_ja
+ -	ja          WideChar     MultiByte    ja          eucJP     eucJP
+--	ja          WideChar     UTF-16       ja          eucJP     UTF-8%UTF-16
++-	ja          WideChar     UTF-16       ja          eucJP     UTF-8%UTF-16LE
+ -	ja          WideChar     WideChar     ja          eucJP     eucJP
+ 
+ -	ja_JP.EUC   CompoundText CompoundText ja          ct_ja     ct_ja
+ -	ja_JP.EUC   CompoundText MultiByte    ja          ct_ja     eucJP
+--	ja_JP.EUC   CompoundText UTF-16       ja          ct_ja     UTF-8%UTF-16
++-	ja_JP.EUC   CompoundText UTF-16       ja          ct_ja     UTF-8%UTF-16LE
+ -	ja_JP.EUC   CompoundText WideChar     ja          ct_ja     eucJP
+ 
+ -	ja_JP.EUC   MultiByte    CompoundText ja          eucJP     ct_ja
+ -	ja_JP.EUC   MultiByte    MultiByte    ja          eucJP     eucJP
+--	ja_JP.EUC   MultiByte    UTF-16       ja          eucJP     UTF-8%UTF-16
++-	ja_JP.EUC   MultiByte    UTF-16       ja          eucJP     UTF-8%UTF-16LE
+ -	ja_JP.EUC   MultiByte    WideChar     ja          eucJP     eucJP
+ 
+--	ja_JP.EUC   UTF-16       CompoundText ja          UTF-16    ct_ja
+--	ja_JP.EUC   UTF-16       MultiByte    ja          UTF-16    UTF-8%eucJP
+--	ja_JP.EUC   UTF-16       UTF-16       ja          UTF-16    UTF-16
+--	ja_JP.EUC   UTF-16       WideChar     ja          UTF-16    UTF-8%eucJP
++-	ja_JP.EUC   UTF-16       CompoundText ja          UTF-16LE    ct_ja
++-	ja_JP.EUC   UTF-16       MultiByte    ja          UTF-16LE    UTF-8%eucJP
++-	ja_JP.EUC   UTF-16       UTF-16       ja          UTF-16LE    UTF-16LE
++-	ja_JP.EUC   UTF-16       WideChar     ja          UTF-16LE    UTF-8%eucJP
+ 
+ -	ja_JP.EUC   WideChar     CompoundText ja          eucJP     ct_ja
+ -	ja_JP.EUC   WideChar     MultiByte    ja          eucJP     eucJP
+--	ja_JP.EUC   WideChar     UTF-16       ja          eucJP     UTF-8%UTF-16
++-	ja_JP.EUC   WideChar     UTF-16       ja          eucJP     UTF-8%UTF-16LE
+ -	ja_JP.EUC   WideChar     WideChar     ja          eucJP     eucJP
+ 
+ -	ja_JP.eucJP CompoundText CompoundText ja_JP.eucJP ct_ja     ct_ja
+ -	ja_JP.eucJP CompoundText MultiByte    ja_JP.eucJP ct_ja     eucJP
+--	ja_JP.eucJP CompoundText UTF-16       ja_JP.eucJP ct_ja     UTF-16
++-	ja_JP.eucJP CompoundText UTF-16       ja_JP.eucJP ct_ja     UTF-16LE
+ -	ja_JP.eucJP CompoundText WideChar     ja_JP.eucJP ct_ja     eucJP
+ 
+ -	ja_JP.eucJP MultiByte    CompoundText ja_JP.eucJP eucJP     ct_ja
+ -	ja_JP.eucJP MultiByte    MultiByte    ja_JP.eucJP eucJP     eucJP
+--	ja_JP.eucJP MultiByte    UTF-16       ja_JP.eucJP eucJP     UTF-16
++-	ja_JP.eucJP MultiByte    UTF-16       ja_JP.eucJP eucJP     UTF-16LE
+ -	ja_JP.eucJP MultiByte    WideChar     ja_JP.eucJP eucJP     eucJP
+ 
+--	ja_JP.eucJP UTF-16       CompoundText ja_JP.eucJP UTF-16    ct_ja
+--	ja_JP.eucJP UTF-16       MultiByte    ja_JP.eucJP UTF-16    eucJP
+--	ja_JP.eucJP UTF-16       UTF-16       ja_JP.eucJP UTF-16    UTF-16
+--	ja_JP.eucJP UTF-16       WideChar     ja_JP.eucJP UTF-16    eucJP
++-	ja_JP.eucJP UTF-16       CompoundText ja_JP.eucJP UTF-16LE    ct_ja
++-	ja_JP.eucJP UTF-16       MultiByte    ja_JP.eucJP UTF-16LE    eucJP
++-	ja_JP.eucJP UTF-16       UTF-16       ja_JP.eucJP UTF-16LE    UTF-16LE
++-	ja_JP.eucJP UTF-16       WideChar     ja_JP.eucJP UTF-16LE    eucJP
+ 
+ -	ja_JP.eucJP WideChar     CompoundText ja_JP.eucJP eucJP     ct_ja
+ -	ja_JP.eucJP WideChar     MultiByte    ja_JP.eucJP eucJP     eucJP
+--	ja_JP.eucJP WideChar     UTF-16       ja_JP.eucJP eucJP     UTF-16
++-	ja_JP.eucJP WideChar     UTF-16       ja_JP.eucJP eucJP     UTF-16LE
+ -	ja_JP.eucJP WideChar     WideChar     ja_JP.eucJP eucJP     eucJP
+ 
+ -	ja_JP.PCK   CompoundText CompoundText ja_JP.PCK   ct_ja     ct_ja
+ -	ja_JP.PCK   CompoundText MultiByte    ja_JP.PCK   ct_ja     eucJP%PCK
+--	ja_JP.PCK   CompoundText UTF-16       ja_JP.PCK   ct_ja     UTF-8%UTF-16
++-	ja_JP.PCK   CompoundText UTF-16       ja_JP.PCK   ct_ja     UTF-8%UTF-16LE
+ -	ja_JP.PCK   CompoundText WideChar     ja_JP.PCK   ct_ja     eucJP%PCK
+ 
+ -	ja_JP.PCK   MultiByte    CompoundText ja_JP.PCK   PCK       eucJP%ct_ja
+ -	ja_JP.PCK   MultiByte    MultiByte    ja_JP.PCK   PCK       PCK
+--	ja_JP.PCK   MultiByte    UTF-16       ja_JP.PCK   PCK       UTF-8%UTF-16
++-	ja_JP.PCK   MultiByte    UTF-16       ja_JP.PCK   PCK       UTF-8%UTF-16LE
+ -	ja_JP.PCK   MultiByte    WideChar     ja_JP.PCK   PCK       PCK
+ 
+--	ja_JP.PCK   UTF-16       CompoundText ja_JP.PCK   UTF-16    ct_ja
+--	ja_JP.PCK   UTF-16       MultiByte    ja_JP.PCK   UTF-16    UTF-8%PCK
+--	ja_JP.PCK   UTF-16       UTF-16       ja_JP.PCK   UTF-16    UTF-16
+--	ja_JP.PCK   UTF-16       WideChar     ja_JP.PCK   UTF-16    UTF-8%PCK
++-	ja_JP.PCK   UTF-16       CompoundText ja_JP.PCK   UTF-16LE    ct_ja
++-	ja_JP.PCK   UTF-16       MultiByte    ja_JP.PCK   UTF-16LE    UTF-8%PCK
++-	ja_JP.PCK   UTF-16       UTF-16       ja_JP.PCK   UTF-16LE    UTF-16LE
++-	ja_JP.PCK   UTF-16       WideChar     ja_JP.PCK   UTF-16LE    UTF-8%PCK
+ 
+ -	ja_JP.PCK   WideChar     CompoundText ja_JP.PCK   PCK       eucJP%ct_ja
+ -	ja_JP.PCK   WideChar     MultiByte    ja_JP.PCK   PCK       PCK
+--	ja_JP.PCK   WideChar     UTF-16       ja_JP.PCK   PCK       UTF-8%UTF-16
++-	ja_JP.PCK   WideChar     UTF-16       ja_JP.PCK   PCK       UTF-8%UTF-16LE
+ -	ja_JP.PCK   WideChar     WideChar     ja_JP.PCK   PCK       PCK
+ 
+ 
+ -	ja_JP.UTF-8 CompoundText CompoundText ja_JP.UTF-8 ct_ja     ct_ja
+ -	ja_JP.UTF-8 CompoundText MultiByte    ja_JP.UTF-8 ct_ja     UTF-8
+--	ja_JP.UTF-8 CompoundText UTF-16       ja_JP.UTF-8 ct_ja     UTF-16
++-	ja_JP.UTF-8 CompoundText UTF-16       ja_JP.UTF-8 ct_ja     UTF-16LE
+ -	ja_JP.UTF-8 CompoundText WideChar     ja_JP.UTF-8 ct_ja     UTF-8
+ 
+ -	ja_JP.UTF-8 MultiByte    CompoundText ja_JP.UTF-8 UTF-8     ct_ja
+ -	ja_JP.UTF-8 MultiByte    MultiByte    ja_JP.UTF-8 UTF-8     UTF-8
+--	ja_JP.UTF-8 MultiByte    UTF-16       ja_JP.UTF-8 UTF-8     UTF-16
++-	ja_JP.UTF-8 MultiByte    UTF-16       ja_JP.UTF-8 UTF-8     UTF-16LE
+ -	ja_JP.UTF-8 MultiByte    WideChar     ja_JP.UTF-8 UTF-8     UTF-8
+ 
+--	ja_JP.UTF-8 UTF-16       CompoundText ja_JP.UTF-8 UTF-16    ct_ja
+--	ja_JP.UTF-8 UTF-16       MultiByte    ja_JP.UTF-8 UTF-16    UTF-8
+--	ja_JP.UTF-8 UTF-16       UTF-16       ja_JP.UTF-8 UTF-16    UTF-16
+--	ja_JP.UTF-8 UTF-16       WideChar     ja_JP.UTF-8 UTF-16    UTF-8
++-	ja_JP.UTF-8 UTF-16       CompoundText ja_JP.UTF-8 UTF-16LE    ct_ja
++-	ja_JP.UTF-8 UTF-16       MultiByte    ja_JP.UTF-8 UTF-16LE    UTF-8
++-	ja_JP.UTF-8 UTF-16       UTF-16       ja_JP.UTF-8 UTF-16LE    UTF-16LE
++-	ja_JP.UTF-8 UTF-16       WideChar     ja_JP.UTF-8 UTF-16LE    UTF-8
+ 
+ -	ja_JP.UTF-8 WideChar     CompoundText ja_JP.UTF-8 UTF-8     ct_ja
+ -	ja_JP.UTF-8 WideChar     MultiByte    ja_JP.UTF-8 UTF-8     UTF-8
+--	ja_JP.UTF-8 WideChar     UTF-16       ja_JP.UTF-8 UTF-8     UTF-16
++-	ja_JP.UTF-8 WideChar     UTF-16       ja_JP.UTF-8 UTF-8     UTF-16LE
+ -	ja_JP.UTF-8 WideChar     WideChar     ja_JP.UTF-8 UTF-8     UTF-8
+ 
+ 
+ -	ko          CompoundText CompoundText ko          ct_ko     ct_ko
+ -	ko          CompoundText MultiByte    ko          ct_ko     eucKR
+--	ko          CompoundText UTF-16       ko          ct_ko     UTF-16
++-	ko          CompoundText UTF-16       ko          ct_ko     UTF-16LE
+ -	ko          CompoundText WideChar     ko          ct_ko     eucKR
+ 
+ -	ko          MultiByte    CompoundText ko          eucKR     ct_ko
+ -	ko          MultiByte    MultiByte    ko          eucKR     eucKR
+--	ko          MultiByte    UTF-16       ko          ko_KR-euc ko_KR-UTF-8|UTF-8%UTF-16
++-	ko          MultiByte    UTF-16       ko          ko_KR-euc ko_KR-UTF-8|UTF-8%UTF-16LE
+ -	ko          MultiByte    WideChar     ko          eucKR     eucKR
+ 
+--	ko          UTF-16       CompoundText ko          UTF-16    ct_ko
+--	ko          UTF-16       MultiByte    ko          UTF-16    UTF-8|ko_KR-UTF-8%ko_KR-euc
+--	ko          UTF-16       UTF-16       ko          UTF-16    UTF-16
+--	ko          UTF-16       WideChar     ko          UTF-16    UTF-8|ko_KR-UTF-8%ko_KR-euc
++-	ko          UTF-16       CompoundText ko          UTF-16LE    ct_ko
++-	ko          UTF-16       MultiByte    ko          UTF-16LE    UTF-8|ko_KR-UTF-8%ko_KR-euc
++-	ko          UTF-16       UTF-16       ko          UTF-16LE    UTF-16LE
++-	ko          UTF-16       WideChar     ko          UTF-16LE    UTF-8|ko_KR-UTF-8%ko_KR-euc
+ 
+ -	ko          WideChar     CompoundText ko          eucKR     ct_ko
+ -	ko          WideChar     MultiByte    ko          eucKR     eucKR
+--	ko          WideChar     UTF-16       ko          ko_KR-euc ko_KR-UTF-8|UTF-8%UTF-16
++-	ko          WideChar     UTF-16       ko          ko_KR-euc ko_KR-UTF-8|UTF-8%UTF-16LE
+ -	ko          WideChar     WideChar     ko          eucKR     eucKR
+ 
+ 
+ -	ko_KR.EUC   CompoundText CompoundText ko          ct_ko     ct_ko
+ -	ko_KR.EUC   CompoundText MultiByte    ko          ct_ko     eucKR
+--	ko_KR.EUC   CompoundText UTF-16       ko          ct_ko     UTF-16
++-	ko_KR.EUC   CompoundText UTF-16       ko          ct_ko     UTF-16LE
+ -	ko_KR.EUC   CompoundText WideChar     ko          ct_ko     eucKR
+ 
+ -	ko_KR.EUC   MultiByte    CompoundText ko          eucKR     ct_ko
+ -	ko_KR.EUC   MultiByte    MultiByte    ko          eucKR     eucKR
+--	ko_KR.EUC   MultiByte    UTF-16       ko          ko_KR-euc UTF-16
++-	ko_KR.EUC   MultiByte    UTF-16       ko          ko_KR-euc UTF-16LE
+ -	ko_KR.EUC   MultiByte    WideChar     ko          eucKR     eucKR
+ 
+--	ko_KR.EUC   UTF-16       CompoundText ko          UTF-16    ct_ko
+--	ko_KR.EUC   UTF-16       MultiByte    ko          UTF-16    ko_KR-euc
+--	ko_KR.EUC   UTF-16       UTF-16       ko          UTF-16    UTF-16
+--	ko_KR.EUC   UTF-16       WideChar     ko          UTF-16    ko_KR-euc
++-	ko_KR.EUC   UTF-16       CompoundText ko          UTF-16LE    ct_ko
++-	ko_KR.EUC   UTF-16       MultiByte    ko          UTF-16LE    ko_KR-euc
++-	ko_KR.EUC   UTF-16       UTF-16       ko          UTF-16LE    UTF-16LE
++-	ko_KR.EUC   UTF-16       WideChar     ko          UTF-16LE    ko_KR-euc
+ 
+ -	ko_KR.EUC   WideChar     CompoundText ko          eucKR     ct_ko
+ -	ko_KR.EUC   WideChar     MultiByte    ko          eucKR     eucKR
+--	ko_KR.EUC   WideChar     UTF-16       ko          ko_KR-euc UTF-16
++-	ko_KR.EUC   WideChar     UTF-16       ko          ko_KR-euc UTF-16LE
+ -	ko_KR.EUC   WideChar     WideChar     ko          eucKR     eucKR
+ 
+ 
+ -	ko.UTF-8    CompoundText CompoundText ko.UTF-8    ct_ko     ct_ko
+ -	ko.UTF-8    CompoundText MultiByte    ko.UTF-8    ct_ko     UTF-8
+--	ko.UTF-8    CompoundText UTF-16       ko.UTF-8    ct_ko     UTF-16
++-	ko.UTF-8    CompoundText UTF-16       ko.UTF-8    ct_ko     UTF-16LE
+ -	ko.UTF-8    CompoundText WideChar     ko.UTF-8    ct_ko     UTF-8
+ 
+ -	ko.UTF-8    MultiByte    CompoundText ko.UTF-8    UTF-8     ct_ko
+ -	ko.UTF-8    MultiByte    MultiByte    ko.UTF-8    UTF-8     UTF-8
+--	ko.UTF-8    MultiByte    UTF-16       ko.UTF-8    UTF-8     UTF-16
++-	ko.UTF-8    MultiByte    UTF-16       ko.UTF-8    UTF-8     UTF-16LE
+ -	ko.UTF-8    MultiByte    WideChar     ko.UTF-8    UTF-8     UTF-8
+ 
+--	ko.UTF-8    UTF-16       CompoundText ko.UTF-8    UTF-16    ct_ko
+--	ko.UTF-8    UTF-16       MultiByte    ko.UTF-8    UTF-16    UTF-8
+--	ko.UTF-8    UTF-16       UTF-16       ko.UTF-8    UTF-16    UTF-16
+--	ko.UTF-8    UTF-16       WideChar     ko.UTF-8    UTF-16    UTF-8
++-	ko.UTF-8    UTF-16       CompoundText ko.UTF-8    UTF-16LE    ct_ko
++-	ko.UTF-8    UTF-16       MultiByte    ko.UTF-8    UTF-16LE    UTF-8
++-	ko.UTF-8    UTF-16       UTF-16       ko.UTF-8    UTF-16LE    UTF-16LE
++-	ko.UTF-8    UTF-16       WideChar     ko.UTF-8    UTF-16LE    UTF-8
+ 
+ -	ko.UTF-8    WideChar     CompoundText ko.UTF-8    UTF-8     ct_ko
+ -	ko.UTF-8    WideChar     MultiByte    ko.UTF-8    UTF-8     UTF-8
+--	ko.UTF-8    WideChar     UTF-16       ko.UTF-8    UTF-8     UTF-16
++-	ko.UTF-8    WideChar     UTF-16       ko.UTF-8    UTF-8     UTF-16LE
+ -	ko.UTF-8    WideChar     WideChar     ko.UTF-8    UTF-8     UTF-8
+ 
+ 
+ -	ko_KR.UTF-8 CompoundText CompoundText ko_KR.UTF-8 ct_ko     ct_ko
+ -	ko_KR.UTF-8 CompoundText MultiByte    ko_KR.UTF-8 ct_ko     UTF-8
+--	ko_KR.UTF-8 CompoundText UTF-16       ko_KR.UTF-8 ct_ko     UTF-16
++-	ko_KR.UTF-8 CompoundText UTF-16       ko_KR.UTF-8 ct_ko     UTF-16LE
+ -	ko_KR.UTF-8 CompoundText WideChar     ko_KR.UTF-8 ct_ko     UTF-8
+ 
+ -	ko_KR.UTF-8 MultiByte    CompoundText ko_KR.UTF-8 UTF-8     ct_ko
+ -	ko_KR.UTF-8 MultiByte    MultiByte    ko_KR.UTF-8 UTF-8     UTF-8
+--	ko_KR.UTF-8 MultiByte    UTF-16       ko_KR.UTF-8 UTF-8     UTF-16
++-	ko_KR.UTF-8 MultiByte    UTF-16       ko_KR.UTF-8 UTF-8     UTF-16LE
+ -	ko_KR.UTF-8 MultiByte    WideChar     ko_KR.UTF-8 UTF-8     UTF-8
+ 
+--	ko_KR.UTF-8 UTF-16       CompoundText ko_KR.UTF-8 UTF-16    ct_ko
+--	ko_KR.UTF-8 UTF-16       MultiByte    ko_KR.UTF-8 UTF-16    UTF-8
+--	ko_KR.UTF-8 UTF-16       UTF-16       ko_KR.UTF-8 UTF-16    UTF-16
+--	ko_KR.UTF-8 UTF-16       WideChar     ko_KR.UTF-8 UTF-16    UTF-8
++-	ko_KR.UTF-8 UTF-16       CompoundText ko_KR.UTF-8 UTF-16LE    ct_ko
++-	ko_KR.UTF-8 UTF-16       MultiByte    ko_KR.UTF-8 UTF-16LE    UTF-8
++-	ko_KR.UTF-8 UTF-16       UTF-16       ko_KR.UTF-8 UTF-16LE    UTF-16LE
++-	ko_KR.UTF-8 UTF-16       WideChar     ko_KR.UTF-8 UTF-16LE    UTF-8
+ 
+ -	ko_KR.UTF-8 WideChar     CompoundText ko_KR.UTF-8 UTF-8     ct_ko
+ -	ko_KR.UTF-8 WideChar     MultiByte    ko_KR.UTF-8 UTF-8     UTF-8
+--	ko_KR.UTF-8 WideChar     UTF-16       ko_KR.UTF-8 UTF-8     UTF-16
++-	ko_KR.UTF-8 WideChar     UTF-16       ko_KR.UTF-8 UTF-8     UTF-16LE
+ -	ko_KR.UTF-8 WideChar     WideChar     ko_KR.UTF-8 UTF-8     UTF-8
+ 
+ 
+ -	zh          CompoundText CompoundText zh          ct_zh     ct_zh
+ -	zh          CompoundText MultiByte    zh          ct_zh     eucZH
+--	zh          CompoundText UTF-16       zh          ct_zh     UTF-16
++-	zh          CompoundText UTF-16       zh          ct_zh     UTF-16LE
+ -	zh          CompoundText WideChar     zh          ct_zh     eucZH
+ 
+ -	zh          MultiByte    CompoundText zh          eucZH     ct_zh
+ -	zh          MultiByte    MultiByte    zh          eucZH     gb2312
+--	zh          MultiByte    UTF-16       zh          gb2312    UTF-16
++-	zh          MultiByte    UTF-16       zh          gb2312    UTF-16LE
+ -	zh          MultiByte    WideChar     zh          eucZH	  eucZH
+ 
+--	zh          UTF-16       CompoundText zh          UTF-16    ct_zh
+--	zh          UTF-16       MultiByte    zh          UTF-16    gb2312
+--	zh          UTF-16       UTF-16       zh          UTF-16    UTF-16
+--	zh          UTF-16       WideChar     zh          UTF-16    gb2312
++-	zh          UTF-16       CompoundText zh          UTF-16LE    ct_zh
++-	zh          UTF-16       MultiByte    zh          UTF-16LE    gb2312
++-	zh          UTF-16       UTF-16       zh          UTF-16LE    UTF-16LE
++-	zh          UTF-16       WideChar     zh          UTF-16LE    gb2312
+ 
+ -	zh          WideChar     CompoundText zh          eucZH     ct_zh
+ -	zh          WideChar     MultiByte    zh          eucZH     eucZH
+--	zh          WideChar     UTF-16       zh          gb2312    UTF-16
++-	zh          WideChar     UTF-16       zh          gb2312    UTF-16LE
+ -	zh          WideChar     WideChar     zh          eucZH     eucZH
+ 
+ 
+ -	zh.GBK      CompoundText CompoundText zh.GBK      ct_zh.GBK ct_zh.GBK
+ -	zh.GBK      CompoundText MultiByte    zh.GBK      ct_zh.GBK GBK
+--	zh.GBK      CompoundText UTF-16       zh.GBK      ct_zh.GBK UTF-16
++-	zh.GBK      CompoundText UTF-16       zh.GBK      ct_zh.GBK UTF-16LE
+ -	zh.GBK      CompoundText WideChar     zh.GBK      ct_zh.GBK GBK
+ 
+ -	zh.GBK      MultiByte    CompoundText zh.GBK      GBK       ct_zh.GBK
+ -	zh.GBK      MultiByte    MultiByte    zh.GBK      GBK       GBK
+--	zh.GBK      MultiByte    UTF-16       zh.GBK      GBK       UTF-16
++-	zh.GBK      MultiByte    UTF-16       zh.GBK      GBK       UTF-16LE
+ -	zh.GBK      MultiByte    WideChar     zh.GBK      GBK       GBK
+ 
+--	zh.GBK      UTF-16       CompoundText zh.GBK      UTF-16    ct_zh.GBK
+--	zh.GBK      UTF-16       MultiByte    zh.GBK      UTF-16    GBK
+--	zh.GBK      UTF-16       UTF-16       zh.GBK      UTF-16    UTF-16
+--	zh.GBK      UTF-16       WideChar     zh.GBK      UTF-16    GBK
++-	zh.GBK      UTF-16       CompoundText zh.GBK      UTF-16LE    ct_zh.GBK
++-	zh.GBK      UTF-16       MultiByte    zh.GBK      UTF-16LE    GBK
++-	zh.GBK      UTF-16       UTF-16       zh.GBK      UTF-16LE    UTF-16LE
++-	zh.GBK      UTF-16       WideChar     zh.GBK      UTF-16LE    GBK
+ 
+ -	zh.GBK      WideChar     CompoundText zh.GBK      GBK       ct_zh.GBK
+ -	zh.GBK      WideChar     MultiByte    zh.GBK      GBK       GBK
+--	zh.GBK      WideChar     UTF-16       zh.GBK      GBK       UTF-16
++-	zh.GBK      WideChar     UTF-16       zh.GBK      GBK       UTF-16LE
+ -	zh.GBK      WideChar     WideChar     zh.GBK      GBK       GBK
+ 
+ 
+ -	zh_TW       CompoundText CompoundText -       ct_zh_TW     ct_zh_TW
+ -	zh_TW       CompoundText MultiByte    -       ct_zh_TW     eucTW
+--	zh_TW       CompoundText UTF-16       -       ct_zh_TW     UTF-16
++-	zh_TW       CompoundText UTF-16       -       ct_zh_TW     UTF-16LE
+ -	zh_TW       CompoundText WideChar     -       ct_zh_TW     eucTW
+ 
+ -	zh_TW       MultiByte    CompoundText -       eucTW        ct_zh_TW
+ -	zh_TW       MultiByte    MultiByte    -       zh_TW-euc    zh_TW-euc
+--	zh_TW       MultiByte    UTF-16       -       zh_TW-euc    UTF-16
++-	zh_TW       MultiByte    UTF-16       -       zh_TW-euc    UTF-16LE
+ -	zh_TW       MultiByte    WideChar     -       zh_TW-euc    zh_TW-euc
+ 
+--	zh_TW       UTF-16       CompoundText -       UTF-16       ct_zh_TW
+--	zh_TW       UTF-16       MultiByte    -       UTF-16       zh_TW-euc
+--	zh_TW       UTF-16       UTF-16       -       UTF-16       UTF-16
+--	zh_TW       UTF-16       WideChar     -       UTF-16       zh_TW-euc
++-	zh_TW       UTF-16       CompoundText -       UTF-16LE       ct_zh_TW
++-	zh_TW       UTF-16       MultiByte    -       UTF-16LE       zh_TW-euc
++-	zh_TW       UTF-16       UTF-16       -       UTF-16LE       UTF-16LE
++-	zh_TW       UTF-16       WideChar     -       UTF-16LE       zh_TW-euc
+ 
+ -	zh_TW       WideChar     CompoundText -       eucTW        ct_zh_TW
+ -	zh_TW       WideChar     MultiByte    -       eucTW        eucTW
+--	zh_TW       WideChar     UTF-16       -       zh_TW-euc    UTF-16
++-	zh_TW       WideChar     UTF-16       -       zh_TW-euc    UTF-16LE
+ -	zh_TW       WideChar     WideChar     -       eucTW        eucTW
+ 
+ 
+@@ -270,10 +270,10 @@
+ -	zh_TW.BIG5  MultiByte    UTF-16       -       BIG5         -
+ -	zh_TW.BIG5  MultiByte    WideChar     -       BIG5         BIG5
+ 
+--	zh_TW.BIG5  UTF-16       CompoundText -       UTF-16       ct_zh_TW
+--	zh_TW.BIG5  UTF-16       MultiByte    -       UTF-16       zh_TW-big5
+--	zh_TW.BIG5  UTF-16       UTF-16       -       UTF-16       -
+--	zh_TW.BIG5  UTF-16       WideChar     -       UTF-16       zh_TW-big5
++-	zh_TW.BIG5  UTF-16       CompoundText -       UTF-16LE       ct_zh_TW
++-	zh_TW.BIG5  UTF-16       MultiByte    -       UTF-16LE       zh_TW-big5
++-	zh_TW.BIG5  UTF-16       UTF-16       -       UTF-16LE       -
++-	zh_TW.BIG5  UTF-16       WideChar     -       UTF-16LE       zh_TW-big5
+ 
+ -	zh_TW.BIG5  WideChar     CompoundText -       zh_TW-big5   zh_TW-euc%ct_zh_TW
+ -	zh_TW.BIG5  WideChar     MultiByte    -       BIG5         BIG5
+@@ -291,10 +291,10 @@
+ -	zh_TW.EUC   MultiByte    UTF-16       zh_TW   zh_TW-euc    -
+ -	zh_TW.EUC   MultiByte    WideChar     zh_TW   zh_TW-euc    zh_TW-euc
+ 
+--	zh_TW.EUC   UTF-16       CompoundText zh_TW   UTF-16       ct_zh_TW
+--	zh_TW.EUC   UTF-16       MultiByte    zh_TW   UTF-16       zh_TW-euc
+--	zh_TW.EUC   UTF-16       UTF-16       zh_TW   UTF-16       -
+--	zh_TW.EUC   UTF-16       WideChar     zh_TW   UTF-16       zh_TW-euc
++-	zh_TW.EUC   UTF-16       CompoundText zh_TW   UTF-16LE       ct_zh_TW
++-	zh_TW.EUC   UTF-16       MultiByte    zh_TW   UTF-16LE       zh_TW-euc
++-	zh_TW.EUC   UTF-16       UTF-16       zh_TW   UTF-16LE       -
++-	zh_TW.EUC   UTF-16       WideChar     zh_TW   UTF-16LE       zh_TW-euc
+ 
+ -	zh_TW.EUC   WideChar     CompoundText zh_TW   zh_TW-euc    ct_zh_TW
+ -	zh_TW.EUC   WideChar     MultiByte    zh_TW   zh_TW-euc    zh_TW-euc
+@@ -304,43 +304,43 @@
+ 
+ -	zh.UTF-8    CompoundText CompoundText zh.UTF-8 ct_zh       ct_zh
+ -	zh.UTF-8    CompoundText MultiByte    zh.UTF-8 ct_zh       UTF-8
+--	zh.UTF-8    CompoundText UTF-16       zh.UTF-8 ct_zh       UTF-16
++-	zh.UTF-8    CompoundText UTF-16       zh.UTF-8 ct_zh       UTF-16LE
+ -	zh.UTF-8    CompoundText WideChar     zh.UTF-8 ct_zh       UTF-8
+ 
+ -	zh.UTF-8    MultiByte    CompoundText zh.UTF-8 UTF-8       ct_zh
+ -	zh.UTF-8    MultiByte    MultiByte    zh.UTF-8 UTF-8       UTF-8
+--	zh.UTF-8    MultiByte    UTF-16       zh.UTF-8 UTF-8       UTF-16
++-	zh.UTF-8    MultiByte    UTF-16       zh.UTF-8 UTF-8       UTF-16LE
+ -	zh.UTF-8    MultiByte    WideChar     zh.UTF-8 UTF-8       UTF-8
+ 
+--	zh.UTF-8    UTF-16       CompoundText zh.UTF-8 UTF-16      ct_zh
+--	zh.UTF-8    UTF-16       MultiByte    zh.UTF-8 UTF-16      UTF-8
+--	zh.UTF-8    UTF-16       UTF-16       zh.UTF-8 UTF-16      UTF-16
+--	zh.UTF-8    UTF-16       WideChar     zh.UTF-8 UTF-16      UTF-8
++-	zh.UTF-8    UTF-16       CompoundText zh.UTF-8 UTF-16LE      ct_zh
++-	zh.UTF-8    UTF-16       MultiByte    zh.UTF-8 UTF-16LE      UTF-8
++-	zh.UTF-8    UTF-16       UTF-16       zh.UTF-8 UTF-16LE      UTF-16LE
++-	zh.UTF-8    UTF-16       WideChar     zh.UTF-8 UTF-16LE      UTF-8
+ 
+ -	zh.UTF-8    WideChar     CompoundText zh.UTF-8 UTF-8       ct_zh
+ -	zh.UTF-8    WideChar     MultiByte    zh.UTF-8 UTF-8       UTF-8
+--	zh.UTF-8    WideChar     UTF-16       zh.UTF-8 UTF-8       UTF-16
++-	zh.UTF-8    WideChar     UTF-16       zh.UTF-8 UTF-8       UTF-16LE
+ -	zh.UTF-8    WideChar     WideChar     zh.UTF-8 UTF-8       UTF-8
+ 
+ 
+ -	zh_TW.UTF-8 CompoundText CompoundText zh_TW.UTF-8 ct_zh_TW     ct_zh_TW
+ -	zh_TW.UTF-8 CompoundText MultiByte    zh_TW.UTF-8 ct_zh_TW     UTF-8
+--	zh_TW.UTF-8 CompoundText UTF-16       zh_TW.UTF-8 ct_zh_TW     UTF-16
++-	zh_TW.UTF-8 CompoundText UTF-16       zh_TW.UTF-8 ct_zh_TW     UTF-16LE
+ -	zh_TW.UTF-8 CompoundText WideChar     zh_TW.UTF-8 ct_zh_TW     UTF-8
+ 
+ -	zh_TW.UTF-8 MultiByte    CompoundText zh_TW.UTF-8 UTF-8        ct_zh_TW
+ -	zh_TW.UTF-8 MultiByte    MultiByte    zh_TW.UTF-8 UTF-8        UTF-8
+--	zh_TW.UTF-8 MultiByte    UTF-16       zh_TW.UTF-8 UTF-8        UTF-16
++-	zh_TW.UTF-8 MultiByte    UTF-16       zh_TW.UTF-8 UTF-8        UTF-16LE
+ -	zh_TW.UTF-8 MultiByte    WideChar     zh_TW.UTF-8 UTF-8        UTF-8
+ 
+--	zh_TW.UTF-8 UTF-16       CompoundText zh_TW.UTF-8 UTF-16       ct_zh_TW
+--	zh_TW.UTF-8 UTF-16       MultiByte    zh_TW.UTF-8 UTF-16       UTF-8
+--	zh_TW.UTF-8 UTF-16       UTF-16       zh_TW.UTF-8 UTF-16       UTF-16
+--	zh_TW.UTF-8 UTF-16       WideChar     zh_TW.UTF-8 UTF-16       UTF-8
++-	zh_TW.UTF-8 UTF-16       CompoundText zh_TW.UTF-8 UTF-16LE       ct_zh_TW
++-	zh_TW.UTF-8 UTF-16       MultiByte    zh_TW.UTF-8 UTF-16LE       UTF-8
++-	zh_TW.UTF-8 UTF-16       UTF-16       zh_TW.UTF-8 UTF-16LE       UTF-16LE
++-	zh_TW.UTF-8 UTF-16       WideChar     zh_TW.UTF-8 UTF-16LE       UTF-8
+ 
+ -	zh_TW.UTF-8 WideChar     CompoundText zh_TW.UTF-8 UTF-8        ct_zh_TW
+ -	zh_TW.UTF-8 WideChar     MultiByte    zh_TW.UTF-8 UTF-8        UTF-8
+--	zh_TW.UTF-8 WideChar     UTF-16       zh_TW.UTF-8 UTF-8        UTF-16
++-	zh_TW.UTF-8 WideChar     UTF-16       zh_TW.UTF-8 UTF-8        UTF-16LE
+ -	zh_TW.UTF-8 WideChar     WideChar     zh_TW.UTF-8 UTF-8        UTF-8
+ 
+ 
+@@ -349,287 +349,287 @@
+ -	ja          euc         utf8     ja          eucJP       UTF-8
+ 
+ 
+--	de.UTF-8      UTF-16 CompoundText  de.UTF-8      UTF-16    ct_de
+--	de.UTF-8@euro UTF-16 CompoundText  de.UTF-8@euro UTF-16    ct_de
+--	en_US.UTF-8   UTF-16 CompoundText  en_US.UTF-8   UTF-16    ct_en_US
+--	es.UTF-8      UTF-16 CompoundText  es.UTF-8      UTF-16    ct_es
+--	es.UTF-8@euro UTF-16 CompoundText  es.UTF-8@euro UTF-16    ct_es
+--	fr.UTF-8      UTF-16 CompoundText  fr.UTF-8      UTF-16    ct_fr
+--	fr.UTF-8@euro UTF-16 CompoundText  fr.UTF-8@euro UTF-16    ct_fr
+--	it.UTF-8      UTF-16 CompoundText  it.UTF-8      UTF-16    ct_it
+--	it.UTF-8@euro UTF-16 CompoundText  it.UTF-8@euro UTF-16    ct_it
+--	sv.UTF-8      UTF-16 CompoundText  sv.UTF-8      UTF-16    ct_sv
+--	sv.UTF-8@euro UTF-16 CompoundText  sv.UTF-8@euro UTF-16    ct_sv
++-	de.UTF-8      UTF-16 CompoundText  de.UTF-8      UTF-16LE    ct_de
++-	de.UTF-8@euro UTF-16 CompoundText  de.UTF-8@euro UTF-16LE    ct_de
++-	en_US.UTF-8   UTF-16 CompoundText  en_US.UTF-8   UTF-16LE    ct_en_US
++-	es.UTF-8      UTF-16 CompoundText  es.UTF-8      UTF-16LE    ct_es
++-	es.UTF-8@euro UTF-16 CompoundText  es.UTF-8@euro UTF-16LE    ct_es
++-	fr.UTF-8      UTF-16 CompoundText  fr.UTF-8      UTF-16LE    ct_fr
++-	fr.UTF-8@euro UTF-16 CompoundText  fr.UTF-8@euro UTF-16LE    ct_fr
++-	it.UTF-8      UTF-16 CompoundText  it.UTF-8      UTF-16LE    ct_it
++-	it.UTF-8@euro UTF-16 CompoundText  it.UTF-8@euro UTF-16LE    ct_it
++-	sv.UTF-8      UTF-16 CompoundText  sv.UTF-8      UTF-16LE    ct_sv
++-	sv.UTF-8@euro UTF-16 CompoundText  sv.UTF-8@euro UTF-16LE    ct_sv
+ 
+ ## UTF-8 locales.
+ 
+--       af_ZA.UTF-8   UTF-16 Multibyte     af_ZA.UTF-8   UTF-16    UTF-8
+--       af_ZA.UTF-8   Multibyte UTF-16     af_ZA.UTF-8   UTF-8     UTF-16
+--       ar_AA.UTF-8   UTF-16 Multibyte     ar_AA.UTF-8   UTF-16    UTF-8
+--       ar_AA.UTF-8   Multibyte UTF-16     ar_AA.UTF-8   UTF-8     UTF-16
+--       ar_BH.UTF-8   UTF-16 Multibyte     ar_BH.UTF-8   UTF-16    UTF-8
+--       ar_BH.UTF-8   Multibyte UTF-16     ar_BH.UTF-8   UTF-8     UTF-16
+--       ar_DZ.UTF-8   UTF-16 Multibyte     ar_DZ.UTF-8   UTF-16    UTF-8
+--       ar_DZ.UTF-8   Multibyte UTF-16     ar_DZ.UTF-8   UTF-8     UTF-16
+--       ar_EG.UTF-8   UTF-16 Multibyte     ar_EG.UTF-8   UTF-16    UTF-8
+--       ar_EG.UTF-8   Multibyte UTF-16     ar_EG.UTF-8   UTF-8     UTF-16
+--       ar_IQ.UTF-8   UTF-16 Multibyte     ar_IQ.UTF-8   UTF-16    UTF-8
+--       ar_IQ.UTF-8   Multibyte UTF-16     ar_IQ.UTF-8   UTF-8     UTF-16
+--       ar_JO.UTF-8   UTF-16 Multibyte     ar_JO.UTF-8   UTF-16    UTF-8
+--       ar_JO.UTF-8   Multibyte UTF-16     ar_JO.UTF-8   UTF-8     UTF-16
+--       ar_KW.UTF-8   UTF-16 Multibyte     ar_KW.UTF-8   UTF-16    UTF-8
+--       ar_KW.UTF-8   Multibyte UTF-16     ar_KW.UTF-8   UTF-8     UTF-16
+--       ar_LB.UTF-8   UTF-16 Multibyte     ar_LB.UTF-8   UTF-16    UTF-8
+--       ar_LB.UTF-8   Multibyte UTF-16     ar_LB.UTF-8   UTF-8     UTF-16
+--       ar_LY.UTF-8   UTF-16 Multibyte     ar_LY.UTF-8   UTF-16    UTF-8
+--       ar_LY.UTF-8   Multibyte UTF-16     ar_LY.UTF-8   UTF-8     UTF-16
+--       ar_MA.UTF-8   UTF-16 Multibyte     ar_MA.UTF-8   UTF-16    UTF-8
+--       ar_MA.UTF-8   Multibyte UTF-16     ar_MA.UTF-8   UTF-8     UTF-16
+--       ar_OM.UTF-8   UTF-16 Multibyte     ar_OM.UTF-8   UTF-16    UTF-8
+--       ar_OM.UTF-8   Multibyte UTF-16     ar_OM.UTF-8   UTF-8     UTF-16
+--       ar_QA.UTF-8   UTF-16 Multibyte     ar_QA.UTF-8   UTF-16    UTF-8
+--       ar_QA.UTF-8   Multibyte UTF-16     ar_QA.UTF-8   UTF-8     UTF-16
+--       ar_SA.UTF-8   UTF-16 Multibyte     ar_SA.UTF-8   UTF-16    UTF-8
+--       ar_SA.UTF-8   Multibyte UTF-16     ar_SA.UTF-8   UTF-8     UTF-16
+--       ar_TN.UTF-8   UTF-16 Multibyte     ar_TN.UTF-8   UTF-16    UTF-8
+--       ar_TN.UTF-8   Multibyte UTF-16     ar_TN.UTF-8   UTF-8     UTF-16
+--       ar_YE.UTF-8   UTF-16 Multibyte     ar_YE.UTF-8   UTF-16    UTF-8
+--       ar_YE.UTF-8   Multibyte UTF-16     ar_YE.UTF-8   UTF-8     UTF-16
+--       az_AZ.UTF-8   UTF-16 Multibyte     az_AZ.UTF-8   UTF-16    UTF-8
+--       az_AZ.UTF-8   Multibyte UTF-16     az_AZ.UTF-8   UTF-8     UTF-16
+--       a3_AZ.UTF-8   UTF-16 Multibyte     a3_AZ.UTF-8   UTF-16    UTF-8
+--       a3_AZ.UTF-8   Multibyte UTF-16     a3_AZ.UTF-8   UTF-8     UTF-16
+--       be_BY.UTF-8   UTF-16 Multibyte     be_BY.UTF-8   UTF-16    UTF-8
+--       be_BY.UTF-8   Multibyte UTF-16     be_BY.UTF-8   UTF-8     UTF-16
+--       bg_BG.UTF-8   UTF-16 Multibyte     bg_BG.UTF-8   UTF-16    UTF-8
+--       bg_BG.UTF-8   Multibyte UTF-16     bg_BG.UTF-8   UTF-8     UTF-16
+--       br_FR.UTF-8   UTF-16 Multibyte     br_FR.UTF-8   UTF-16    UTF-8
+--       br_FR.UTF-8   Multibyte UTF-16     br_FR.UTF-8   UTF-8     UTF-16
+--       ca_ES.UTF-8   UTF-16 Multibyte     ca_ES.UTF-8   UTF-16    UTF-8
+--       ca_ES.UTF-8   Multibyte UTF-16     ca_ES.UTF-8   UTF-8     UTF-16
+--       cs_CZ.UTF-8   UTF-16 Multibyte     cs_CZ.UTF-8   UTF-16    UTF-8
+--       cs_CZ.UTF-8   Multibyte UTF-16     cs_CZ.UTF-8   UTF-8     UTF-16
+--       cy_GB.UTF-8   UTF-16 Multibyte     cy_GB.UTF-8   UTF-16    UTF-8
+--       cy_GB.UTF-8   Multibyte UTF-16     cy_GB.UTF-8   UTF-8     UTF-16
+--       cz_CZ.UTF-8   UTF-16 Multibyte     cz_CZ.UTF-8   UTF-16    UTF-8
+--       cz_CZ.UTF-8   Multibyte UTF-16     cz_CZ.UTF-8   UTF-8     UTF-16
+--       da_DK.UTF-8   UTF-16 Multibyte     da_DK.UTF-8   UTF-16    UTF-8
+--       da_DK.UTF-8   Multibyte UTF-16     da_DK.UTF-8   UTF-8     UTF-16
+--       de_AT.UTF-8   UTF-16 Multibyte     de_AT.UTF-8   UTF-16    UTF-8
+--       de_AT.UTF-8   Multibyte UTF-16     de_AT.UTF-8   UTF-8     UTF-16
+--       de_BE.UTF-8   UTF-16 Multibyte     de_BE.UTF-8   UTF-16    UTF-8
+--       de_BE.UTF-8   Multibyte UTF-16     de_BE.UTF-8   UTF-8     UTF-16
+--       de_CH.UTF-8   UTF-16 Multibyte     de_CH.UTF-8   UTF-16    UTF-8
+--       de_CH.UTF-8   Multibyte UTF-16     de_CH.UTF-8   UTF-8     UTF-16
+--       de_DE.UTF-8   UTF-16 Multibyte     de_DE.UTF-8   UTF-16    UTF-8
+--       de_DE.UTF-8   Multibyte UTF-16     de_DE.UTF-8   UTF-8     UTF-16
+--       de_LI.UTF-8   UTF-16 Multibyte     de_LI.UTF-8   UTF-16    UTF-8
+--       de_LI.UTF-8   Multibyte UTF-16     de_LI.UTF-8   UTF-8     UTF-16
+--       de_LU.UTF-8   UTF-16 Multibyte     de_LU.UTF-8   UTF-16    UTF-8
+--       de_LU.UTF-8   Multibyte UTF-16     de_LU.UTF-8   UTF-8     UTF-16
+--       el_GR.UTF-8   UTF-16 Multibyte     el_GR.UTF-8   UTF-16    UTF-8
+--       el_GR.UTF-8   Multibyte UTF-16     el_GR.UTF-8   UTF-8     UTF-16
+--       en_AU.UTF-8   UTF-16 Multibyte     en_AU.UTF-8   UTF-16    UTF-8
+--       en_AU.UTF-8   Multibyte UTF-16     en_AU.UTF-8   UTF-8     UTF-16
+--       en_BZ.UTF-8   UTF-16 Multibyte     en_BZ.UTF-8   UTF-16    UTF-8
+--       en_BZ.UTF-8   Multibyte UTF-16     en_BZ.UTF-8   UTF-8     UTF-16
+--       en_CA.UTF-8   UTF-16 Multibyte     en_CA.UTF-8   UTF-16    UTF-8
+--       en_CA.UTF-8   Multibyte UTF-16     en_CA.UTF-8   UTF-8     UTF-16
+--       en_GB.UTF-8   UTF-16 Multibyte     en_GB.UTF-8   UTF-16    UTF-8
+--       en_GB.UTF-8   Multibyte UTF-16     en_GB.UTF-8   UTF-8     UTF-16
+--       en_IE.UTF-8   UTF-16 Multibyte     en_IE.UTF-8   UTF-16    UTF-8
+--       en_IE.UTF-8   Multibyte UTF-16     en_IE.UTF-8   UTF-8     UTF-16
+--       en_JM.UTF-8   UTF-16 Multibyte     en_JM.UTF-8   UTF-16    UTF-8
+--       en_JM.UTF-8   Multibyte UTF-16     en_JM.UTF-8   UTF-8     UTF-16
+--       en_NZ.UTF-8   UTF-16 Multibyte     en_NZ.UTF-8   UTF-16    UTF-8
+--       en_NZ.UTF-8   Multibyte UTF-16     en_NZ.UTF-8   UTF-8     UTF-16
+--       en_TT.UTF-8   UTF-16 Multibyte     en_TT.UTF-8   UTF-16    UTF-8
+--       en_TT.UTF-8   Multibyte UTF-16     en_TT.UTF-8   UTF-8     UTF-16
+--       en_UK.UTF-8   UTF-16 Multibyte     en_UK.UTF-8   UTF-16    UTF-8
+--       en_UK.UTF-8   Multibyte UTF-16     en_UK.UTF-8   UTF-8     UTF-16
+--       en_US.UTF-8   UTF-16 Multibyte     en_US.UTF-8   UTF-16    UTF-8
+--       en_US.UTF-8   Multibyte UTF-16     en_US.UTF-8   UTF-8     UTF-16
+--       en_ZA.UTF-8   UTF-16 Multibyte     en_ZA.UTF-8   UTF-16    UTF-8
+--       en_ZA.UTF-8   Multibyte UTF-16     en_ZA.UTF-8   UTF-8     UTF-16
+--       eo_XX.UTF-8   UTF-16 Multibyte     eo_XX.UTF-8   UTF-16    UTF-8
+--       eo_XX.UTF-8   Multibyte UTF-16     eo_XX.UTF-8   UTF-8     UTF-16
+--       es_AR.UTF-8   UTF-16 Multibyte     es_AR.UTF-8   UTF-16    UTF-8
+--       es_AR.UTF-8   Multibyte UTF-16     es_AR.UTF-8   UTF-8     UTF-16
+--       es_BO.UTF-8   UTF-16 Multibyte     es_BO.UTF-8   UTF-16    UTF-8
+--       es_BO.UTF-8   Multibyte UTF-16     es_BO.UTF-8   UTF-8     UTF-16
+--       es_CL.UTF-8   UTF-16 Multibyte     es_CL.UTF-8   UTF-16    UTF-8
+--       es_CL.UTF-8   Multibyte UTF-16     es_CL.UTF-8   UTF-8     UTF-16
+--       es_CO.UTF-8   UTF-16 Multibyte     es_CO.UTF-8   UTF-16    UTF-8
+--       es_CO.UTF-8   Multibyte UTF-16     es_CO.UTF-8   UTF-8     UTF-16
+--       es_CR.UTF-8   UTF-16 Multibyte     es_CR.UTF-8   UTF-16    UTF-8
+--       es_CR.UTF-8   Multibyte UTF-16     es_CR.UTF-8   UTF-8     UTF-16
+--       es_DO.UTF-8   UTF-16 Multibyte     es_DO.UTF-8   UTF-16    UTF-8
+--       es_DO.UTF-8   Multibyte UTF-16     es_DO.UTF-8   UTF-8     UTF-16
+--       es_EC.UTF-8   UTF-16 Multibyte     es_EC.UTF-8   UTF-16    UTF-8
+--       es_EC.UTF-8   Multibyte UTF-16     es_EC.UTF-8   UTF-8     UTF-16
+--       es_ES.UTF-8   UTF-16 Multibyte     es_ES.UTF-8   UTF-16    UTF-8
+--       es_ES.UTF-8   Multibyte UTF-16     es_ES.UTF-8   UTF-8     UTF-16
+--       es_GT.UTF-8   UTF-16 Multibyte     es_GT.UTF-8   UTF-16    UTF-8
+--       es_GT.UTF-8   Multibyte UTF-16     es_GT.UTF-8   UTF-8     UTF-16
+--       es_HN.UTF-8   UTF-16 Multibyte     es_HN.UTF-8   UTF-16    UTF-8
+--       es_HN.UTF-8   Multibyte UTF-16     es_HN.UTF-8   UTF-8     UTF-16
+--       es_MX.UTF-8   UTF-16 Multibyte     es_MX.UTF-8   UTF-16    UTF-8
+--       es_MX.UTF-8   Multibyte UTF-16     es_MX.UTF-8   UTF-8     UTF-16
+--       es_NI.UTF-8   UTF-16 Multibyte     es_NI.UTF-8   UTF-16    UTF-8
+--       es_NI.UTF-8   Multibyte UTF-16     es_NI.UTF-8   UTF-8     UTF-16
+--       es_PA.UTF-8   UTF-16 Multibyte     es_PA.UTF-8   UTF-16    UTF-8
+--       es_PA.UTF-8   Multibyte UTF-16     es_PA.UTF-8   UTF-8     UTF-16
+--       es_PE.UTF-8   UTF-16 Multibyte     es_PE.UTF-8   UTF-16    UTF-8
+--       es_PE.UTF-8   Multibyte UTF-16     es_PE.UTF-8   UTF-8     UTF-16
+--       es_PR.UTF-8   UTF-16 Multibyte     es_PR.UTF-8   UTF-16    UTF-8
+--       es_PR.UTF-8   Multibyte UTF-16     es_PR.UTF-8   UTF-8     UTF-16
+--       es_PY.UTF-8   UTF-16 Multibyte     es_PY.UTF-8   UTF-16    UTF-8
+--       es_PY.UTF-8   Multibyte UTF-16     es_PY.UTF-8   UTF-8     UTF-16
+--       es_SV.UTF-8   UTF-16 Multibyte     es_SV.UTF-8   UTF-16    UTF-8
+--       es_SV.UTF-8   Multibyte UTF-16     es_SV.UTF-8   UTF-8     UTF-16
+--       es_UY.UTF-8   UTF-16 Multibyte     es_UY.UTF-8   UTF-16    UTF-8
+--       es_UY.UTF-8   Multibyte UTF-16     es_UY.UTF-8   UTF-8     UTF-16
+--       es_VE.UTF-8   UTF-16 Multibyte     es_VE.UTF-8   UTF-16    UTF-8
+--       es_VE.UTF-8   Multibyte UTF-16     es_VE.UTF-8   UTF-8     UTF-16
+--       et_EE.UTF-8   UTF-16 Multibyte     et_EE.UTF-8   UTF-16    UTF-8
+--       et_EE.UTF-8   Multibyte UTF-16     et_EE.UTF-8   UTF-8     UTF-16
+--       eu_ES.UTF-8   UTF-16 Multibyte     eu_ES.UTF-8   UTF-16    UTF-8
+--       eu_ES.UTF-8   Multibyte UTF-16     eu_ES.UTF-8   UTF-8     UTF-16
+--       fa_IR.UTF-8   UTF-16 Multibyte     fa_IR.UTF-8   UTF-16    UTF-8
+--       fa_IR.UTF-8   Multibyte UTF-16     fa_IR.UTF-8   UTF-8     UTF-16
+--       fi_FI.UTF-8   UTF-16 Multibyte     fi_FI.UTF-8   UTF-16    UTF-8
+--       fi_FI.UTF-8   Multibyte UTF-16     fi_FI.UTF-8   UTF-8     UTF-16
+--       fo_FO.UTF-8   UTF-16 Multibyte     fo_FO.UTF-8   UTF-16    UTF-8
+--       fo_FO.UTF-8   Multibyte UTF-16     fo_FO.UTF-8   UTF-8     UTF-16
+--       fr_BE.UTF-8   UTF-16 Multibyte     fr_BE.UTF-8   UTF-16    UTF-8
+--       fr_BE.UTF-8   Multibyte UTF-16     fr_BE.UTF-8   UTF-8     UTF-16
+--       fr_CA.UTF-8   UTF-16 Multibyte     fr_CA.UTF-8   UTF-16    UTF-8
+--       fr_CA.UTF-8   Multibyte UTF-16     fr_CA.UTF-8   UTF-8     UTF-16
+--       fr_CH.UTF-8   UTF-16 Multibyte     fr_CH.UTF-8   UTF-16    UTF-8
+--       fr_CH.UTF-8   Multibyte UTF-16     fr_CH.UTF-8   UTF-8     UTF-16
+--       fr_FR.UTF-8   UTF-16 Multibyte     fr_FR.UTF-8   UTF-16    UTF-8
+--       fr_FR.UTF-8   Multibyte UTF-16     fr_FR.UTF-8   UTF-8     UTF-16
+--       fr_LU.UTF-8   UTF-16 Multibyte     fr_LU.UTF-8   UTF-16    UTF-8
+--       fr_LU.UTF-8   Multibyte UTF-16     fr_LU.UTF-8   UTF-8     UTF-16
+--       ga_IE.UTF-8   UTF-16 Multibyte     ga_IE.UTF-8   UTF-16    UTF-8
+--       ga_IE.UTF-8   Multibyte UTF-16     ga_IE.UTF-8   UTF-8     UTF-16
+--       gd_GB.UTF-8   UTF-16 Multibyte     gd_GB.UTF-8   UTF-16    UTF-8
+--       gd_GB.UTF-8   Multibyte UTF-16     gd_GB.UTF-8   UTF-8     UTF-16
+--       gl_ES.UTF-8   UTF-16 Multibyte     gl_ES.UTF-8   UTF-16    UTF-8
+--       gl_ES.UTF-8   Multibyte UTF-16     gl_ES.UTF-8   UTF-8     UTF-16
+--       gv_GB.UTF-8   UTF-16 Multibyte     gv_GB.UTF-8   UTF-16    UTF-8
+--       gv_GB.UTF-8   Multibyte UTF-16     gv_GB.UTF-8   UTF-8     UTF-16
+--       he_IL.UTF-8   UTF-16 Multibyte     he_IL.UTF-8   UTF-16    UTF-8
+--       he_IL.UTF-8   Multibyte UTF-16     he_IL.UTF-8   UTF-8     UTF-16
+--       hi_IN.UTF-8   UTF-16 Multibyte     hi_IN.UTF-8   UTF-16    UTF-8
+--       hi_IN.UTF-8   Multibyte UTF-16     hi_IN.UTF-8   UTF-8     UTF-16
+--       hr_HR.UTF-8   UTF-16 Multibyte     hr_HR.UTF-8   UTF-16    UTF-8
+--       hr_HR.UTF-8   Multibyte UTF-16     hr_HR.UTF-8   UTF-8     UTF-16
+--       hu_HU.UTF-8   UTF-16 Multibyte     hu_HU.UTF-8   UTF-16    UTF-8
+--       hu_HU.UTF-8   Multibyte UTF-16     hu_HU.UTF-8   UTF-8     UTF-16
+--       hy_AM.UTF-8   UTF-16 Multibyte     hy_AM.UTF-8   UTF-16    UTF-8
+--       hy_AM.UTF-8   Multibyte UTF-16     hy_AM.UTF-8   UTF-8     UTF-16
+--       id_ID.UTF-8   UTF-16 Multibyte     id_ID.UTF-8   UTF-16    UTF-8
+--       id_ID.UTF-8   Multibyte UTF-16     id_ID.UTF-8   UTF-8     UTF-16
+--       is_IS.UTF-8   UTF-16 Multibyte     is_IS.UTF-8   UTF-16    UTF-8
+--       is_IS.UTF-8   Multibyte UTF-16     is_IS.UTF-8   UTF-8     UTF-16
+--       it_CH.UTF-8   UTF-16 Multibyte     it_CH.UTF-8   UTF-16    UTF-8
+--       it_CH.UTF-8   Multibyte UTF-16     it_CH.UTF-8   UTF-8     UTF-16
+--       it_IT.UTF-8   UTF-16 Multibyte     it_IT.UTF-8   UTF-16    UTF-8
+--       it_IT.UTF-8   Multibyte UTF-16     it_IT.UTF-8   UTF-8     UTF-16
+--       iu_CA.UTF-8   UTF-16 Multibyte     iu_CA.UTF-8   UTF-16    UTF-8
+--       iu_CA.UTF-8   Multibyte UTF-16     iu_CA.UTF-8   UTF-8     UTF-16
+--       ja_JP.UTF-8   UTF-16 Multibyte     ja_JP.UTF-8   UTF-16    UTF-8
+--       ja_JP.UTF-8   Multibyte UTF-16     ja_JP.UTF-8   UTF-8     UTF-16
+--       ka_GE.UTF-8   UTF-16 Multibyte     ka_GE.UTF-8   UTF-16    UTF-8
+--       ka_GE.UTF-8   Multibyte UTF-16     ka_GE.UTF-8   UTF-8     UTF-16
+--       kl_GL.UTF-8   UTF-16 Multibyte     kl_GL.UTF-8   UTF-16    UTF-8
+--       kl_GL.UTF-8   Multibyte UTF-16     kl_GL.UTF-8   UTF-8     UTF-16
+--       ko_KR.UTF-8   UTF-16 Multibyte     ko_KR.UTF-8   UTF-16    UTF-8
+--       ko_KR.UTF-8   Multibyte UTF-16     ko_KR.UTF-8   UTF-8     UTF-16
+--       kw_GB.UTF-8   UTF-16 Multibyte     kw_GB.UTF-8   UTF-16    UTF-8
+--       kw_GB.UTF-8   Multibyte UTF-16     kw_GB.UTF-8   UTF-8     UTF-16
+--       lo_LA.UTF-8   UTF-16 Multibyte     lo_LA.UTF-8   UTF-16    UTF-8
+--       lo_LA.UTF-8   Multibyte UTF-16     lo_LA.UTF-8   UTF-8     UTF-16
+--       lt_LT.UTF-8   UTF-16 Multibyte     lt_LT.UTF-8   UTF-16    UTF-8
+--       lt_LT.UTF-8   Multibyte UTF-16     lt_LT.UTF-8   UTF-8     UTF-16
+--       lv_LV.UTF-8   UTF-16 Multibyte     lv_LV.UTF-8   UTF-16    UTF-8
+--       lv_LV.UTF-8   Multibyte UTF-16     lv_LV.UTF-8   UTF-8     UTF-16
+--       mi_NZ.UTF-8   UTF-16 Multibyte     mi_NZ.UTF-8   UTF-16    UTF-8
+--       mi_NZ.UTF-8   Multibyte UTF-16     mi_NZ.UTF-8   UTF-8     UTF-16
+--       mk_MK.UTF-8   UTF-16 Multibyte     mk_MK.UTF-8   UTF-16    UTF-8
+--       mk_MK.UTF-8   Multibyte UTF-16     mk_MK.UTF-8   UTF-8     UTF-16
+--       ms_MY.UTF-8   UTF-16 Multibyte     ms_MY.UTF-8   UTF-16    UTF-8
+--       ms_MY.UTF-8   Multibyte UTF-16     ms_MY.UTF-8   UTF-8     UTF-16
+--       nl_BE.UTF-8   UTF-16 Multibyte     nl_BE.UTF-8   UTF-16    UTF-8
+--       nl_BE.UTF-8   Multibyte UTF-16     nl_BE.UTF-8   UTF-8     UTF-16
+--       nl_NL.UTF-8   UTF-16 Multibyte     nl_NL.UTF-8   UTF-16    UTF-8
+--       nl_NL.UTF-8   Multibyte UTF-16     nl_NL.UTF-8   UTF-8     UTF-16
+--       no_NO.UTF-8   UTF-16 Multibyte     no_NO.UTF-8   UTF-16    UTF-8
+--       no_NO.UTF-8   Multibyte UTF-16     no_NO.UTF-8   UTF-8     UTF-16
+--       nb_NO.UTF-8   UTF-16 Multibyte     nb_NO.UTF-8   UTF-16    UTF-8
+--       nb_NO.UTF-8   Multibyte UTF-16     nb_NO.UTF-8   UTF-8     UTF-16
+--       ny_NO.UTF-8   UTF-16 Multibyte     ny_NO.UTF-8   UTF-16    UTF-8
+--       ny_NO.UTF-8   Multibyte UTF-16     ny_NO.UTF-8   UTF-8     UTF-16
+--       oc_FR.UTF-8   UTF-16 Multibyte     oc_FR.UTF-8   UTF-16    UTF-8
+--       oc_FR.UTF-8   Multibyte UTF-16     oc_FR.UTF-8   UTF-8     UTF-16
+--       pd_DE.UTF-8   UTF-16 Multibyte     pd_DE.UTF-8   UTF-16    UTF-8
+--       pd_DE.UTF-8   Multibyte UTF-16     pd_DE.UTF-8   UTF-8     UTF-16
+--       pd_US.UTF-8   UTF-16 Multibyte     pd_US.UTF-8   UTF-16    UTF-8
+--       pd_US.UTF-8   Multibyte UTF-16     pd_US.UTF-8   UTF-8     UTF-16
+--       ph_PH.UTF-8   UTF-16 Multibyte     ph_PH.UTF-8   UTF-16    UTF-8
+--       ph_PH.UTF-8   Multibyte UTF-16     ph_PH.UTF-8   UTF-8     UTF-16
+--       pl_PL.UTF-8   UTF-16 Multibyte     pl_PL.UTF-8   UTF-16    UTF-8
+--       pl_PL.UTF-8   Multibyte UTF-16     pl_PL.UTF-8   UTF-8     UTF-16
+--       pp_AN.UTF-8   UTF-16 Multibyte     pp_AN.UTF-8   UTF-16    UTF-8
+--       pp_AN.UTF-8   Multibyte UTF-16     pp_AN.UTF-8   UTF-8     UTF-16
+--       pt_BR.UTF-8   UTF-16 Multibyte     pt_BR.UTF-8   UTF-16    UTF-8
+--       pt_BR.UTF-8   Multibyte UTF-16     pt_BR.UTF-8   UTF-8     UTF-16
+--       pt_PT.UTF-8   UTF-16 Multibyte     pt_PT.UTF-8   UTF-16    UTF-8
+--       pt_PT.UTF-8   Multibyte UTF-16     pt_PT.UTF-8   UTF-8     UTF-16
+--       ro_RO.UTF-8   UTF-16 Multibyte     ro_RO.UTF-8   UTF-16    UTF-8
+--       ro_RO.UTF-8   Multibyte UTF-16     ro_RO.UTF-8   UTF-8     UTF-16
+--       ru_RU.UTF-8   UTF-16 Multibyte     ru_RU.UTF-8   UTF-16    UTF-8
+--       ru_RU.UTF-8   Multibyte UTF-16     ru_RU.UTF-8   UTF-8     UTF-16
+--       ru_UA.UTF-8   UTF-16 Multibyte     ru_UA.UTF-8   UTF-16    UTF-8
+--       ru_UA.UTF-8   Multibyte UTF-16     ru_UA.UTF-8   UTF-8     UTF-16
+--       sk_SK.UTF-8   UTF-16 Multibyte     sk_SK.UTF-8   UTF-16    UTF-8
+--       sk_SK.UTF-8   Multibyte UTF-16     sk_SK.UTF-8   UTF-8     UTF-16
+--       sl_SI.UTF-8   UTF-16 Multibyte     sl_SI.UTF-8   UTF-16    UTF-8
+--       sl_SI.UTF-8   Multibyte UTF-16     sl_SI.UTF-8   UTF-8     UTF-16
+--       sq_AL.UTF-8   UTF-16 Multibyte     sq_AL.UTF-8   UTF-16    UTF-8
+--       sq_AL.UTF-8   Multibyte UTF-16     sq_AL.UTF-8   UTF-8     UTF-16
+--       sr_YU.UTF-8   UTF-16 Multibyte     sr_YU.UTF-8   UTF-16    UTF-8
+--       sr_YU.UTF-8   Multibyte UTF-16     sr_YU.UTF-8   UTF-8     UTF-16
+--       sv_FI.UTF-8   UTF-16 Multibyte     sv_FI.UTF-8   UTF-16    UTF-8
+--       sv_FI.UTF-8   Multibyte UTF-16     sv_FI.UTF-8   UTF-8     UTF-16
+--       sv_SE.UTF-8   UTF-16 Multibyte     sv_SE.UTF-8   UTF-16    UTF-8
+--       sv_SE.UTF-8   Multibyte UTF-16     sv_SE.UTF-8   UTF-8     UTF-16
+--       ta_IN.UTF-8   UTF-16 Multibyte     ta_IN.UTF-8   UTF-16    UTF-8
+--       ta_IN.UTF-8   Multibyte UTF-16     ta_IN.UTF-8   UTF-8     UTF-16
+--       tg_TJ.UTF-8   UTF-16 Multibyte     tg_TJ.UTF-8   UTF-16    UTF-8
+--       tg_TJ.UTF-8   Multibyte UTF-16     tg_TJ.UTF-8   UTF-8     UTF-16
+--       th_TH.UTF-8   UTF-16 Multibyte     th_TH.UTF-8   UTF-16    UTF-8
+--       th_TH.UTF-8   Multibyte UTF-16     th_TH.UTF-8   UTF-8     UTF-16
+--       tl_PH.UTF-8   UTF-16 Multibyte     tl_PH.UTF-8   UTF-16    UTF-8
+--       tl_PH.UTF-8   Multibyte UTF-16     tl_PH.UTF-8   UTF-8     UTF-16
+--       tr_TR.UTF-8   UTF-16 Multibyte     tr_TR.UTF-8   UTF-16    UTF-8
+--       tr_TR.UTF-8   Multibyte UTF-16     tr_TR.UTF-8   UTF-8     UTF-16
+--       tt_RU.UTF-8   UTF-16 Multibyte     tt_RU.UTF-8   UTF-16    UTF-8
+--       tt_RU.UTF-8   Multibyte UTF-16     tt_RU.UTF-8   UTF-8     UTF-16
+--       uk_UA.UTF-8   UTF-16 Multibyte     uk_UA.UTF-8   UTF-16    UTF-8
+--       uk_UA.UTF-8   Multibyte UTF-16     uk_UA.UTF-8   UTF-8     UTF-16
+--       ur_PK.UTF-8   UTF-16 Multibyte     ur_PK.UTF-8   UTF-16    UTF-8
+--       ur_PK.UTF-8   Multibyte UTF-16     ur_PK.UTF-8   UTF-8     UTF-16
+--       vi_VN.UTF-8   UTF-16 Multibyte     vi_VN.UTF-8   UTF-16    UTF-8
+--       vi_VN.UTF-8   Multibyte UTF-16     vi_VN.UTF-8   UTF-8     UTF-16
+--       wa_BE.UTF-8   UTF-16 Multibyte     wa_BE.UTF-8   UTF-16    UTF-8
+--       wa_BE.UTF-8   Multibyte UTF-16     wa_BE.UTF-8   UTF-8     UTF-16
+--       yi_US.UTF-8   UTF-16 Multibyte     yi_US.UTF-8   UTF-16    UTF-8
+--       yi_US.UTF-8   Multibyte UTF-16     yi_US.UTF-8   UTF-8     UTF-16
+--       zh_CN.UTF-8   UTF-16 Multibyte     zh_CN.UTF-8   UTF-16    UTF-8
+--       zh_CN.UTF-8   Multibyte UTF-16     zh_CN.UTF-8   UTF-8     UTF-16
+--       zh_HK.UTF-8   UTF-16 Multibyte     zh_HK.UTF-8   UTF-16    UTF-8
+--       zh_HK.UTF-8   Multibyte UTF-16     zh_HK.UTF-8   UTF-8     UTF-16
+--       zh_TW.UTF-8   UTF-16 Multibyte     zh_TW.UTF-8   UTF-16    UTF-8
+--       zh_TW.UTF-8   Multibyte UTF-16     zh_TW.UTF-8   UTF-8     UTF-16
++-       af_ZA.UTF-8   UTF-16 Multibyte     af_ZA.UTF-8   UTF-16LE    UTF-8
++-       af_ZA.UTF-8   Multibyte UTF-16     af_ZA.UTF-8   UTF-8     UTF-16LE
++-       ar_AA.UTF-8   UTF-16 Multibyte     ar_AA.UTF-8   UTF-16LE    UTF-8
++-       ar_AA.UTF-8   Multibyte UTF-16     ar_AA.UTF-8   UTF-8     UTF-16LE
++-       ar_BH.UTF-8   UTF-16 Multibyte     ar_BH.UTF-8   UTF-16LE    UTF-8
++-       ar_BH.UTF-8   Multibyte UTF-16     ar_BH.UTF-8   UTF-8     UTF-16LE
++-       ar_DZ.UTF-8   UTF-16 Multibyte     ar_DZ.UTF-8   UTF-16LE    UTF-8
++-       ar_DZ.UTF-8   Multibyte UTF-16     ar_DZ.UTF-8   UTF-8     UTF-16LE
++-       ar_EG.UTF-8   UTF-16 Multibyte     ar_EG.UTF-8   UTF-16LE    UTF-8
++-       ar_EG.UTF-8   Multibyte UTF-16     ar_EG.UTF-8   UTF-8     UTF-16LE
++-       ar_IQ.UTF-8   UTF-16 Multibyte     ar_IQ.UTF-8   UTF-16LE    UTF-8
++-       ar_IQ.UTF-8   Multibyte UTF-16     ar_IQ.UTF-8   UTF-8     UTF-16LE
++-       ar_JO.UTF-8   UTF-16 Multibyte     ar_JO.UTF-8   UTF-16LE    UTF-8
++-       ar_JO.UTF-8   Multibyte UTF-16     ar_JO.UTF-8   UTF-8     UTF-16LE
++-       ar_KW.UTF-8   UTF-16 Multibyte     ar_KW.UTF-8   UTF-16LE    UTF-8
++-       ar_KW.UTF-8   Multibyte UTF-16     ar_KW.UTF-8   UTF-8     UTF-16LE
++-       ar_LB.UTF-8   UTF-16 Multibyte     ar_LB.UTF-8   UTF-16LE    UTF-8
++-       ar_LB.UTF-8   Multibyte UTF-16     ar_LB.UTF-8   UTF-8     UTF-16LE
++-       ar_LY.UTF-8   UTF-16 Multibyte     ar_LY.UTF-8   UTF-16LE    UTF-8
++-       ar_LY.UTF-8   Multibyte UTF-16     ar_LY.UTF-8   UTF-8     UTF-16LE
++-       ar_MA.UTF-8   UTF-16 Multibyte     ar_MA.UTF-8   UTF-16LE    UTF-8
++-       ar_MA.UTF-8   Multibyte UTF-16     ar_MA.UTF-8   UTF-8     UTF-16LE
++-       ar_OM.UTF-8   UTF-16 Multibyte     ar_OM.UTF-8   UTF-16LE    UTF-8
++-       ar_OM.UTF-8   Multibyte UTF-16     ar_OM.UTF-8   UTF-8     UTF-16LE
++-       ar_QA.UTF-8   UTF-16 Multibyte     ar_QA.UTF-8   UTF-16LE    UTF-8
++-       ar_QA.UTF-8   Multibyte UTF-16     ar_QA.UTF-8   UTF-8     UTF-16LE
++-       ar_SA.UTF-8   UTF-16 Multibyte     ar_SA.UTF-8   UTF-16LE    UTF-8
++-       ar_SA.UTF-8   Multibyte UTF-16     ar_SA.UTF-8   UTF-8     UTF-16LE
++-       ar_TN.UTF-8   UTF-16 Multibyte     ar_TN.UTF-8   UTF-16LE    UTF-8
++-       ar_TN.UTF-8   Multibyte UTF-16     ar_TN.UTF-8   UTF-8     UTF-16LE
++-       ar_YE.UTF-8   UTF-16 Multibyte     ar_YE.UTF-8   UTF-16LE    UTF-8
++-       ar_YE.UTF-8   Multibyte UTF-16     ar_YE.UTF-8   UTF-8     UTF-16LE
++-       az_AZ.UTF-8   UTF-16 Multibyte     az_AZ.UTF-8   UTF-16LE    UTF-8
++-       az_AZ.UTF-8   Multibyte UTF-16     az_AZ.UTF-8   UTF-8     UTF-16LE
++-       a3_AZ.UTF-8   UTF-16 Multibyte     a3_AZ.UTF-8   UTF-16LE    UTF-8
++-       a3_AZ.UTF-8   Multibyte UTF-16     a3_AZ.UTF-8   UTF-8     UTF-16LE
++-       be_BY.UTF-8   UTF-16 Multibyte     be_BY.UTF-8   UTF-16LE    UTF-8
++-       be_BY.UTF-8   Multibyte UTF-16     be_BY.UTF-8   UTF-8     UTF-16LE
++-       bg_BG.UTF-8   UTF-16 Multibyte     bg_BG.UTF-8   UTF-16LE    UTF-8
++-       bg_BG.UTF-8   Multibyte UTF-16     bg_BG.UTF-8   UTF-8     UTF-16LE
++-       br_FR.UTF-8   UTF-16 Multibyte     br_FR.UTF-8   UTF-16LE    UTF-8
++-       br_FR.UTF-8   Multibyte UTF-16     br_FR.UTF-8   UTF-8     UTF-16LE
++-       ca_ES.UTF-8   UTF-16 Multibyte     ca_ES.UTF-8   UTF-16LE    UTF-8
++-       ca_ES.UTF-8   Multibyte UTF-16     ca_ES.UTF-8   UTF-8     UTF-16LE
++-       cs_CZ.UTF-8   UTF-16 Multibyte     cs_CZ.UTF-8   UTF-16LE    UTF-8
++-       cs_CZ.UTF-8   Multibyte UTF-16     cs_CZ.UTF-8   UTF-8     UTF-16LE
++-       cy_GB.UTF-8   UTF-16 Multibyte     cy_GB.UTF-8   UTF-16LE    UTF-8
++-       cy_GB.UTF-8   Multibyte UTF-16     cy_GB.UTF-8   UTF-8     UTF-16LE
++-       cz_CZ.UTF-8   UTF-16 Multibyte     cz_CZ.UTF-8   UTF-16LE    UTF-8
++-       cz_CZ.UTF-8   Multibyte UTF-16     cz_CZ.UTF-8   UTF-8     UTF-16LE
++-       da_DK.UTF-8   UTF-16 Multibyte     da_DK.UTF-8   UTF-16LE    UTF-8
++-       da_DK.UTF-8   Multibyte UTF-16     da_DK.UTF-8   UTF-8     UTF-16LE
++-       de_AT.UTF-8   UTF-16 Multibyte     de_AT.UTF-8   UTF-16LE    UTF-8
++-       de_AT.UTF-8   Multibyte UTF-16     de_AT.UTF-8   UTF-8     UTF-16LE
++-       de_BE.UTF-8   UTF-16 Multibyte     de_BE.UTF-8   UTF-16LE    UTF-8
++-       de_BE.UTF-8   Multibyte UTF-16     de_BE.UTF-8   UTF-8     UTF-16LE
++-       de_CH.UTF-8   UTF-16 Multibyte     de_CH.UTF-8   UTF-16LE    UTF-8
++-       de_CH.UTF-8   Multibyte UTF-16     de_CH.UTF-8   UTF-8     UTF-16LE
++-       de_DE.UTF-8   UTF-16 Multibyte     de_DE.UTF-8   UTF-16LE    UTF-8
++-       de_DE.UTF-8   Multibyte UTF-16     de_DE.UTF-8   UTF-8     UTF-16LE
++-       de_LI.UTF-8   UTF-16 Multibyte     de_LI.UTF-8   UTF-16LE    UTF-8
++-       de_LI.UTF-8   Multibyte UTF-16     de_LI.UTF-8   UTF-8     UTF-16LE
++-       de_LU.UTF-8   UTF-16 Multibyte     de_LU.UTF-8   UTF-16LE    UTF-8
++-       de_LU.UTF-8   Multibyte UTF-16     de_LU.UTF-8   UTF-8     UTF-16LE
++-       el_GR.UTF-8   UTF-16 Multibyte     el_GR.UTF-8   UTF-16LE    UTF-8
++-       el_GR.UTF-8   Multibyte UTF-16     el_GR.UTF-8   UTF-8     UTF-16LE
++-       en_AU.UTF-8   UTF-16 Multibyte     en_AU.UTF-8   UTF-16LE    UTF-8
++-       en_AU.UTF-8   Multibyte UTF-16     en_AU.UTF-8   UTF-8     UTF-16LE
++-       en_BZ.UTF-8   UTF-16 Multibyte     en_BZ.UTF-8   UTF-16LE    UTF-8
++-       en_BZ.UTF-8   Multibyte UTF-16     en_BZ.UTF-8   UTF-8     UTF-16LE
++-       en_CA.UTF-8   UTF-16 Multibyte     en_CA.UTF-8   UTF-16LE    UTF-8
++-       en_CA.UTF-8   Multibyte UTF-16     en_CA.UTF-8   UTF-8     UTF-16LE
++-       en_GB.UTF-8   UTF-16 Multibyte     en_GB.UTF-8   UTF-16LE    UTF-8
++-       en_GB.UTF-8   Multibyte UTF-16     en_GB.UTF-8   UTF-8     UTF-16LE
++-       en_IE.UTF-8   UTF-16 Multibyte     en_IE.UTF-8   UTF-16LE    UTF-8
++-       en_IE.UTF-8   Multibyte UTF-16     en_IE.UTF-8   UTF-8     UTF-16LE
++-       en_JM.UTF-8   UTF-16 Multibyte     en_JM.UTF-8   UTF-16LE    UTF-8
++-       en_JM.UTF-8   Multibyte UTF-16     en_JM.UTF-8   UTF-8     UTF-16LE
++-       en_NZ.UTF-8   UTF-16 Multibyte     en_NZ.UTF-8   UTF-16LE    UTF-8
++-       en_NZ.UTF-8   Multibyte UTF-16     en_NZ.UTF-8   UTF-8     UTF-16LE
++-       en_TT.UTF-8   UTF-16 Multibyte     en_TT.UTF-8   UTF-16LE    UTF-8
++-       en_TT.UTF-8   Multibyte UTF-16     en_TT.UTF-8   UTF-8     UTF-16LE
++-       en_UK.UTF-8   UTF-16 Multibyte     en_UK.UTF-8   UTF-16LE    UTF-8
++-       en_UK.UTF-8   Multibyte UTF-16     en_UK.UTF-8   UTF-8     UTF-16LE
++-       en_US.UTF-8   UTF-16 Multibyte     en_US.UTF-8   UTF-16LE    UTF-8
++-       en_US.UTF-8   Multibyte UTF-16     en_US.UTF-8   UTF-8     UTF-16LE
++-       en_ZA.UTF-8   UTF-16 Multibyte     en_ZA.UTF-8   UTF-16LE    UTF-8
++-       en_ZA.UTF-8   Multibyte UTF-16     en_ZA.UTF-8   UTF-8     UTF-16LE
++-       eo_XX.UTF-8   UTF-16 Multibyte     eo_XX.UTF-8   UTF-16LE    UTF-8
++-       eo_XX.UTF-8   Multibyte UTF-16     eo_XX.UTF-8   UTF-8     UTF-16LE
++-       es_AR.UTF-8   UTF-16 Multibyte     es_AR.UTF-8   UTF-16LE    UTF-8
++-       es_AR.UTF-8   Multibyte UTF-16     es_AR.UTF-8   UTF-8     UTF-16LE
++-       es_BO.UTF-8   UTF-16 Multibyte     es_BO.UTF-8   UTF-16LE    UTF-8
++-       es_BO.UTF-8   Multibyte UTF-16     es_BO.UTF-8   UTF-8     UTF-16LE
++-       es_CL.UTF-8   UTF-16 Multibyte     es_CL.UTF-8   UTF-16LE    UTF-8
++-       es_CL.UTF-8   Multibyte UTF-16     es_CL.UTF-8   UTF-8     UTF-16LE
++-       es_CO.UTF-8   UTF-16 Multibyte     es_CO.UTF-8   UTF-16LE    UTF-8
++-       es_CO.UTF-8   Multibyte UTF-16     es_CO.UTF-8   UTF-8     UTF-16LE
++-       es_CR.UTF-8   UTF-16 Multibyte     es_CR.UTF-8   UTF-16LE    UTF-8
++-       es_CR.UTF-8   Multibyte UTF-16     es_CR.UTF-8   UTF-8     UTF-16LE
++-       es_DO.UTF-8   UTF-16 Multibyte     es_DO.UTF-8   UTF-16LE    UTF-8
++-       es_DO.UTF-8   Multibyte UTF-16     es_DO.UTF-8   UTF-8     UTF-16LE
++-       es_EC.UTF-8   UTF-16 Multibyte     es_EC.UTF-8   UTF-16LE    UTF-8
++-       es_EC.UTF-8   Multibyte UTF-16     es_EC.UTF-8   UTF-8     UTF-16LE
++-       es_ES.UTF-8   UTF-16 Multibyte     es_ES.UTF-8   UTF-16LE    UTF-8
++-       es_ES.UTF-8   Multibyte UTF-16     es_ES.UTF-8   UTF-8     UTF-16LE
++-       es_GT.UTF-8   UTF-16 Multibyte     es_GT.UTF-8   UTF-16LE    UTF-8
++-       es_GT.UTF-8   Multibyte UTF-16     es_GT.UTF-8   UTF-8     UTF-16LE
++-       es_HN.UTF-8   UTF-16 Multibyte     es_HN.UTF-8   UTF-16LE    UTF-8
++-       es_HN.UTF-8   Multibyte UTF-16     es_HN.UTF-8   UTF-8     UTF-16LE
++-       es_MX.UTF-8   UTF-16 Multibyte     es_MX.UTF-8   UTF-16LE    UTF-8
++-       es_MX.UTF-8   Multibyte UTF-16     es_MX.UTF-8   UTF-8     UTF-16LE
++-       es_NI.UTF-8   UTF-16 Multibyte     es_NI.UTF-8   UTF-16LE    UTF-8
++-       es_NI.UTF-8   Multibyte UTF-16     es_NI.UTF-8   UTF-8     UTF-16LE
++-       es_PA.UTF-8   UTF-16 Multibyte     es_PA.UTF-8   UTF-16LE    UTF-8
++-       es_PA.UTF-8   Multibyte UTF-16     es_PA.UTF-8   UTF-8     UTF-16LE
++-       es_PE.UTF-8   UTF-16 Multibyte     es_PE.UTF-8   UTF-16LE    UTF-8
++-       es_PE.UTF-8   Multibyte UTF-16     es_PE.UTF-8   UTF-8     UTF-16LE
++-       es_PR.UTF-8   UTF-16 Multibyte     es_PR.UTF-8   UTF-16LE    UTF-8
++-       es_PR.UTF-8   Multibyte UTF-16     es_PR.UTF-8   UTF-8     UTF-16LE
++-       es_PY.UTF-8   UTF-16 Multibyte     es_PY.UTF-8   UTF-16LE    UTF-8
++-       es_PY.UTF-8   Multibyte UTF-16     es_PY.UTF-8   UTF-8     UTF-16LE
++-       es_SV.UTF-8   UTF-16 Multibyte     es_SV.UTF-8   UTF-16LE    UTF-8
++-       es_SV.UTF-8   Multibyte UTF-16     es_SV.UTF-8   UTF-8     UTF-16LE
++-       es_UY.UTF-8   UTF-16 Multibyte     es_UY.UTF-8   UTF-16LE    UTF-8
++-       es_UY.UTF-8   Multibyte UTF-16     es_UY.UTF-8   UTF-8     UTF-16LE
++-       es_VE.UTF-8   UTF-16 Multibyte     es_VE.UTF-8   UTF-16LE    UTF-8
++-       es_VE.UTF-8   Multibyte UTF-16     es_VE.UTF-8   UTF-8     UTF-16LE
++-       et_EE.UTF-8   UTF-16 Multibyte     et_EE.UTF-8   UTF-16LE    UTF-8
++-       et_EE.UTF-8   Multibyte UTF-16     et_EE.UTF-8   UTF-8     UTF-16LE
++-       eu_ES.UTF-8   UTF-16 Multibyte     eu_ES.UTF-8   UTF-16LE    UTF-8
++-       eu_ES.UTF-8   Multibyte UTF-16     eu_ES.UTF-8   UTF-8     UTF-16LE
++-       fa_IR.UTF-8   UTF-16 Multibyte     fa_IR.UTF-8   UTF-16LE    UTF-8
++-       fa_IR.UTF-8   Multibyte UTF-16     fa_IR.UTF-8   UTF-8     UTF-16LE
++-       fi_FI.UTF-8   UTF-16 Multibyte     fi_FI.UTF-8   UTF-16LE    UTF-8
++-       fi_FI.UTF-8   Multibyte UTF-16     fi_FI.UTF-8   UTF-8     UTF-16LE
++-       fo_FO.UTF-8   UTF-16 Multibyte     fo_FO.UTF-8   UTF-16LE    UTF-8
++-       fo_FO.UTF-8   Multibyte UTF-16     fo_FO.UTF-8   UTF-8     UTF-16LE
++-       fr_BE.UTF-8   UTF-16 Multibyte     fr_BE.UTF-8   UTF-16LE    UTF-8
++-       fr_BE.UTF-8   Multibyte UTF-16     fr_BE.UTF-8   UTF-8     UTF-16LE
++-       fr_CA.UTF-8   UTF-16 Multibyte     fr_CA.UTF-8   UTF-16LE    UTF-8
++-       fr_CA.UTF-8   Multibyte UTF-16     fr_CA.UTF-8   UTF-8     UTF-16LE
++-       fr_CH.UTF-8   UTF-16 Multibyte     fr_CH.UTF-8   UTF-16LE    UTF-8
++-       fr_CH.UTF-8   Multibyte UTF-16     fr_CH.UTF-8   UTF-8     UTF-16LE
++-       fr_FR.UTF-8   UTF-16 Multibyte     fr_FR.UTF-8   UTF-16LE    UTF-8
++-       fr_FR.UTF-8   Multibyte UTF-16     fr_FR.UTF-8   UTF-8     UTF-16LE
++-       fr_LU.UTF-8   UTF-16 Multibyte     fr_LU.UTF-8   UTF-16LE    UTF-8
++-       fr_LU.UTF-8   Multibyte UTF-16     fr_LU.UTF-8   UTF-8     UTF-16LE
++-       ga_IE.UTF-8   UTF-16 Multibyte     ga_IE.UTF-8   UTF-16LE    UTF-8
++-       ga_IE.UTF-8   Multibyte UTF-16     ga_IE.UTF-8   UTF-8     UTF-16LE
++-       gd_GB.UTF-8   UTF-16 Multibyte     gd_GB.UTF-8   UTF-16LE    UTF-8
++-       gd_GB.UTF-8   Multibyte UTF-16     gd_GB.UTF-8   UTF-8     UTF-16LE
++-       gl_ES.UTF-8   UTF-16 Multibyte     gl_ES.UTF-8   UTF-16LE    UTF-8
++-       gl_ES.UTF-8   Multibyte UTF-16     gl_ES.UTF-8   UTF-8     UTF-16LE
++-       gv_GB.UTF-8   UTF-16 Multibyte     gv_GB.UTF-8   UTF-16LE    UTF-8
++-       gv_GB.UTF-8   Multibyte UTF-16     gv_GB.UTF-8   UTF-8     UTF-16LE
++-       he_IL.UTF-8   UTF-16 Multibyte     he_IL.UTF-8   UTF-16LE    UTF-8
++-       he_IL.UTF-8   Multibyte UTF-16     he_IL.UTF-8   UTF-8     UTF-16LE
++-       hi_IN.UTF-8   UTF-16 Multibyte     hi_IN.UTF-8   UTF-16LE    UTF-8
++-       hi_IN.UTF-8   Multibyte UTF-16     hi_IN.UTF-8   UTF-8     UTF-16LE
++-       hr_HR.UTF-8   UTF-16 Multibyte     hr_HR.UTF-8   UTF-16LE    UTF-8
++-       hr_HR.UTF-8   Multibyte UTF-16     hr_HR.UTF-8   UTF-8     UTF-16LE
++-       hu_HU.UTF-8   UTF-16 Multibyte     hu_HU.UTF-8   UTF-16LE    UTF-8
++-       hu_HU.UTF-8   Multibyte UTF-16     hu_HU.UTF-8   UTF-8     UTF-16LE
++-       hy_AM.UTF-8   UTF-16 Multibyte     hy_AM.UTF-8   UTF-16LE    UTF-8
++-       hy_AM.UTF-8   Multibyte UTF-16     hy_AM.UTF-8   UTF-8     UTF-16LE
++-       id_ID.UTF-8   UTF-16 Multibyte     id_ID.UTF-8   UTF-16LE    UTF-8
++-       id_ID.UTF-8   Multibyte UTF-16     id_ID.UTF-8   UTF-8     UTF-16LE
++-       is_IS.UTF-8   UTF-16 Multibyte     is_IS.UTF-8   UTF-16LE    UTF-8
++-       is_IS.UTF-8   Multibyte UTF-16     is_IS.UTF-8   UTF-8     UTF-16LE
++-       it_CH.UTF-8   UTF-16 Multibyte     it_CH.UTF-8   UTF-16LE    UTF-8
++-       it_CH.UTF-8   Multibyte UTF-16     it_CH.UTF-8   UTF-8     UTF-16LE
++-       it_IT.UTF-8   UTF-16 Multibyte     it_IT.UTF-8   UTF-16LE    UTF-8
++-       it_IT.UTF-8   Multibyte UTF-16     it_IT.UTF-8   UTF-8     UTF-16LE
++-       iu_CA.UTF-8   UTF-16 Multibyte     iu_CA.UTF-8   UTF-16LE    UTF-8
++-       iu_CA.UTF-8   Multibyte UTF-16     iu_CA.UTF-8   UTF-8     UTF-16LE
++-       ja_JP.UTF-8   UTF-16 Multibyte     ja_JP.UTF-8   UTF-16LE    UTF-8
++-       ja_JP.UTF-8   Multibyte UTF-16     ja_JP.UTF-8   UTF-8     UTF-16LE
++-       ka_GE.UTF-8   UTF-16 Multibyte     ka_GE.UTF-8   UTF-16LE    UTF-8
++-       ka_GE.UTF-8   Multibyte UTF-16     ka_GE.UTF-8   UTF-8     UTF-16LE
++-       kl_GL.UTF-8   UTF-16 Multibyte     kl_GL.UTF-8   UTF-16LE    UTF-8
++-       kl_GL.UTF-8   Multibyte UTF-16     kl_GL.UTF-8   UTF-8     UTF-16LE
++-       ko_KR.UTF-8   UTF-16 Multibyte     ko_KR.UTF-8   UTF-16LE    UTF-8
++-       ko_KR.UTF-8   Multibyte UTF-16     ko_KR.UTF-8   UTF-8     UTF-16LE
++-       kw_GB.UTF-8   UTF-16 Multibyte     kw_GB.UTF-8   UTF-16LE    UTF-8
++-       kw_GB.UTF-8   Multibyte UTF-16     kw_GB.UTF-8   UTF-8     UTF-16LE
++-       lo_LA.UTF-8   UTF-16 Multibyte     lo_LA.UTF-8   UTF-16LE    UTF-8
++-       lo_LA.UTF-8   Multibyte UTF-16     lo_LA.UTF-8   UTF-8     UTF-16LE
++-       lt_LT.UTF-8   UTF-16 Multibyte     lt_LT.UTF-8   UTF-16LE    UTF-8
++-       lt_LT.UTF-8   Multibyte UTF-16     lt_LT.UTF-8   UTF-8     UTF-16LE
++-       lv_LV.UTF-8   UTF-16 Multibyte     lv_LV.UTF-8   UTF-16LE    UTF-8
++-       lv_LV.UTF-8   Multibyte UTF-16     lv_LV.UTF-8   UTF-8     UTF-16LE
++-       mi_NZ.UTF-8   UTF-16 Multibyte     mi_NZ.UTF-8   UTF-16LE    UTF-8
++-       mi_NZ.UTF-8   Multibyte UTF-16     mi_NZ.UTF-8   UTF-8     UTF-16LE
++-       mk_MK.UTF-8   UTF-16 Multibyte     mk_MK.UTF-8   UTF-16LE    UTF-8
++-       mk_MK.UTF-8   Multibyte UTF-16     mk_MK.UTF-8   UTF-8     UTF-16LE
++-       ms_MY.UTF-8   UTF-16 Multibyte     ms_MY.UTF-8   UTF-16LE    UTF-8
++-       ms_MY.UTF-8   Multibyte UTF-16     ms_MY.UTF-8   UTF-8     UTF-16LE
++-       nl_BE.UTF-8   UTF-16 Multibyte     nl_BE.UTF-8   UTF-16LE    UTF-8
++-       nl_BE.UTF-8   Multibyte UTF-16     nl_BE.UTF-8   UTF-8     UTF-16LE
++-       nl_NL.UTF-8   UTF-16 Multibyte     nl_NL.UTF-8   UTF-16LE    UTF-8
++-       nl_NL.UTF-8   Multibyte UTF-16     nl_NL.UTF-8   UTF-8     UTF-16LE
++-       no_NO.UTF-8   UTF-16 Multibyte     no_NO.UTF-8   UTF-16LE    UTF-8
++-       no_NO.UTF-8   Multibyte UTF-16     no_NO.UTF-8   UTF-8     UTF-16LE
++-       nb_NO.UTF-8   UTF-16 Multibyte     nb_NO.UTF-8   UTF-16LE    UTF-8
++-       nb_NO.UTF-8   Multibyte UTF-16     nb_NO.UTF-8   UTF-8     UTF-16LE
++-       ny_NO.UTF-8   UTF-16 Multibyte     ny_NO.UTF-8   UTF-16LE    UTF-8
++-       ny_NO.UTF-8   Multibyte UTF-16     ny_NO.UTF-8   UTF-8     UTF-16LE
++-       oc_FR.UTF-8   UTF-16 Multibyte     oc_FR.UTF-8   UTF-16LE    UTF-8
++-       oc_FR.UTF-8   Multibyte UTF-16     oc_FR.UTF-8   UTF-8     UTF-16LE
++-       pd_DE.UTF-8   UTF-16 Multibyte     pd_DE.UTF-8   UTF-16LE    UTF-8
++-       pd_DE.UTF-8   Multibyte UTF-16     pd_DE.UTF-8   UTF-8     UTF-16LE
++-       pd_US.UTF-8   UTF-16 Multibyte     pd_US.UTF-8   UTF-16LE    UTF-8
++-       pd_US.UTF-8   Multibyte UTF-16     pd_US.UTF-8   UTF-8     UTF-16LE
++-       ph_PH.UTF-8   UTF-16 Multibyte     ph_PH.UTF-8   UTF-16LE    UTF-8
++-       ph_PH.UTF-8   Multibyte UTF-16     ph_PH.UTF-8   UTF-8     UTF-16LE
++-       pl_PL.UTF-8   UTF-16 Multibyte     pl_PL.UTF-8   UTF-16LE    UTF-8
++-       pl_PL.UTF-8   Multibyte UTF-16     pl_PL.UTF-8   UTF-8     UTF-16LE
++-       pp_AN.UTF-8   UTF-16 Multibyte     pp_AN.UTF-8   UTF-16LE    UTF-8
++-       pp_AN.UTF-8   Multibyte UTF-16     pp_AN.UTF-8   UTF-8     UTF-16LE
++-       pt_BR.UTF-8   UTF-16 Multibyte     pt_BR.UTF-8   UTF-16LE    UTF-8
++-       pt_BR.UTF-8   Multibyte UTF-16     pt_BR.UTF-8   UTF-8     UTF-16LE
++-       pt_PT.UTF-8   UTF-16 Multibyte     pt_PT.UTF-8   UTF-16LE    UTF-8
++-       pt_PT.UTF-8   Multibyte UTF-16     pt_PT.UTF-8   UTF-8     UTF-16LE
++-       ro_RO.UTF-8   UTF-16 Multibyte     ro_RO.UTF-8   UTF-16LE    UTF-8
++-       ro_RO.UTF-8   Multibyte UTF-16     ro_RO.UTF-8   UTF-8     UTF-16LE
++-       ru_RU.UTF-8   UTF-16 Multibyte     ru_RU.UTF-8   UTF-16LE    UTF-8
++-       ru_RU.UTF-8   Multibyte UTF-16     ru_RU.UTF-8   UTF-8     UTF-16LE
++-       ru_UA.UTF-8   UTF-16 Multibyte     ru_UA.UTF-8   UTF-16LE    UTF-8
++-       ru_UA.UTF-8   Multibyte UTF-16     ru_UA.UTF-8   UTF-8     UTF-16LE
++-       sk_SK.UTF-8   UTF-16 Multibyte     sk_SK.UTF-8   UTF-16LE    UTF-8
++-       sk_SK.UTF-8   Multibyte UTF-16     sk_SK.UTF-8   UTF-8     UTF-16LE
++-       sl_SI.UTF-8   UTF-16 Multibyte     sl_SI.UTF-8   UTF-16LE    UTF-8
++-       sl_SI.UTF-8   Multibyte UTF-16     sl_SI.UTF-8   UTF-8     UTF-16LE
++-       sq_AL.UTF-8   UTF-16 Multibyte     sq_AL.UTF-8   UTF-16LE    UTF-8
++-       sq_AL.UTF-8   Multibyte UTF-16     sq_AL.UTF-8   UTF-8     UTF-16LE
++-       sr_YU.UTF-8   UTF-16 Multibyte     sr_YU.UTF-8   UTF-16LE    UTF-8
++-       sr_YU.UTF-8   Multibyte UTF-16     sr_YU.UTF-8   UTF-8     UTF-16LE
++-       sv_FI.UTF-8   UTF-16 Multibyte     sv_FI.UTF-8   UTF-16LE    UTF-8
++-       sv_FI.UTF-8   Multibyte UTF-16     sv_FI.UTF-8   UTF-8     UTF-16LE
++-       sv_SE.UTF-8   UTF-16 Multibyte     sv_SE.UTF-8   UTF-16LE    UTF-8
++-       sv_SE.UTF-8   Multibyte UTF-16     sv_SE.UTF-8   UTF-8     UTF-16LE
++-       ta_IN.UTF-8   UTF-16 Multibyte     ta_IN.UTF-8   UTF-16LE    UTF-8
++-       ta_IN.UTF-8   Multibyte UTF-16     ta_IN.UTF-8   UTF-8     UTF-16LE
++-       tg_TJ.UTF-8   UTF-16 Multibyte     tg_TJ.UTF-8   UTF-16LE    UTF-8
++-       tg_TJ.UTF-8   Multibyte UTF-16     tg_TJ.UTF-8   UTF-8     UTF-16LE
++-       th_TH.UTF-8   UTF-16 Multibyte     th_TH.UTF-8   UTF-16LE    UTF-8
++-       th_TH.UTF-8   Multibyte UTF-16     th_TH.UTF-8   UTF-8     UTF-16LE
++-       tl_PH.UTF-8   UTF-16 Multibyte     tl_PH.UTF-8   UTF-16LE    UTF-8
++-       tl_PH.UTF-8   Multibyte UTF-16     tl_PH.UTF-8   UTF-8     UTF-16LE
++-       tr_TR.UTF-8   UTF-16 Multibyte     tr_TR.UTF-8   UTF-16LE    UTF-8
++-       tr_TR.UTF-8   Multibyte UTF-16     tr_TR.UTF-8   UTF-8     UTF-16LE
++-       tt_RU.UTF-8   UTF-16 Multibyte     tt_RU.UTF-8   UTF-16LE    UTF-8
++-       tt_RU.UTF-8   Multibyte UTF-16     tt_RU.UTF-8   UTF-8     UTF-16LE
++-       uk_UA.UTF-8   UTF-16 Multibyte     uk_UA.UTF-8   UTF-16LE    UTF-8
++-       uk_UA.UTF-8   Multibyte UTF-16     uk_UA.UTF-8   UTF-8     UTF-16LE
++-       ur_PK.UTF-8   UTF-16 Multibyte     ur_PK.UTF-8   UTF-16LE    UTF-8
++-       ur_PK.UTF-8   Multibyte UTF-16     ur_PK.UTF-8   UTF-8     UTF-16LE
++-       vi_VN.UTF-8   UTF-16 Multibyte     vi_VN.UTF-8   UTF-16LE    UTF-8
++-       vi_VN.UTF-8   Multibyte UTF-16     vi_VN.UTF-8   UTF-8     UTF-16LE
++-       wa_BE.UTF-8   UTF-16 Multibyte     wa_BE.UTF-8   UTF-16LE    UTF-8
++-       wa_BE.UTF-8   Multibyte UTF-16     wa_BE.UTF-8   UTF-8     UTF-16LE
++-       yi_US.UTF-8   UTF-16 Multibyte     yi_US.UTF-8   UTF-16LE    UTF-8
++-       yi_US.UTF-8   Multibyte UTF-16     yi_US.UTF-8   UTF-8     UTF-16LE
++-       zh_CN.UTF-8   UTF-16 Multibyte     zh_CN.UTF-8   UTF-16LE    UTF-8
++-       zh_CN.UTF-8   Multibyte UTF-16     zh_CN.UTF-8   UTF-8     UTF-16LE
++-       zh_HK.UTF-8   UTF-16 Multibyte     zh_HK.UTF-8   UTF-16LE    UTF-8
++-       zh_HK.UTF-8   Multibyte UTF-16     zh_HK.UTF-8   UTF-8     UTF-16LE
++-       zh_TW.UTF-8   UTF-16 Multibyte     zh_TW.UTF-8   UTF-16LE    UTF-8
++-       zh_TW.UTF-8   Multibyte UTF-16     zh_TW.UTF-8   UTF-8     UTF-16LE
+------------------------------------------------------------
 
-
-  Also ports/textproc/iiimf-gtk should be fixed.
-
---- /usr/ports/textproc/iiimf-gtk/files/patch-iiimgcf_gtkimcontextiiim.c.orig	Thu Feb  8 21:06:25 2007
-+++ /usr/ports/textproc/iiimf-gtk/files/patch-iiimgcf_gtkimcontextiiim.c	Thu Feb  8 21:06:33 2007
-@@ -82,62 +82,6 @@
-    gtk_frame_set_shadow_type (GTK_FRAME (w->frame), GTK_SHADOW_ETCHED_OUT);
-  
-    w->tree = gtk_tree_view_new ();
--@@ -1539,14 +1544,52 @@
-- }
-- 
-- static gchar *
--+iconv_utf16_to_utf8(const gunichar2 *utf16, int length)
--+{
--+  if (!utf16 || 0 >= length) return g_strdup("");
--+
--+  if ((iconv_t)-1 == ic_u16_to_u8) {
--+    ic_u16_to_u8 = iconv_open("UTF-8", "UTF-16");
--+
--+    if ((iconv_t)-1 == ic_u16_to_u8) {
--+      fprintf(stderr, "iiimgcf: Unable to open UTF-16 -> UTF-8 converter.");
--+      return NULL;
--+    }
--+  }
--+
--+  int inlen = length * sizeof(gunichar2);
--+  int outlen = (length +1) * 4;
--+  const char *inbuf = (char*)utf16;
--+  char *outbuf = g_malloc0(outlen + 4);
--+  gchar *utf8 = (gchar*)outbuf;
--+
--+  if (!outbuf) {
--+    fprintf(stderr, "iiimgcf: Out of memory error.");
--+    return NULL;
--+  }
--+
--+  if ((size_t)-1 == iconv(ic_u16_to_u8, &inbuf, &inlen, &outbuf, &outlen)) {
--+    fprintf(stderr, "iiimgcf: Unable to convert the string.");
--+    g_free(utf8);
--+    return NULL;
--+  }
--+
--+  return utf8;
--+}
--+
--+static gchar *
-- utf16_to_utf8 (IIIMCF_text text)
-- {
--   IIIMF_status st;
--+
--+  int len = 0;
--   IIIMP_card16 *u16str = NULL;
--   st = iiimcf_get_text_utf16string (text, (const IIIMP_card16 **) &u16str);
---  return (u16str != NULL ?
---	  g_utf16_to_utf8 ((const gunichar2 *) u16str, -1, NULL, NULL, NULL) :
---	  NULL);
--+  st = iiimcf_get_text_length(text, &len);
--+
--+  if (st != IIIMF_STATUS_SUCCESS) return NULL;
--+
--+  return iconv_utf16_to_utf8((const gunichar2 *)u16str, len);
-- }
-- 
-- static void
- @@ -2094,7 +2137,7 @@
-      goto Error;
-    utf8 = utf16_to_utf8 (text);
