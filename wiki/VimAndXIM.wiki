@@ -14,9 +14,9 @@ IM の対応状況
 
 ||input style||  uim  ||  scim  || iiimf || kinput2 ||
 ||       Root||   o   ||   o    ||   o   ||    o    ||
-||  OnTheSpot||   o   ||   o    ||   o   ||    o    ||
 || OffTheSpot||   x   ||   o    ||   o   ||    o    ||
 ||OverTheSpot||   o   ||   o    ||   o   ||    o    ||
+||  OnTheSpot||   o   ||   o    ||   o   ||    o    ||
 
 uim は OffTheSpot 非対応。
 
@@ -31,18 +31,15 @@ Vim の対応状況 (Athena 版 Vim は OnTheSpot 非対応)
 
 ||input style||  uim  ||  scim  || iiimf || kinput2 ||
 ||       Root||   o   ||   o    ||   o   ||    o    ||
-||  OnTheSpot||   -   ||   -    ||   -   ||    -    ||
 || OffTheSpot||   x   ||   x    ||   o   ||    o    ||
 ||OverTheSpot||   x   ||   o    ||   o   ||    o    ||
+||  OnTheSpot||   -   ||   -    ||   -   ||    -    ||
 
 X での日本語入力は Athena 版が一番安定している気がする(少し直せば)。
 
 ポイントは
   # XNInputStyle の指定
   # フォーカス制御
-
-Root, OnTheSpot, OffTheSpot, OverTheSpot というのは目安であって、それによっ
-て XNInputStyle のフラグの組み合わが決まっているわけではないらしい。
 
 Root のときはどちらも IM 制御が利く。XSetICFocus() と XUnsetICFocus() によっ
 て IM の on/off を切り替えてるらしい。
@@ -76,7 +73,7 @@ set guifont=-misc-fixed-medium-r-normal--15-140-75-75-c-90-iso10646-1
 " (by mbyte.txt) だと文字が横長になる。
 }}}
 
-~/.Xresources
+~/.Xdefaults
 {{{
 *.preeditType: Root
 ! または
@@ -108,7 +105,7 @@ vim は XNQueryInputStyle で対応しているスタイルを問い合わせる
 style = (XIMPreeditPosition | XIMStatusArea)
 if style in supported:
   XCreateIC(style)
-elif (style ^ XIMStatusArea) in supported:
+elif (style & XIMStatusArea) and (style ^ XIMStatusArea) in supported:
   XCreateIC(style ^ XIMStatusArea)
 }}}
 その場合、uim-xim はハングする。
@@ -172,7 +169,7 @@ iiimf の対応 input style。
 iiimf-12.3.91-svn2814/xiiimp.so/iiimp/iiimpIM.c
 {{{
  56 static XIMStyle im_styles[] = {
- 57         XIMPreeditCallbacks |XIMStatusCallbacks,
+ 57         XIMPreeditCallbacks | XIMStatusCallbacks,
  58         XIMPreeditCallbacks | XIMStatusArea,
  59         XIMPreeditCallbacks | XIMStatusNothing,
  60         XIMPreeditPosition  | XIMStatusCallbacks,
@@ -188,7 +185,7 @@ iiimf-12.3.91-svn2814/xiiimp.so/iiimp/iiimpIM.c
  70         XIMPreeditPosition  | XIMStatusNone,
  71         XIMPreeditArea      | XIMStatusNone,
  72         XIMPreeditNothing   | XIMStatusNone,
- 73         XIMPreeditNone  | XIMStatusCallbacks,
+ 73         XIMPreeditNone      | XIMStatusCallbacks,
  74         XIMPreeditNone      | XIMStatusArea,
  75         XIMPreeditNone      | XIMStatusNothing,
  76         XIMPreeditNone      | XIMStatusNone,
@@ -225,6 +222,11 @@ Xlib.h:
 #define XIMStatusNone           0x0800L
 }}}
 
+||   XIMPreeditNothing || Root        ||
+||      XIMPreeditArea || OffTheSpot  ||
+||  XIMPreeditPosition || OverTheSpot ||
+|| XIMPreeditCallbacks || OnTheSpot   ||
+||      XIMPreeditNone || 表示なし    ||
 
 = GTK1 =
 
