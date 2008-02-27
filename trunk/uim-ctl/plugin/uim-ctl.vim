@@ -15,11 +15,11 @@ augroup UimHelper
   au!
   autocmd InsertEnter * call s:RestoreMode()
   autocmd InsertLeave * call s:SaveMode()
-  autocmd CursorHold,CursorHoldI * call s:PumpEvent()
+  autocmd VimLeavePre * call libcall(s:dll, "unload", 0)
 augroup END
 
-function! s:PumpEvent()
-  let buf = libcall(s:dll, "pump_event", 0)
+function! s:GetProp()
+  let buf = libcall(s:dll, "get_prop", 0)
   if buf =~ '^prop_list_update'
     let cur_method = matchstr(buf, 'action_imsw_\zs\w\+\ze\t\*')
     let current_mode = matchstr(buf, 'action_' . cur_method . '_\w*\ze\t\*')
@@ -30,7 +30,7 @@ function! s:PumpEvent()
 endfunction
 
 function! s:SaveMode()
-  let [s:current_mode, s:direct_mode] = s:PumpEvent()
+  let [s:current_mode, s:direct_mode] = s:GetProp()
   if s:current_mode != ""
     call libcall(s:dll, "send_message", "prop_activate\n" . s:direct_mode . "\n")
   endif
@@ -40,6 +40,5 @@ function! s:RestoreMode()
   if s:current_mode != ""
     call libcall(s:dll, "send_message", "prop_activate\n" . s:current_mode . "\n")
   endif
-  call s:PumpEvent()
 endfunction
 
