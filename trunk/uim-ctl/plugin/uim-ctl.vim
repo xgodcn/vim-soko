@@ -13,7 +13,7 @@ augroup UimHelper
   autocmd InsertEnter * call s:RestoreMode()
   autocmd InsertLeave * call s:SaveMode()
   autocmd VimLeave * call libcall(s:dll, "unload", 0)
-  " poll() is not work when dll is loaded before VimEnter.
+  " poll() does not work when dll is loaded before VimEnter.
   autocmd VimEnter * let s:err = libcall(s:dll, "load", s:dll)
   autocmd VimEnter * if s:err != "" | au! UimHelper * | endif
 augroup END
