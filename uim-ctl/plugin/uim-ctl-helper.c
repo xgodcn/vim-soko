@@ -55,15 +55,6 @@ main(int argc, char **argv)
     free(p);
   }
 
-  /*
-   * XXX: uim warn
-   * uim-helper_server write(2) failed: Broken pipe
-   */
-  {
-    char buf[BUFSIZ];
-    read(uim_fd, buf, sizeof(buf));
-  }
-
   uim_helper_close_client_fd(uim_fd);
   pthread_join(twatch, NULL);
   pthread_mutex_destroy(&mutex);

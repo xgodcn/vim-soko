@@ -15,7 +15,7 @@ augroup UimHelper
   au!
   autocmd InsertEnter * call s:RestoreMode()
   autocmd InsertLeave * call s:SaveMode()
-  autocmd VimLeavePre * call libcall(s:dll, "unload", 0)
+  autocmd VimLeave * call libcall(s:dll, "unload", 0)
 augroup END
 
 function! s:GetProp()

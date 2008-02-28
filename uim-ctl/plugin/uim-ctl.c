@@ -1,6 +1,8 @@
 #include <uim/uim.h>
 #include <uim/uim-helper.h>
 #include <dlfcn.h>
+#include <sys/types.h>
+#include <sys/wait.h>
 
 #include <stdlib.h>
 #include <string.h>
