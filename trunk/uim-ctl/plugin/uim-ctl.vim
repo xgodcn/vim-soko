@@ -1,4 +1,3 @@
-" 2007-01-30
 
 if exists("s:init")
   finish
@@ -9,13 +8,14 @@ let s:dll = expand("<sfile>:p:h") . "/uim-ctl.so"
 let s:direct_mode = ""
 let s:current_mode = ""
 
-call libcall(s:dll, "load", s:dll)
-
 augroup UimHelper
   au!
   autocmd InsertEnter * call s:RestoreMode()
   autocmd InsertLeave * call s:SaveMode()
   autocmd VimLeave * call libcall(s:dll, "unload", 0)
+  " poll() is not work when dll is loaded before VimEnter.
+  autocmd VimEnter * let s:err = libcall(s:dll, "load", s:dll)
+  autocmd VimEnter * if s:err != "" | au! UimHelper * | endif
 augroup END
 
 function! s:GetProp()
