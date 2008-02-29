@@ -35,6 +35,9 @@ load(const char* dsopath)
   char *path;
   int fd;
 
+  if (uim_fd != 0)
+    return NULL;
+
   self = dlopen(dsopath, RTLD_LAZY);
   if (self == NULL)
     return strerror(errno);
@@ -84,7 +87,7 @@ load(const char* dsopath)
 
   uim_fd = fd;
 
-  return 0;
+  return NULL;
 }
 
 const char*
@@ -102,13 +105,18 @@ unload()
 const char*
 get_prop()
 {
-  static char buf[2048];
+  static char *p = NULL;
   if (uim_fd == 0)
     return NULL;
   pthread_mutex_lock(&mutex);
-  strlcpy(buf, prop ? prop : "", sizeof(buf));
+  if (prop) {
+    if (p)
+      free(p);
+    p = prop;
+    prop = NULL;
+  }
   pthread_mutex_unlock(&mutex);
-  return buf;
+  return p;
 }
 
 const char*
