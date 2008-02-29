@@ -5,6 +5,7 @@
 
 #include <errno.h>
 #include <stdio.h>
+#include <string.h>
 
 #include <uim/uim.h>
 #include <uim/uim-helper.h>
@@ -61,6 +62,8 @@ main(int argc, char **argv)
         if (len[i] == 0) {
           pfd[i].fd = fds[i][0];
           pfd[i].events = POLLIN;
+        } else {
+          memmove(buf[i], buf[i] + n, len[i]);
         }
       } else if (pfd[i].revents & (POLLERR | POLLHUP | POLLNVAL)) {
         goto endloop;
