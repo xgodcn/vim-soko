@@ -173,14 +173,14 @@ static ssize_t
 xwrite(int fd, const char *buf, size_t size)
 {
   ssize_t n;
-  size_t s = size;
-  while (s > 0) {
-    RETRY_EINTR(n, write(uim_fd, buf, size));
+  size_t s = 0;
+  while (s < size) {
+    RETRY_EINTR(n, write(uim_fd, buf + s, size - s));
     if (n == -1)
       return -1;
-    s -= n;
+    s += n;
   }
-  return size;
+  return s;
 }
 
 
