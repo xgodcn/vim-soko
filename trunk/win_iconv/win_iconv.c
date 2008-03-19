@@ -152,6 +152,7 @@ static HMODULE hlastdll; /* keep dll loaded for efficiency (unnecessary?) */
 
 static int sbcs_mblen(csconv_t *cv, const uchar *buf, int bufsize);
 static int dbcs_mblen(csconv_t *cv, const uchar *buf, int bufsize);
+static int mbcs_mblen(csconv_t *cv, const uchar *buf, int bufsize);
 static int utf8_mblen(csconv_t *cv, const uchar *buf, int bufsize);
 static int eucjp_mblen(csconv_t *cv, const uchar *buf, int bufsize);
 
@@ -178,10 +179,12 @@ static struct {
     {1200, "CP1200"},
     {1200, "UTF16LE"},
     {1200, "UTF-16LE"},
+    {1200, "UCS-2LE"},
 
     {1201, "CP1201"},
     {1201, "UTF16BE"},
     {1201, "UTF-16BE"},
+    {1201, "UCS-2BE"},
     {1201, "unicodeFFFE"},
 
     {12000, "CP12000"},
@@ -205,6 +208,7 @@ static struct {
     /* Default is little endian, because the platform is */
     {1200, "UTF16"},
     {1200, "UTF-16"},
+    {1200, "UCS-2"},
     {12000, "UTF32"},
     {12000, "UTF-32"},
 #endif
@@ -226,7 +230,6 @@ static struct {
     /* !IsValidCodePage(819) */
     {1252, "CP819"},
     {1252, "IBM819"},
-
     {28591, "ISO-8859-1"},
     {28591, "ISO-IR-100"},
     {28591, "ISO8859-1"},
@@ -438,6 +441,7 @@ static struct {
     {874, "windows-874"}, /* ANSI/OEM Thai (same as 28605, ISO 8859-15); Thai (Windows) */
     {875, "cp875"}, /* IBM EBCDIC Greek Modern */
     {932, "shift_jis"}, /* ANSI/OEM Japanese; Japanese (Shift-JIS) */
+    {932, "shift-jis"}, /* alternative name for it */
     {936, "gb2312"}, /* ANSI/OEM Simplified Chinese (PRC, Singapore); Chinese Simplified (GB2312) */
     {949, "ks_c_5601-1987"}, /* ANSI/OEM Korean (Unified Hangul Code) */
     {950, "big5"}, /* ANSI/OEM Traditional Chinese (Taiwan; Hong Kong SAR, PRC); Chinese Traditional (Big5) */
@@ -891,7 +895,9 @@ make_csconv(const char *_name)
     {
         cv.mbtowc = utf16_mbtowc;
         cv.wctomb = utf16_wctomb;
-        if (_stricmp(name, "UTF-16") == 0 || _stricmp(name, "UTF16") == 0)
+        if (_stricmp(name, "UTF-16") == 0 ||
+	    _stricmp(name, "UTF16") == 0 ||
+	    _stricmp(name, "UCS-2") == 0)
             cv.flags |= UNICODE_FLAG_USE_BOM_ENDIAN;
     }
     else if (cv.codepage == 12000 || cv.codepage == 12001)
@@ -920,15 +926,16 @@ make_csconv(const char *_name)
         cv.mblen = eucjp_mblen;
     }
     else if (IsValidCodePage(cv.codepage)
-            && GetCPInfoEx(cv.codepage, 0, &cpinfoex) != 0
-            && (cpinfoex.MaxCharSize == 1 || cpinfoex.MaxCharSize == 2))
+	     && GetCPInfoEx(cv.codepage, 0, &cpinfoex) != 0)
     {
         cv.mbtowc = kernel_mbtowc;
         cv.wctomb = kernel_wctomb;
         if (cpinfoex.MaxCharSize == 1)
             cv.mblen = sbcs_mblen;
-        else
+        else if (cpinfoex.MaxCharSize == 2)
             cv.mblen = dbcs_mblen;
+	else
+	    cv.mblen = mbcs_mblen;
     }
     else
     {
@@ -953,7 +960,12 @@ name_to_codepage(const char *name)
 {
     int i;
 
-    if (_strnicmp(name, "cp", 2) == 0)
+    if (*name == '\0' ||
+	strcmp(name, "char") == 0)
+        return GetACP();
+    else if (strcmp(name, "wchar_t") == 0)
+        return 1200;
+    else if (_strnicmp(name, "cp", 2) == 0)
         return atoi(name + 2); /* CP123 */
     else if ('0' <= name[0] && name[0] <= '9')
         return atoi(name);     /* 123 */
@@ -1208,6 +1220,28 @@ dbcs_mblen(csconv_t *cv, const uchar *buf, int bufsize)
     if (bufsize < len)
         return_error(EINVAL);
     return len;
+}
+
+static int
+mbcs_mblen(csconv_t *cv, const uchar *buf, int bufsize)
+{
+    int len = 0;
+
+    if (cv->codepage == 54936) {
+	if (buf[0] <= 0x7F) len = 1;
+	else if (buf[0] >= 0x81 && buf[0] <= 0xFE &&
+		 bufsize >= 2 &&
+		 ((buf[1] >= 0x40 && buf[1] <= 0x7E) ||
+		  (buf[1] >= 0x80 && buf[1] <= 0xFE))) len = 2;
+	else if (buf[0] >= 0x81 && buf[0] <= 0xFE &&
+		 bufsize >= 4 &&
+		 buf[1] >= 0x30 && buf[1] <= 0x39) len = 4;
+	else
+	    return_error(EINVAL);
+	return len;
+    }
+    else
+	return_error(EINVAL);
 }
 
 static int
