@@ -1,5 +1,5 @@
 
-fpdf.vim is library to write PDF.  This is translated from FPDF.
+fpdf.vim is a library to write PDF, ported from FPDF.
 
 About FPDF:
   FPDF is a PHP class which allows to generate PDF files with pure PHP.
