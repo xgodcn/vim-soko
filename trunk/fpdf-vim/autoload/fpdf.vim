@@ -1688,10 +1688,11 @@ endfunction
 
 function s:fpdf._escape(s)
   "Add \ before \, ( and )
-  let s = substitute(a:s, '\\', '\\\\', 'g')
-  let s = substitute(a:s, '(', '\\(', 'g')
-  let s = substitute(a:s, ')', '\\)', 'g')
-  return a:s
+  let s = a:s
+  let s = substitute(s, '\\', '\\\\', 'g')
+  let s = substitute(s, '(', '\\(', 'g')
+  let s = substitute(s, ')', '\\)', 'g')
+  return s
 endfunction
 
 function s:fpdf._bin2hex(s)
@@ -1721,10 +1722,10 @@ endfunction
 
 " Encoding & CMap List (CMap information from Acrobat Reader Resource/CMap folder)
 let s:fpdf.MBCMAP = {
-      \ 'UniCNS' : {'CMap' : 'UniCNS-UTF16-H', 'Ordering' : 'CNS1',   'Supplement' : 0},
-      \ 'UniGB'  : {'CMap' : 'UniGB-UTF16-H',  'Ordering' : 'GB1',    'Supplement' : 2},
-      \ 'UniKS'  : {'CMap' : 'UniKS-UTF16-H',  'Ordering' : 'Korea1', 'Supplement' : 0},
-      \ 'UniJIS' : {'CMap' : 'UniJIS-UTF16-H', 'Ordering' : 'Japan1', 'Supplement' : 5},
+      \ 'UniCNS' : {'Encoding' : 'UniCNS-UTF16-H', 'Ordering' : 'CNS1',   'Supplement' : 0},
+      \ 'UniGB'  : {'Encoding' : 'UniGB-UTF16-H',  'Ordering' : 'GB1',    'Supplement' : 2},
+      \ 'UniKS'  : {'Encoding' : 'UniKS-UTF16-H',  'Ordering' : 'Korea1', 'Supplement' : 0},
+      \ 'UniJIS' : {'Encoding' : 'UniJIS-UTF16-H', 'Ordering' : 'Japan1', 'Supplement' : 5},
       \ }
 
 let s:fpdf.MBTTFDEF_MONO = {
@@ -1769,10 +1770,10 @@ let s:fpdf.MBTTFDEF_PROPORTIONAL = {
       \   },
       \ }
 
-function s:fpdf.AddCIDFont(family, style, name, cw, CMap, registry, ut, up)
+function s:fpdf.AddCIDFont(family, style, name, cw, Encoding, Registry, ut, up)
   let i = len(self.fonts) + 1
   let fontkey = tolower(a:family) . toupper(a:style)
-  let self.fonts[fontkey] = {'i' : i, 'type' : 'Type0', 'name' : a:name, 'up' : a:up, 'ut' : a:ut, 'cw' : a:cw, 'CMap' : a:CMap, 'registry' : a:registry}
+  let self.fonts[fontkey] = {'i' : i, 'type' : 'Type0', 'name' : a:name, 'up' : a:up, 'ut' : a:ut, 'cw' : a:cw, 'Encoding' : a:Encoding, 'Registry' : a:Registry}
 endfunction
 
 function s:fpdf.AddMBFont(...)
@@ -1790,14 +1791,14 @@ function s:fpdf.AddMBFont(...)
   let ut = gt['ut']
   let up = gt['up']
   let cw = gt['cw']
-  let cm = gc['CMap']
+  let ec = gc['Encoding']
   let od = gc['Ordering']
   let sp = gc['Supplement']
-  let registry = {'ordering' : od, 'supplement' : sp}
-  call self.AddCIDFont(family,''  , family                , cw, cm, registry, ut, up)
-  call self.AddCIDFont(family,'B' , family . ",Bold"      , cw, cm, registry, ut, up)
-  call self.AddCIDFont(family,'I' , family . ",Italic"    , cw, cm, registry, ut, up)
-  call self.AddCIDFont(family,'BI', family . ",BoldItalic", cw, cm, registry, ut, up)
+  let Registry = {'Ordering' : od, 'Supplement' : sp}
+  call self.AddCIDFont(family,''  , family                , cw, ec, Registry, ut, up)
+  call self.AddCIDFont(family,'B' , family . ",Bold"      , cw, ec, Registry, ut, up)
+  call self.AddCIDFont(family,'I' , family . ",Italic"    , cw, ec, Registry, ut, up)
+  call self.AddCIDFont(family,'BI', family . ",BoldItalic", cw, ec, Registry, ut, up)
 endfunction
 
 function s:fpdf.nr2utf16hex(char)
@@ -1820,8 +1821,8 @@ function s:fpdf._putType0(font)
   call self._newobj()
   call self._out('<</Type /Font')
   call self._out('/Subtype /Type0')
-  call self._out('/BaseFont /' . font['name'] . '-' . font['CMap'])
-  call self._out('/Encoding /' . font['CMap'])
+  call self._out('/BaseFont /' . font['name'] . '-' . font['Encoding'])
+  call self._out('/Encoding /' . font['Encoding'])
   call self._out('/DescendantFonts [' . (self.n + 1) . ' 0 R]')
   call self._out('>>')
   call self._out('endobj')
@@ -1829,14 +1830,21 @@ function s:fpdf._putType0(font)
   call self._newobj()
   call self._out('<</Type /Font')
   call self._out('/Subtype /CIDFontType0')
-  call self._out('/BaseFont /' . font['name'])
-  call self._out('/CIDSystemInfo <</Registry (Adobe) /Ordering (' . font['registry']['ordering'] . ') /Supplement ' . font['registry']['supplement'] . '>>')
-  call self._out('/FontDescriptor ' . (self.n + 1) . ' 0 R')
+  call self._out('/BaseFont /' . font['name'] . '-' . font['Encoding'])
+  call self._out('/CIDSystemInfo ' . (self.n + 1) . ' 0 R')
+  call self._out('/FontDescriptor ' . (self.n + 2) . ' 0 R')
   call self._out('/W [1 [ ' . join(values(font['cw']), ' ') . ' ]')
-  if font['registry']['ordering'] == 'Japan1'
+  if font['Registry']['Ordering'] == 'Japan1'
     call self._out(' 231 325 500 631 [500] 326 389 500')
   endif
   call self._out(']')
+  call self._out('>>')
+  call self._out('endobj')
+  "CIDSystemInfo
+  call self._newobj()
+  call self._out('<</Registry (Adobe)')
+  call self._out('/Ordering (' . font['Registry']['Ordering'] . ')')
+  call self._out('/Supplement ' . font['Registry']['Supplement'])
   call self._out('>>')
   call self._out('endobj')
   "Font descriptor
