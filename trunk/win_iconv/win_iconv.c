@@ -137,6 +137,7 @@ static int name_to_codepage(const char *name);
 static uint utf16_to_ucs4(const ushort *wbuf);
 static void ucs4_to_utf16(uint wc, ushort *wbuf, int *wbufsize);
 static int is_unicode(int codepage);
+static int mbtowc_flags(int codepage);
 static int must_use_null_useddefaultchar(int codepage);
 static void check_utf_bom(rec_iconv_t *cd, ushort *wbuf, int *wbufsize);
 static char *strrstr(const char *str, const char *token);
@@ -1015,6 +1016,35 @@ is_unicode(int codepage)
             codepage == 65000 || codepage == 65001);
 }
 
+/*
+ * Check if codepage is one of those for which the dwFlags parameter
+ * to MultiByteToWideChar() must be zero. Return zero or
+ * MB_ERR_INVALID_CHARS.  The docs in Platform SDK for for Windows
+ * Server 2003 R2 claims that also codepage 65001 is one of these, but
+ * that doesn't seem to be the case. The MSDN docs for MSVS2008 leave
+ * out 65001 (UTF-8), and that indeed seems to be the case on XP, it
+ * works fine to pass MB_ERR_INVALID_CHARS in dwFlags when converting
+ * from UTF-8.
+ */
+static int
+mbtowc_flags(int codepage)
+{
+    return (codepage == 50220 || codepage == 50221 ||
+	    codepage == 50222 || codepage == 50225 ||
+	    codepage == 50227 || codepage == 50229 ||
+	    codepage == 52936 || codepage == 54936 ||
+	    (codepage >= 57002 && codepage <= 57011) ||
+	    codepage == 65000 || codepage == 42) ? 0 : MB_ERR_INVALID_CHARS;
+}
+
+/*
+ * Check if codepage is one those for which the lpUsedDefaultChar
+ * parameter to WideCharToMultiByte() must be NULL.  The docs in
+ * Platform SDK for for Windows Server 2003 R2 claims that this is the
+ * list below, while the MSDN docs for MSVS2008 claim that it is only
+ * for 65000 (UTF-7) and 65001 (UTF-8). This time the earlier Platform
+ * SDK seems to be correct, at least for XP.
+ */
 static int
 must_use_null_useddefaultchar(int codepage)
 {
@@ -1304,7 +1334,7 @@ kernel_mbtowc(csconv_t *cv, const uchar *buf, int bufsize, ushort *wbuf, int *wb
     len = cv->mblen(cv, buf, bufsize);
     if (len == -1)
         return -1;
-    *wbufsize = MultiByteToWideChar(cv->codepage, MB_ERR_INVALID_CHARS,
+    *wbufsize = MultiByteToWideChar(cv->codepage, mbtowc_flags (cv->codepage),
             (const char *)buf, len, (wchar_t *)wbuf, *wbufsize);
     if (*wbufsize == 0)
         return_error(EILSEQ);
