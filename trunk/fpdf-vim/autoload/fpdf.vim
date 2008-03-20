@@ -92,7 +92,11 @@ function! s:gzcompress(data)
 endfunction
 
 function! s:fread(path)
-  throw 'fread: not impremented'
+  if !executable('xxd')
+    throw 'cannot find xxd'
+  endif
+  let data = system('xxd -ps -c 1 ' . shellescape(a:path))
+  return split(data)
 endfunction
 
 function! s:get_magic_quotes_runtime()
@@ -604,15 +608,18 @@ function s:fpdf.AddFont(...)
   if has_key(self.fonts, fontkey)
     throw 'Font already added: ' . family . ' ' . style
   endif
-  unlet! s:fpdf._font
   call s:include(self._getfontpath() . file)
   " _font should have type, name, desc, up, ut, cw, enc, file, diff
   if !has_key(s:fpdf, '_font')
     throw 'Could not include font definition file'
   endif
+  let font = s:fpdf._font
+  unlet s:fpdf._font
   let i = len(self.fonts) + 1
-  let self.fonts[fontkey] = s:fpdf._font
-  let diff = s:fpdf._font['diff']
+  let font['i'] = i
+  let self.fonts[fontkey] = font
+  let file = font['file']
+  let diff = font['diff']
   if diff != 0
     "Search existing encodings
     let d = 0
@@ -630,8 +637,8 @@ function s:fpdf.AddFont(...)
     let self.fonts[fontkey]['diff'] = d
   endif
   if file != ''
-    if type == 'TrueType'
-      let self.FontFiles[file] = {'length1' : originalsize}
+    if font['type'] == 'TrueType'
+      let self.FontFiles[file] = {'length1' : font['originalsize']}
     else
       let self.FontFiles[file] = {'length1' : size1, 'length2' : size2}
     endif
@@ -1251,29 +1258,34 @@ function s:fpdf._putfonts()
     "Font file embedding
     call self._newobj()
     let self.FontFiles[file]['n'] = self.n
-    let font = s:fread(self._getfontpath() . file, 'rb', 1)
+    let fontdata = s:fread(self._getfontpath() . file)
     let compressed = (file =~ '\.z$')
     if !compressed && has_key(info, 'length2')
-      let header = (char2nr(font[0])==128)
+      let header = (str2nr(fontdata[0], 16)==128)
       if header
         "Strip first binary header
-        let font = font[6 : ]
+        "let font = font[6 : ]
+        call remoev(fontdata, 0, 5)
       endif
-      if header && char2nr(font[info['length1']])==128
+      if header && str2nr(fontdata[info['length1']], 16) == 128
         "Strip second binary header
-        let font = font[0 : info['length1']] . font[info['length1'] + 6 : ]
+        "let font = font[0 : info['length1'] - 1] + font[info['length1'] + 6 : ]
+        call remove(fontdata, info['length1'], info['length1'] + 5)
       endif
     endif
-    call self._out('<</Length ' . strlen(font))
+    let hex = join(fontdata, '')
+    call self._out('<</Length ' . strlen(hex))
     if compressed
-      call self._out('/Filter /FlateDecode')
+      call self._out('/Filter [/ASCIIHexDecode /FlateDecode]')
+    else
+      call self._out('/Filter /ASCIIHexDecode')
     endif
     call self._out('/Length1 ' . info['length1'])
     if has_key(info, 'length2')
       call self._out('/Length2 ' . info['length2'] . ' /Length3 0')
     endif
     call self._out('>>')
-    call self._putstream(font)
+    call self._putstream(hex)
     call self._out('endobj')
   endfor
   call s:set_magic_quotes_runtime(mqr)
