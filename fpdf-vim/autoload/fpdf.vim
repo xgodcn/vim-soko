@@ -1589,7 +1589,7 @@ function s:fpdf._parsejpg(file)
   let data = s:readfilebin(file)
   "Extract info from a JPEG file
   let a = self.GetJpegImageSize(data)
-  if a == []
+  if a == {}
     throw 'Missing or incorrect image file: ' . file
   endif
   if a[2] != 2
@@ -1603,7 +1603,7 @@ function s:fpdf._parsejpg(file)
     let colspace = 'DeviceGray'
   endif
   let bpc = get(a, 'bits', 8)
-  return {'w' : a[0], 'h' : a[1], 'cs' : colspace, 'bpc' : bpc, 'f' : 'DCTDecode', 'data' : data}
+  return {'w' : a[0], 'h' : a[1], 'cs' : colspace, 'bpc' : bpc, 'f' : 'DCTDecode', 'data' : join(data, '')}
 endfunction
 
 function s:fpdf._parsepng(file)
@@ -1696,6 +1696,40 @@ function s:fpdf._parsepng(file)
 endfunction
 
 function s:fpdf.GetJpegImageSize(data)
+  " XXX: I don't know specification.
+  let data = a:data
+  let code = data[0] . data[1]
+  if code !=? 'FFD8'
+    throw 'GetJpegImageSize(): format error'
+  endif
+  let i = 2
+  let code = data[i] . data[i + 1]
+  while code !=? 'FFC0'
+    let i += 2
+    let size = self._freadshort(data[i : i + 1])
+    let i += size
+    let code = data[i] . data[i + 1]
+  endwhile
+  if code !=? 'FFC0'
+    throw 'GetJpegImageSize(): cannot get image size'
+  endif
+  let i += 2
+  let data = data[i : i + 7]
+  let lf = self._freadshort(data)
+  let p = self._freadbyte(data)
+  let y = self._freadshort(data)
+  let x = self._freadshort(data)
+  let nif = self._freadbyte(data)
+  let IMAGETYPE_JPEG = 2
+  return {
+        \ 0 : x,
+        \ 1 : y,
+        \ 2 : IMAGETYPE_JPEG,
+        \ 3 : printf('width="%d" height="%d"', x, y),
+        \ 'bits' : p,
+        \ 'channels' : nif,
+        \ 'mime' : 'image/jpeg',
+        \ }
 endfunction
 
 " XXX:
@@ -1704,6 +1738,16 @@ function s:fpdf._freadint(data)
   let n = remove(a:data, 0, 3)
   call map(n, 'str2nr(v:val, 16)')
   return (n[0] * 0x1000000) + (n[1] * 0x10000) + (n[2] * 0x100) + n[3]
+endfunction
+
+function s:fpdf._freadshort(data)
+  let n = remove(a:data, 0, 1)
+  call map(n, 'str2nr(v:val, 16)')
+  return (n[0] * 0x100) + n[1]
+endfunction
+
+function s:fpdf._freadbyte(data)
+  return str2nr(remove(a:data, 0), 16)
 endfunction
 
 function s:fpdf._freadstr(data, n)
