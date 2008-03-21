@@ -8,8 +8,6 @@
 " You may use, modify and redistribute this software as you wish.              *
 "******************************************************************************/
 " 2008-03-20: ported to vim by Yukihiro Nakadaira <yukihiri.nakadaira@gmail.com>
-"
-" TODO: embed font and image (use xxd and ASCIIHexDecode?)
 
 function fpdf#import()
   return s:fpdf
@@ -1371,7 +1369,8 @@ function s:fpdf._putimages()
     call self._out('/Width ' . info['w'])
     call self._out('/Height ' . info['h'])
     if info['cs'] == 'Indexed'
-      call self._out('/ColorSpace [/Indexed /DeviceRGB ' . (strlen(info['pal']) / 2 / 3 - 1) . ' ' . (self.n + 1) . ' 0 R]')
+      let pallen = strlen(info['pal']) / 2    " count as byte
+      call self._out('/ColorSpace [/Indexed /DeviceRGB ' . (pallen / 3 - 1) . ' ' . (self.n + 1) . ' 0 R]')
     else
       call self._out('/ColorSpace /' . info['cs'])
       if info['cs'] == 'DeviceCMYK'
@@ -1588,7 +1587,7 @@ function s:fpdf._parsejpg(file)
   "Read whole file
   let data = s:readfilebin(file)
   "Extract info from a JPEG file
-  let a = self.GetJpegImageSize(data)
+  let a = self.GetImageSizeJpeg(data)
   if a == {}
     throw 'Missing or incorrect image file: ' . file
   endif
@@ -1647,7 +1646,7 @@ function s:fpdf._parsepng(file)
     throw 'Interlacing not supported: ' . file
   endif
   call remove(data, 0, 3)
-  let parms = '/DecodeParms <</Predictor 15 /Colors ' . (ct==2 ? 3 : 1) . ' /BitsPerComponent ' . bpc . ' /Columns ' .  w . '>>'
+  let parms = '/DecodeParms [null <</Predictor 15 /Colors ' . (ct==2 ? 3 : 1) . ' /BitsPerComponent ' . bpc . ' /Columns ' .  w . '>>]'
   "Scan chunks looking for palette, transparency and image data
   let pal = []
   let trns = ''
@@ -1695,12 +1694,12 @@ function s:fpdf._parsepng(file)
   return {'w' : w, 'h' : h, 'cs' : colspace, 'bpc' : bpc, 'f' : 'FlateDecode', 'parms' : parms, 'pal' : join(pal, ''), 'trns' : trns, 'data' : join(idata, '')}
 endfunction
 
-function s:fpdf.GetJpegImageSize(data)
+function s:fpdf.GetImageSizeJpeg(data)
   " XXX: I don't know specification.
   let data = a:data
   let code = data[0] . data[1]
   if code !=? 'FFD8'
-    throw 'GetJpegImageSize(): format error'
+    throw 'GetImageSizeJpeg(): format error'
   endif
   let i = 2
   let code = data[i] . data[i + 1]
@@ -1711,7 +1710,7 @@ function s:fpdf.GetJpegImageSize(data)
     let code = data[i] . data[i + 1]
   endwhile
   if code !=? 'FFC0'
-    throw 'GetJpegImageSize(): cannot get image size'
+    throw 'GetImageSizeJpeg(): cannot get image size'
   endif
   let i += 2
   let data = data[i : i + 7]
