@@ -302,6 +302,9 @@ function s:fpdf.__construct(...)
   let self.author = ''
   let self.keywords = ''
   let self.creator = ''
+
+  " set default font
+  call self.SetFont('courier')
 endfunction
 
 function s:fpdf.SetMargins(...)
