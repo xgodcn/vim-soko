@@ -1719,6 +1719,8 @@ function s:fpdf.GetJpegImageSize(data)
   let p = self._freadbyte(data)
   let y = self._freadshort(data)
   let x = self._freadshort(data)
+  echo y x
+  sleep 3
   let nif = self._freadbyte(data)
   let IMAGETYPE_JPEG = 2
   return {
