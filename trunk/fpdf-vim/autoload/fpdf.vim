@@ -1398,7 +1398,7 @@ function s:fpdf._putfonts()
       if header
         "Strip first binary header
         "let font = font[6 : ]
-        call remoev(fontdata, 0, 5)
+        call remove(fontdata, 0, 5)
       endif
       if header && str2nr(fontdata[info['length1']], 16) == 128
         "Strip second binary header
