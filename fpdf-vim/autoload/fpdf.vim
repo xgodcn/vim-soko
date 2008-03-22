@@ -85,28 +85,6 @@ function! s:dirname(p)
   return fnamemodify(a:p, ':h')
 endfunction
 
-function! s:gzcompress(data)
-  throw 'gzcompress: not implemented'
-endfunction
-
-function! s:readfilebin(path)
-  if !executable('xxd')
-    throw 'cannot find xxd'
-  elseif !filereadable(a:path)
-    throw a:path . ' is not readable'
-  endif
-  let data = system('xxd -ps -c 1 ' . shellescape(a:path))
-  return split(data)
-endfunction
-
-function! s:get_magic_quotes_runtime()
-  return 0
-endfunction
-
-function! s:set_magic_quotes_runtime(mqr)
-  " void
-endfunction
-
 function! s:equal(a, b)
   return (type(a:a) == type(a:b) && a:a == a:b)
 endfunction
@@ -120,6 +98,150 @@ function! s:substr_count(txt, sub)
   endwhile
   return n
 endfunction
+
+function! s:gzcompress(data)
+  " data is hex dump string
+  if !executable('xxd')
+    throw 'cannot find xxd'
+  elseif !executable('gzip')
+    throw 'cannot find gzip'
+  endif
+  " convert RFC1952 (gzip) to RFC1950 (zlib)
+  " TODO: this is probably wrong...
+  let data = system('xxd -ps -r | gzip -c | xxd -ps -c 1', a:data)
+  let data = s:parse_gzip_file(split(data))
+  return '789c' . data
+endfunction
+
+function! s:parse_gzip_file(data)
+  let data = a:data
+  if s:freadhex(data, 2) !=? '1F8B'
+    throw 'Not a gzip file'
+  endif
+  let cm = s:freadhex(data, 1)
+  if cm !=? '08'
+    throw 'not supported compression method : ' . cm
+  endif
+  let flg = s:freadbyte(data)
+  let mtime = s:freadhex(data, 4)
+  let xfl = s:freadhex(data, 1)
+  let os = s:freadhex(data, 1)
+  if s:getflg(flg, 2)     " FEXTRA
+    let xlen = s:freadshort(data, 0)
+    call s:freadhex(data, xlen)
+  endif
+  if s:getflg(flg, 3)     " FNAME
+    while s:freadhex(data, 1) != '00'
+      " skip to zero-terminator
+    endwhile
+  endif
+  if s:getflg(flg, 4)     " FCOMMENT
+    while s:freadhex(data, 1) != '00'
+      " skip to zero-terminator
+    endwhile
+  endif
+  if s:getflg(flg, 1)     " FHCRC
+    let crc16 = s:freadhex(data, 2)
+  endif
+  let body = s:freadhex(data, len(data) - 8)
+  let crc32 = s:freadhex(data, 4)
+  let isize = s:freadhex(data, 4)
+  return body
+endfunction
+
+function! s:getflg(bits, n)
+  let s = 1
+  for i in range(a:n)
+    let s = s * 2
+  endfor
+  return (a:bits / s) % 1
+endfunction
+
+function! s:readfilebin(path)
+  if !executable('xxd')
+    throw 'cannot find xxd'
+  elseif !filereadable(a:path)
+    throw a:path . ' is not readable'
+  endif
+  let data = system('xxd -ps -c 1 ' . shellescape(a:path))
+  return split(data)
+endfunction
+
+function! s:freadint(data, ...)
+  "Read a 4-byte integer from file
+  let n = get(a:000, 0, 1) ? remove(a:data, 0, 3) : reverse(remove(a:data, 0, 3))
+  if str2nr(n[0], 16) >= 0x80
+    throw 'freadint(): overflow'
+  endif
+  call map(n, 'str2nr(v:val, 16)')
+  return (n[0] * 0x1000000) + (n[1] * 0x10000) + (n[2] * 0x100) + n[3]
+endfunction
+
+function! s:freadshort(data, ...)
+  let n = get(a:000, 0, 1) ? remove(a:data, 0, 1) : reverse(remove(a:data, 0, 1))
+  call map(n, 'str2nr(v:val, 16)')
+  return (n[0] * 0x100) + n[1]
+endfunction
+
+function! s:freadbyte(data)
+  return str2nr(remove(a:data, 0), 16)
+endfunction
+
+function! s:fread(data, n)
+  let n = remove(a:data, 0, a:n - 1)
+  call map(n, '"\\x" . v:val')
+  return eval('"' . join(n, '') . '"')
+endfunction
+
+function! s:freadhex(data, n)
+  return join(remove(a:data, 0, a:n - 1), '')
+endfunction
+
+function! s:bin2hex(s)
+  return join(map(range(len(a:s)), 'printf("%02X", char2nr(a:s[v:val]))'), '')
+endfunction
+
+function! s:bin2hex_utf16(s)
+  return join(map(split(a:s, '\zs'), 'self.nr2utf16hex(char2nr(v:val))'), '')
+endfunction
+
+function s:GetImageSizeJpeg(data)
+  " XXX: I don't know specification.
+  let data = a:data
+  let code = data[0] . data[1]
+  if code !=? 'FFD8'
+    throw 'GetImageSizeJpeg(): format error'
+  endif
+  let i = 2
+  let code = data[i] . data[i + 1]
+  while code !=? 'FFC0'
+    let i += 2
+    let size = s:freadshort(data[i : i + 1])
+    let i += size
+    let code = data[i] . data[i + 1]
+  endwhile
+  if code !=? 'FFC0'
+    throw 'GetImageSizeJpeg(): cannot get image size'
+  endif
+  let i += 2
+  let data = data[i : i + 7]
+  let lf = s:freadshort(data)
+  let p = s:freadbyte(data)
+  let y = s:freadshort(data)
+  let x = s:freadshort(data)
+  let nif = s:freadbyte(data)
+  let IMAGETYPE_JPEG = 2
+  return {
+        \ 0 : x,
+        \ 1 : y,
+        \ 2 : IMAGETYPE_JPEG,
+        \ 3 : printf('width="%d" height="%d"', x, y),
+        \ 'bits' : p,
+        \ 'channels' : nif,
+        \ 'mime' : 'image/jpeg',
+        \ }
+endfunction
+
 
 let s:fpdf = {}
 
@@ -292,7 +414,7 @@ function s:fpdf.__construct(...)
   call self.SetAutoPageBreak(s:true, s:float.mul('2', margin))
   "Full width display mode
   call self.SetDisplayMode('fullwidth')
-  "Enable compression
+  "Disable compression
   call self.SetCompression(s:false)
   "Set default PDF version number
   let self.PDFVersion = '1.3'
@@ -1201,7 +1323,6 @@ function s:fpdf._putpages()
     let wPt = self.fhPt
     let hPt = self.fwPt
   endif
-  let filter = self.compress ? '/Filter /FlateDecode ' : ''
   for n in range(1, nb)
     "Page
     call self._newobj()
@@ -1230,7 +1351,14 @@ function s:fpdf._putpages()
     call self._out('/Contents ' . (self.n + 1) . ' 0 R>>')
     call self._out('endobj')
     "Page content
-    let p = self.compress ? s:gzcompress(self.pages[n]) : self.pages[n]
+    if self.compress
+      let filter = '/Filter [/ASCIIHexDecode /FlateDecode] '
+      let p = s:bin2hex(self.pages[n])
+      let p = s:gzcompress(p)
+    else
+      let filter = ''
+      let p = self.pages[n]
+    endif
     call self._newobj()
     call self._out('<<' . filter . '/Length ' . strlen(p) . '>>')
     call self._putstream(p)
@@ -1259,8 +1387,6 @@ function s:fpdf._putfonts()
     call self._out('<</Type /Encoding /BaseEncoding /WinAnsiEncoding /Differences [' . diff . ']>>')
     call self._out('endobj')
   endfor
-  let mqr = s:get_magic_quotes_runtime()
-  call s:set_magic_quotes_runtime(0)
   for [file, info] in items(self.FontFiles)
     "Font file embedding
     call self._newobj()
@@ -1295,7 +1421,6 @@ function s:fpdf._putfonts()
     call self._putstream(hex)
     call self._out('endobj')
   endfor
-  call s:set_magic_quotes_runtime(mqr)
   for [k, font] in items(self.fonts)
     "Font objects
     let self.fonts[k]['n'] = self.n + 1
@@ -1363,7 +1488,6 @@ function s:fpdf._putfonts()
 endfunction
 
 function s:fpdf._putimages()
-  let filter = (self.compress) ? '/Filter [/ASCIIHexDecode /FlateDecode] ' : '/Filter /ASCIIHexDecode '
   for [file, info] in items(self.images)
     call self._newobj()
     let self.images[file]['n'] = self.n
@@ -1382,9 +1506,7 @@ function s:fpdf._putimages()
     endif
     call self._out('/BitsPerComponent ' . info['bpc'])
     if has_key(info, 'f')
-      call self._out('/Filter [/ASCIIHexDecode /' . info['f'] . ']')
-    else
-      call self._out('/Filter /ASCIIHexDecode')
+      call self._out(info['f'])
     endif
     if has_key(info, 'parms')
       call self._out(info['parms'])
@@ -1402,8 +1524,14 @@ function s:fpdf._putimages()
     call self._out('endobj')
     "Palette
     if info['cs'] == 'Indexed'
+      if self.compress
+        let filter = '/Filter [/ASCIIHexDecode /FlateDecode] '
+        let pal = s:gzcompress(info['pal'])
+      else
+        let filter = '/Filter /ASCIIHexDecode '
+        let pal = info['pal']
+      endif
       call self._newobj()
-      let pal = (self.compress) ? s:gzcompress(info['pal']) : info['pal']
       call self._out('<<' . filter . '/Length ' . strlen(pal) . '>>')
       call self._putstream(pal)
       call self._out('endobj')
@@ -1590,7 +1718,7 @@ function s:fpdf._parsejpg(file)
   "Read whole file
   let data = s:readfilebin(file)
   "Extract info from a JPEG file
-  let a = self.GetImageSizeJpeg(data)
+  let a = s:GetImageSizeJpeg(data)
   if a == {}
     throw 'Missing or incorrect image file: ' . file
   endif
@@ -1605,7 +1733,8 @@ function s:fpdf._parsejpg(file)
     let colspace = 'DeviceGray'
   endif
   let bpc = get(a, 'bits', 8)
-  return {'w' : a[0], 'h' : a[1], 'cs' : colspace, 'bpc' : bpc, 'f' : 'DCTDecode', 'data' : join(data, '')}
+  let filter = '/Filter [/ASCIIHexDecode /DCTDecode]'
+  return {'w' : a[0], 'h' : a[1], 'cs' : colspace, 'bpc' : bpc, 'f' : filter, 'data' : join(data, '')}
 endfunction
 
 function s:fpdf._parsepng(file)
@@ -1615,21 +1744,21 @@ function s:fpdf._parsepng(file)
   let data = s:readfilebin(file)
   "Check signature
   "if(fread($f,8)!=chr(137).'PNG'.chr(13).chr(10).chr(26).chr(10))
-  if join(remove(data, 0, 7), '') != '89504E470D0A1A0A'
+  if s:freadhex(data, 8) !=? '89504E470D0A1A0A'
     throw 'Not a PNG file: ' . file
   endif
   "Read header chunk
-  call remove(data, 0, 3)
-  if self._freadstr(data, 4) != 'IHDR'
+  call s:freadhex(data, 4)
+  if s:fread(data, 4) !=? 'IHDR'
     throw 'Incorrect PNG file: ' . file
   endif
-  let w = self._freadint(data)
-  let h = self._freadint(data)
-  let bpc = str2nr(remove(data, 0), 16)
+  let w = s:freadint(data)
+  let h = s:freadint(data)
+  let bpc = s:freadbyte(data)
   if bpc > 8
     throw '16-bit depth not supported: ' . file
   endif
-  let ct = str2nr(remove(data, 0), 16)
+  let ct = s:freadbyte(data)
   if ct == 0
     let colspace = 'DeviceGray'
   elseif ct == 2
@@ -1639,28 +1768,29 @@ function s:fpdf._parsepng(file)
   else
     throw 'Alpha channel not supported: ' . file
   endif
-  if str2nr(remove(data, 0), 16) != 0
+  if s:freadbyte(data) != 0
     throw 'Unknown compression method: ' . file
   endif
-  if str2nr(remove(data, 0), 16) != 0
+  if s:freadbyte(data) != 0
     throw 'Unknown filter method: ' . file
   endif
-  if str2nr(remove(data, 0), 16) != 0
+  if s:freadbyte(data) != 0
     throw 'Interlacing not supported: ' . file
   endif
-  call remove(data, 0, 3)
+  call s:freadhex(data, 4)
+  let filter = '/Filter [/ASCIIHexDecode /FlateDecode]'
   let parms = '/DecodeParms [null <</Predictor 15 /Colors ' . (ct==2 ? 3 : 1) . ' /BitsPerComponent ' . bpc . ' /Columns ' .  w . '>>]'
   "Scan chunks looking for palette, transparency and image data
-  let pal = []
+  let pal = ''
   let trns = ''
-  let idata = []
+  let block = []
   while 1
-    let n = self._freadint(data)
-    let type = self._freadstr(data, 4)
+    let n = s:freadint(data)
+    let type = s:fread(data, 4)
     if type == 'PLTE'
       "Read palette
-      let pal = remove(data, 0, n - 1)
-      call remove(data, 0, 3)
+      let pal = s:freadhex(data, n)
+      call s:freadhex(data, 4)
     elseif type == 'tRNS'
       "Read transparency info
       let t = remove(data, 0, n - 1)
@@ -1677,92 +1807,31 @@ function s:fpdf._parsepng(file)
           let trns = [pos]
         endif
       endif
-      call remove(data, 0, 3)
+      call s:freadhex(data, 4)
     elseif type == 'IDAT'
       "Read image data block
-      call extend(idata, remove(data, 0, n - 1))
-      call remove(data, 0, 3)
+      call add(block, s:freadhex(data, n))
+      call s:freadhex(data, 4)
     elseif type == 'IEND'
       break
     else
-      call remove(data, 0, n + 4 - 1)
+      call s:freadhex(data, n + 4)
     endif
     if n == 0
       break
     endif
   endwhile
-  if colspace == 'Indexed' && empty(pal)
+  if colspace == 'Indexed' && pal == ''
     throw 'Missing palette in ' . file
   endif
-  return {'w' : w, 'h' : h, 'cs' : colspace, 'bpc' : bpc, 'f' : 'FlateDecode', 'parms' : parms, 'pal' : join(pal, ''), 'trns' : trns, 'data' : join(idata, '')}
-endfunction
-
-function s:fpdf.GetImageSizeJpeg(data)
-  " XXX: I don't know specification.
-  let data = a:data
-  let code = data[0] . data[1]
-  if code !=? 'FFD8'
-    throw 'GetImageSizeJpeg(): format error'
-  endif
-  let i = 2
-  let code = data[i] . data[i + 1]
-  while code !=? 'FFC0'
-    let i += 2
-    let size = self._freadshort(data[i : i + 1])
-    let i += size
-    let code = data[i] . data[i + 1]
-  endwhile
-  if code !=? 'FFC0'
-    throw 'GetImageSizeJpeg(): cannot get image size'
-  endif
-  let i += 2
-  let data = data[i : i + 7]
-  let lf = self._freadshort(data)
-  let p = self._freadbyte(data)
-  let y = self._freadshort(data)
-  let x = self._freadshort(data)
-  let nif = self._freadbyte(data)
-  let IMAGETYPE_JPEG = 2
-  return {
-        \ 0 : x,
-        \ 1 : y,
-        \ 2 : IMAGETYPE_JPEG,
-        \ 3 : printf('width="%d" height="%d"', x, y),
-        \ 'bits' : p,
-        \ 'channels' : nif,
-        \ 'mime' : 'image/jpeg',
-        \ }
-endfunction
-
-" XXX:
-function s:fpdf._freadint(data)
-  "Read a 4-byte integer from file
-  let n = remove(a:data, 0, 3)
-  call map(n, 'str2nr(v:val, 16)')
-  return (n[0] * 0x1000000) + (n[1] * 0x10000) + (n[2] * 0x100) + n[3]
-endfunction
-
-function s:fpdf._freadshort(data)
-  let n = remove(a:data, 0, 1)
-  call map(n, 'str2nr(v:val, 16)')
-  return (n[0] * 0x100) + n[1]
-endfunction
-
-function s:fpdf._freadbyte(data)
-  return str2nr(remove(a:data, 0), 16)
-endfunction
-
-function s:fpdf._freadstr(data, n)
-  let n = remove(a:data, 0, a:n - 1)
-  call map(n, '"\\x" . v:val')
-  return eval('"' . join(n, '') . '"')
+  return {'w' : w, 'h' : h, 'cs' : colspace, 'bpc' : bpc, 'f' : filter, 'parms' : parms, 'pal' : pal, 'trns' : trns, 'data' : join(block, '')}
 endfunction
 
 function s:fpdf._textstring(s)
   "TODO: encoding
   "Format a text string
   if self.CurrentFont['type'] ==? 'type0'
-    return '<' . self._bin2hex(a:s) . '>'
+    return '<' . s:bin2hex_utf16(a:s) . '>'
   else
     return '(' . self._escape(a:s) . ')'
   endif
@@ -1775,10 +1844,6 @@ function s:fpdf._escape(s)
   let s = substitute(s, '(', '\\(', 'g')
   let s = substitute(s, ')', '\\)', 'g')
   return s
-endfunction
-
-function s:fpdf._bin2hex(s)
-  return join(map(split(a:s, '\zs'), 'self.nr2utf16hex(char2nr(v:val))'), '')
 endfunction
 
 function s:fpdf._putstream(s)
