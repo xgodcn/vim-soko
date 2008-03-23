@@ -424,9 +424,6 @@ function s:fpdf.__construct(...)
   let self.author = ''
   let self.keywords = ''
   let self.creator = ''
-
-  " set default font
-  call self.SetFont('courier')
 endfunction
 
 function s:fpdf.SetMargins(...)
@@ -789,9 +786,9 @@ function s:fpdf.SetFont(...)
     let style = ''
   endif
   let style = toupper(style)
-  if style =~# 'U'
+  if style =~ 'U'
     let self.underline = s:true
-    let style = substitute(style, 'U', '', 'G')
+    let style = substitute(style, 'U', '', 'g')
   else
     let self.underline = s:false
   endif
@@ -1830,10 +1827,10 @@ endfunction
 function s:fpdf._textstring(s)
   "TODO: encoding
   "Format a text string
-  if self.CurrentFont['type'] ==? 'type0'
-    return '<' . s:bin2hex_utf16(a:s) . '>'
-  else
+  if a:s =~ '^[\x00-\x7F]*$'
     return '(' . self._escape(a:s) . ')'
+  else
+    return '<' . s:bin2hex_utf16(a:s) . '>'
   endif
 endfunction
 
