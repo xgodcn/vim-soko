@@ -202,7 +202,20 @@ function! s:bin2hex(s)
 endfunction
 
 function! s:bin2hex_utf16(s)
-  return join(map(split(a:s, '\zs'), 'self.nr2utf16hex(char2nr(v:val))'), '')
+  return join(map(split(a:s, '\zs'), 's:nr2utf16hex(char2nr(v:val))'), '')
+endfunction
+
+function s:nr2utf16hex(char)
+  if a:char == 0xFFFD
+    return "FFFD" " replacement character
+  elseif a:char < 0x10000
+    return printf("%02X%02X", a:char / 0x100, a:char % 0x100)
+  else
+    let char = a:char - 0x10000
+    let w1 = 0xD800 + (char / 0x400)
+    let w2 = 0xDC00 + (char % 0x400)
+    return printf("%02X%02X%02X%02X", w1 / 0x100, w1 & 0xFF, w2 / 0x100, w2 % 0x100)
+  endif
 endfunction
 
 function s:GetImageSizeJpeg(data)
@@ -1943,19 +1956,6 @@ function s:fpdf.AddMBFont(...)
   call self.AddCIDFont(family,'B' , family . ",Bold"      , cw, ec, Registry, ut, up)
   call self.AddCIDFont(family,'I' , family . ",Italic"    , cw, ec, Registry, ut, up)
   call self.AddCIDFont(family,'BI', family . ",BoldItalic", cw, ec, Registry, ut, up)
-endfunction
-
-function s:fpdf.nr2utf16hex(char)
-  if a:char == 0xFFFD
-    return "FFFD" " replacement character
-  elseif a:char < 0x10000
-    return printf("%02X%02X", a:char / 0x100, a:char % 0x100)
-  else
-    let char = a:char - 0x10000
-    let w1 = 0xD800 + (char / 0x400)
-    let w2 = 0xDC00 + (char % 0x400)
-    return printf("%02X%02X%02X%02X", w1 / 0x100, w1 & 0xFF, w2 / 0x100, w2 % 0x100)
-  endif
 endfunction
 
 function s:fpdf._putType0(font)
