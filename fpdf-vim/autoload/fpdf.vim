@@ -1580,21 +1580,21 @@ function s:fpdf._putresources()
 endfunction
 
 function s:fpdf._putinfo()
-  call self._out('/Producer ' . self._textstring(printf('fpdf-vim %s (FPDF %s)', s:FPDF_VIM_VERSION, s:FPDF_VERSION)))
+  call self._out('/Producer ' . self._textstring(printf('fpdf-vim %s (FPDF %s)', s:FPDF_VIM_VERSION, s:FPDF_VERSION), 1))
   if self.title != ''
-    call self._out('/Title ' . self._textstring(self.title))
+    call self._out('/Title ' . self._textstring(self.title, 1))
   endif
   if self.subject != ''
-    call self._out('/Subject ' . self._textstring(self.subject))
+    call self._out('/Subject ' . self._textstring(self.subject, 1))
   endif
   if self.author != ''
-    call self._out('/Author ' . self._textstring(self.author))
+    call self._out('/Author ' . self._textstring(self.author, 1))
   endif
   if self.keywords != ''
-    call self._out('/Keywords ' . self._textstring(self.keywords))
+    call self._out('/Keywords ' . self._textstring(self.keywords, 1))
   endif
   if self.creator != ''
-    call self._out('/Creator ' . self._textstring(self.creator))
+    call self._out('/Creator ' . self._textstring(self.creator, 1))
   endif
   call self._out('/CreationDate ' . self._textstring('D:' . strftime('%Y%m%d%H%M%S')))
 endfunction
@@ -1837,13 +1837,14 @@ function s:fpdf._parsepng(file)
   return {'w' : w, 'h' : h, 'cs' : colspace, 'bpc' : bpc, 'f' : filter, 'parms' : parms, 'pal' : pal, 'trns' : trns, 'data' : join(block, '')}
 endfunction
 
-function s:fpdf._textstring(s)
+function s:fpdf._textstring(s, ...)
+  let bom = get(a:000, 0, 0)
   "TODO: encoding
   "Format a text string
   if a:s =~ '^[\x00-\x7F]*$'
     return '(' . self._escape(a:s) . ')'
   else
-    return '<' . s:bin2hex_utf16(a:s) . '>'
+    return '<' . (bom ? 'FEFF' : '') . s:bin2hex_utf16(a:s) . '>'
   endif
 endfunction
 
