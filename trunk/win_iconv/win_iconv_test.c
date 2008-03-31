@@ -212,6 +212,13 @@ main(int argc, char **argv)
     }
 
     /*
+     * test for //translit
+     * U+FF41 (FULLWIDTH LATIN SMALL LETTER A) <-> U+0062 (LATIN SMALL LETTER A)
+     */
+    eilseq("UTF-16BE", "\xFF\x41", "iso-8859-1", "");
+    success("UTF-16BE", "\xFF\x41", "iso-8859-1//translit", "a");
+
+    /*
      * TODO:
      * Test for state after iconv() failed.
      * Ensure iconv() error is safe and continuable.
