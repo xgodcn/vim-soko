@@ -1,6 +1,6 @@
 " Maintainer:   Yukihiro Nakadaira <yukihiro.nakadaira@gmail.com>
 " License:      This file is placed in the public domain.
-" Last Change:  2007-07-04
+" Last Change:  2008-04-15
 "
 " Options:
 "
@@ -84,7 +84,6 @@ function autofmt#compat#test()
 endfunction
 
 let s:lib = {}
-let s:lib.uni = unicode#import()
 
 function s:lib.formatexpr()
   if mode() =~# '[iR]' && &formatoptions =~# 'a'
