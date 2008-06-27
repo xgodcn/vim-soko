@@ -14,10 +14,20 @@
 #include <uim/uim.h>
 #include <uim/uim-helper.h>
 
+#ifndef INFTIM
+# define INFTIM -1
+#endif
+
 #define RETRY_EINTR(ret, funcall)     \
   do {                                \
     ret = funcall;                    \
   } while (ret == -1 && errno == EINTR)
+
+#define STRLCPY(dst, src, n)          \
+  do {                                \
+    strncpy(dst, src, n);             \
+    dst[n - 1] = '\0';                \
+  } while (0)
 
 static void *self;
 static int uim_fd;
@@ -33,7 +43,6 @@ load(const char* dsopath)
 {
   struct sockaddr_un server;
   char *path;
-  int fd;
 
   if (uim_fd != 0)
     return NULL;
@@ -51,41 +60,43 @@ load(const char* dsopath)
 
   bzero(&server, sizeof(server));
   server.sun_family = PF_UNIX;
-  strlcpy(server.sun_path, path, sizeof(server.sun_path));
+  STRLCPY(server.sun_path, path, sizeof(server.sun_path));
 
   free(path);
 
-  fd = socket(PF_UNIX, SOCK_STREAM, 0);
-  if (fd < 0) {
+  uim_fd = socket(PF_UNIX, SOCK_STREAM, 0);
+  if (uim_fd < 0) {
     dlclose(self);
     return "error socket()";
   }
 
-  if (connect(fd, (struct sockaddr *)&server, sizeof(server)) != 0) {
-    close(fd);
+  if (connect(uim_fd, (struct sockaddr *)&server, sizeof(server)) != 0) {
+    shutdown(uim_fd, SHUT_RDWR);
+    close(uim_fd);
     dlclose(self);
     return "cannot connect to uim-helper-server";
   }
 
-  if (uim_helper_check_connection_fd(fd) != 0) {
-    close(fd);
+  if (uim_helper_check_connection_fd(uim_fd) != 0) {
+    shutdown(uim_fd, SHUT_RDWR);
+    close(uim_fd);
     dlclose(self);
     return "error uim_helper_check_connection_fd()";
   }
 
   if (pthread_mutex_init(&mutex, NULL) != 0) {
-    close(fd);
+    shutdown(uim_fd, SHUT_RDWR);
+    close(uim_fd);
     dlclose(self);
     return "error pthread_mutex_init()";
   }
 
   if (pthread_create(&twatch, NULL, uimwatch, (void *)NULL) != 0) {
-    close(fd);
+    shutdown(uim_fd, SHUT_RDWR);
+    close(uim_fd);
     dlclose(self);
     return "error pthread_create()";
   }
-
-  uim_fd = fd;
 
   return NULL;
 }
@@ -95,6 +106,7 @@ unload()
 {
   if (uim_fd == 0)
     return NULL;
+  shutdown(uim_fd, SHUT_RDWR);
   close(uim_fd);
   pthread_join(twatch, NULL);
   pthread_mutex_destroy(&mutex);

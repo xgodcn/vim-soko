@@ -10,6 +10,10 @@
 #include <uim/uim.h>
 #include <uim/uim-helper.h>
 
+#ifndef INFTIM
+# define INFTIM -1
+#endif
+
 #define RETRY_EINTR(ret, funcall)     \
   do {                                \
     ret = funcall;                    \
