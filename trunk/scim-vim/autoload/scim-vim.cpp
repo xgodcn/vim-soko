@@ -46,6 +46,7 @@ typedef vector<unsigned char> buf_t;
 
 class iobuf_t {
   stringstream m_strm;
+  string m_str;
 
 public:
   iobuf_t(const string& s = "")
@@ -56,7 +57,8 @@ public:
     m_strm.str(s);
   }
   const char *str() {
-    return m_strm.str().c_str();
+    m_str = m_strm.str();
+    return m_str.c_str();
   }
   stringstream& strm() {
     return m_strm;
