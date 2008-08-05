@@ -45,16 +45,13 @@
 "         echohl None
 "       endfunction
 "   @param format [String]
-"     Log format.  See :help strftime().  You can use {expr} form.  {expr} is
-"     replaced by eval(expr).  For example, {getpid()} is useful to detect
-"     session.  Following special variables are available.
+"     Log format.  {expr} is replaced by eval(expr).  For example, {getpid()}
+"     is useful to detect session.  Following special variables are available.
 "     {level}   log level like DEBUG, INFO, etc...
 "     {name}    log name specified by log#getLogger(name)
 "     {msg}     log message
-"     {rp}      '}' character
-"     If this is 0, '', [] or {} (empty(format) is true), default value is
-"     used.
-"     default:  [{level}][%Y-%m-%d %H:%M:%S][{name}] {msg}
+"     If this is 0, '', [] or {} (empty(format) is true), default is used.
+"     default:  [{level}][{strftime("%Y-%m-%d %H:%M:%S")}][{name}] {msg}
 "   @param filter [mixed]
 "     Pattern (String) or Function or Dictionary to filter log session.
 "     Filter is applied to name that specified by log#getLogger(name).  If
@@ -111,7 +108,7 @@ function s:lib.init(level, targets, ...)
   let format = get(a:000, 0, '')
   let tmp.filter = get(a:000, 1, '')
   if empty(format)
-    let format = '[{level}][%Y-%m-%d %H:%M:%S][{name}] {msg}'
+    let format = '[{level}][{strftime("%Y-%m-%d %H:%M:%S")}][{name}] {msg}'
   endif
   if empty(tmp.filter)
     let tmp.filter = ''
@@ -173,12 +170,10 @@ function s:lib.Logger.log(level, args)
   let level = a:level
   let name = self.name
   let msg = (len(a:args) == 1) ? a:args[0] : call('printf', a:args)
-  let rp = '}'
-  let format = strftime(s:lib.config.format)
   " sub-replace-\= does not work recursively.
-  "let str = substitute(format, '{\([^}]\+\)}', '\=eval(submatch(1))', 'g')
+  "let str = substitute(s:lib.config.format, '{\([^}]\+\)}', '\=eval(submatch(1))', 'g')
   let str = ''
-  let m = s:lib.Matcher.new(format, '{\([^}]\+\)}')
+  let m = s:lib.Matcher.new(s:lib.config.format, '{\([^}]\+\)}')
   while m.find()
     let str .= m.head() . eval(m[1])
   endwhile
