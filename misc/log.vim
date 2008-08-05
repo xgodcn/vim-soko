@@ -21,6 +21,16 @@
 "     call s:log.trace('end of func()')
 "   endfunction
 "
+"   " If you want to distribute your script without log.vim, use :silent! or
+"   " exists().
+"   silent! let s:log = log#getLogger(expand('<sfile>:t'))
+"   function s:func()
+"     silent! call s:log.info('aaa')
+"     if exists('s:log')
+"       call s:log.info('bbb')
+"     endif
+"   endfunction
+"
 " Reference:
 "
 "   function log#init(level, targets [, format [, filter]])
