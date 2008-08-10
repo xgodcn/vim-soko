@@ -741,7 +741,14 @@ function s:fpdf.AddFont(...)
   unlet g:fpdf_font
   let i = len(self.fonts) + 1
   let font['i'] = i
-  let self.fonts[fontkey] = font
+  if font['type'] == 'cidfont0'
+    let self.fonts[family] = font
+    let self.fonts[family.'B'] = extend({'name':font['name'].',Bold'}, font, 'keep')
+    let self.fonts[family.'I'] = extend({'name':font['name'].',Italic'}, font, 'keep')
+    let self.fonts[family.'BI'] = extend({'name':font['name'].',BoldItalic'}, font, 'keep')
+  else
+    let self.fonts[fontkey] = font
+  endif
   let file = font['file']
   let diff = font['diff']
   if diff != 0
