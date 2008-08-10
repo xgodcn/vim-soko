@@ -13,8 +13,6 @@ function fpdf#import()
   return s:fpdf
 endfunction
 
-let s:float = float#import()
-
 let s:__file__ = expand("<sfile>:p")
 
 let s:FPDF_VERSION = '1.53'
@@ -23,19 +21,9 @@ let s:FPDF_VIM_VERSION = '0.1'
 let s:false = 0
 let s:true = 1
 
-function! s:sprintf(fmt, ...)
-  let fmt = substitute(a:fmt, '%[^%]\{-}f', '%s', 'g')
-  let args = [fmt]
-  for v in a:000
-    if s:float.is_float(v)
-      " TODO: fmt
-      call add(args, v.tostr())
-    else
-      call add(args, v)
-    endif
-    unlet v
-  endfor
-  return call('printf', args)
+" cast
+function! s:float(f)
+  return a:f * 1.0
 endfunction
 
 function! s:mb_strlen(s)
@@ -346,7 +334,7 @@ function s:fpdf.__construct(...)
   let self.lasth = 0
   let self.FontFamily = ''
   let self.FontStyle = ''
-  let self.FontSizePt = s:float.new(12)
+  let self.FontSizePt = 12.0
   let self.underline = s:false
   let self.DrawColor = '0 G'
   let self.FillColor = '0 g'
@@ -362,13 +350,13 @@ function s:fpdf.__construct(...)
         \ }
   "Scale factor
   if unit == 'pt'
-    let self.k = s:float.new(1)
+    let self.k = 1.0
   elseif unit == 'mm'
-    let self.k = s:float.div('72', '25.4')
+    let self.k = 72.0 / 25.4
   elseif unit == 'cm'
-    let self.k = s:float.div('72', '2.54')
+    let self.k = 72.0 / 2.54
   elseif unit == 'in'
-    let self.k = s:float.new(72)
+    let self.k = 72.0
   else
     throw 'Incorrect unit: ' . unit
   endif
@@ -376,30 +364,30 @@ function s:fpdf.__construct(...)
   if s:is_string(format)
     if format ==? 'a3'
       unlet format
-      let format = ['841.89','1190.55']
+      let format = [841.89,1190.55]
     elseif format ==? 'a4'
       unlet format
-      let format = ['595.28','841.89']
+      let format = [595.28,841.89]
     elseif format ==? 'a5'
       unlet format
-      let format = ['420.94','595.28']
+      let format = [420.94,595.28]
     elseif format ==? 'letter'
       unlet format
-      let format = ['612','792']
+      let format = [612,792]
     elseif format ==? 'legal'
       unlet format
-      let format = ['612','1008']
+      let format = [612,1008]
     else
       throw 'Unknown page format: ' . format
     endif
     let self.fwPt = format[0]
     let self.fhPt = format[1]
   else
-    let self.fwPt = s:float.mul(format[0], self.k)
-    let self.fhPt = s:float.mul(format[1], self.k)
+    let self.fwPt = format[0] * self.k
+    let self.fhPt = format[1] * self.k
   endif
-  let self.fw = s:float.div(self.fwPt, self.k)
-  let self.fh = s:float.div(self.fwPt, self.k)
+  let self.fw = self.fwPt / self.k
+  let self.fh = self.fhPt / self.k
   "Page orientation
   let orientation = tolower(orientation)
   if orientation == 'p' || orientation == 'portrait'
@@ -414,17 +402,17 @@ function s:fpdf.__construct(...)
     throw 'Incorrect orientation: ' . orientation
   endif
   let self.CurOrientation = self.DefOrientation
-  let self.w = s:float.div(self.wPt, self.k)
-  let self.h = s:float.div(self.hPt, self.k)
+  let self.w = self.wPt / self.k
+  let self.h = self.hPt / self.k
   "Page margins (1 cm)
-  let margin = s:float.div('28.35', self.k)
+  let margin = 28.35 / self.k
   call self.SetMargins(margin, margin)
   "Interior cell margin (1 mm)
-  let self.cMargin = s:float.div(margin, '10')
+  let self.cMargin = margin / 10.0
   "Line width (0.2 mm)
-  let self.LineWidth = s:float.div('.567', self.k)
+  let self.LineWidth = 0.567 / self.k
   "Automatic page break
-  call self.SetAutoPageBreak(s:true, s:float.mul('2', margin))
+  call self.SetAutoPageBreak(s:true, 2.0 * margin)
   "Full width display mode
   call self.SetDisplayMode('fullwidth')
   "Disable compression
@@ -440,44 +428,44 @@ function s:fpdf.__construct(...)
 endfunction
 
 function s:fpdf.SetMargins(...)
-  let left = s:float.new(get(a:000, 0))
-  let top = s:float.new(get(a:000, 1))
-  let right = s:float.new(get(a:000, 2, -1))
+  let left = s:float(get(a:000, 0))
+  let top = s:float(get(a:000, 1))
+  let right = s:float(get(a:000, 2, -1))
   "Set left, top and right margins
   let self.lMargin = left
   let self.tMargin = top
-  if s:float.cmp(right, -1) == 0
+  if right == -1
     let right = left
   endif
   let self.rMargin = right
 endfunction
 
 function s:fpdf.SetLeftMargin(margin)
-  let margin = s:float.new(a:margin)
+  let margin = s:float(a:margin)
   "Set left margin
   let self.lMargin = margin
-  if self.page > 0 && s:float.cmp(self.x, margin) < 0
+  if self.page > 0 && self.x < margin
     let self.x = margin
   endif
 endfunction
 
 function s:fpdf.SetTopMargin(margin)
   "Set top margin
-  let self.tMargin = s:float.new(a:margin)
+  let self.tMargin = s:float(a:margin)
 endfunction
 
 function s:fpdf.SetRightMargin(margin)
   "Set right margin
-  let self.rMargin = s:float.new(s:margin)
+  let self.rMargin = s:float(s:margin)
 endfunction
 
 function s:fpdf.SetAutoPageBreak(...)
   let auto = get(a:000, 0)
-  let margin = s:float.new(get(a:000, 1, 0))
+  let margin = s:float(get(a:000, 1, 0))
   "Set auto page break mode and triggering margin
   let self.AutoPageBreak = auto
   let self.bMargin = margin
-  let self.PageBreakTrigger = s:float.sub(self.h, margin)
+  let self.PageBreakTrigger = self.h - margin
 endfunction
 
 function s:fpdf.SetDisplayMode(...)
@@ -582,7 +570,7 @@ function s:fpdf.AddPage(...)
   call self._out('2 J')
   "Set line width
   let self.LineWidth = lw
-  call self._out(s:sprintf('%.2f w', s:float.mul(lw, self.k)))
+  call self._out(printf('%.2f w', lw * self.k))
   "Set font
   if family != ''
     call self.SetFont(family, style, size)
@@ -603,7 +591,7 @@ function s:fpdf.AddPage(...)
   "Restore line width
   if self.LineWidth != lw
     let self.LineWidth = lw
-    call self._out(s:sprintf('%.2f w', s:float.mul(lw, self.k)))
+    call self._out(printf('%.2f w', lw * self.k))
   endif
   "Restore font
   if family != ''
@@ -636,14 +624,14 @@ function s:fpdf.PageNo()
 endfunction
 
 function s:fpdf.SetDrawColor(...)
-  let r = s:float.new(get(a:000, 0))
-  let g = s:float.new(get(a:000, 1, -1))
-  let b = s:float.new(get(a:000, 2, -1))
+  let r = s:float(get(a:000, 0))
+  let g = s:float(get(a:000, 1, -1))
+  let b = s:float(get(a:000, 2, -1))
   "Set color for all stroking operations
-  if (s:float.cmp(r, 0) == 0 && s:float.cmp(g, 0) == 0 && s:float.cmp(b, 0) == 0) || s:float.cmp(g, -1) == 0
-    let self.DrawColor = s:sprintf('%.3f G', s:float.div(r, 255))
+  if (r == 0 && g == 0 && b == 0) || g == -1
+    let self.DrawColor = printf('%.3f G', r / 255.0)
   else
-    let self.DrawColor = s:sprintf('%.3f %.3f %.3f RG', s:float.div(r, 255), s:float.div(g, 255), s:float.div(b, 255))
+    let self.DrawColor = printf('%.3f %.3f %.3f RG', r / 255.0, g / 255.0, b / 255.0)
   endif
   if self.page > 0
     call self._out(self.DrawColor)
@@ -651,14 +639,14 @@ function s:fpdf.SetDrawColor(...)
 endfunction
 
 function s:fpdf.SetFillColor(...)
-  let r = s:float.new(get(a:000, 0))
-  let g = s:float.new(get(a:000, 1, -1))
-  let b = s:float.new(get(a:000, 2, -1))
+  let r = s:float(get(a:000, 0))
+  let g = s:float(get(a:000, 1, -1))
+  let b = s:float(get(a:000, 2, -1))
   "Set color for all filling operations
-  if (s:float.cmp(r, 0) == 0 && s:float.cmp(g, 0) == 0 && s:float.cmp(b, 0) == 0) || s:float.cmp(g, -1) == 0
-    let self.FillColor = s:sprintf('%.3f g', s:float.div(r, 255))
+  if (r == 0 && g == 0 && b == 0) || g == -1
+    let self.FillColor = printf('%.3f g', r / 255.0)
   else
-    let self.FillColor = s:sprintf('%.3f %.3f %.3f rg', s:float.div(r, 255), s:float.div(g, 255), s:float.div(b, 255))
+    let self.FillColor = printf('%.3f %.3f %.3f rg', r / 255.0, g / 255.0, b / 255.0)
   endif
   let self.ColorFlag = (self.FillColor != self.TextColor)
   if self.page > 0
@@ -667,14 +655,14 @@ function s:fpdf.SetFillColor(...)
 endfunction
 
 function s:fpdf.SetTextColor(...)
-  let r = s:float.new(get(a:000, 0))
-  let g = s:float.new(get(a:000, 1, -1))
-  let b = s:float.new(get(a:000, 2, -1))
+  let r = s:float(get(a:000, 0))
+  let g = s:float(get(a:000, 1, -1))
+  let b = s:float(get(a:000, 2, -1))
   "Set color for text
-  if (s:float.cmp(r, 0) == 0 && s:float.cmp(g, 0) == 0 && s:float.cmp(b, 0) == 0) || s:float.cmp(g, -1) == 0
-    let self.TextColor = s:sprintf('%.3f g', s:float.div(r, 255))
+  if (r == 0 && g == 0 && b == 0) || g == -1
+    let self.TextColor = printf('%.3f g', r / 255.0)
   else
-    let self.TextColor = s:sprintf('%.3f %.3f %.3f rg', s:float.div(r, 255), s:float.div(g, 255), s:float.div(b, 255))
+    let self.TextColor = printf('%.3f %.3f %.3f rg', r / 255.0, g / 255.0, b / 255.0)
   endif
   let self.ColorFlag = (self.FillColor != self.TextColor)
 endfunction
@@ -690,20 +678,20 @@ function s:fpdf.GetStringWidthPoint(s)
 endfunction
 
 function s:fpdf.GetStringWidth(s)
-  return s:float.div(s:float.mul(self.GetStringWidthPoint(a:s), self.FontSize), 1000)
+  return self.GetStringWidthPoint(a:s) * self.FontSize / 1000.0
 endfunction
 
 function s:fpdf.SetLineWidth(width)
   "Set line width
-  let self.LineWidth = s:float.new(a:width)
+  let self.LineWidth = s:float(a:width)
   if self.page > 0
-    call self._out(s:sprintf('%.2f w', s:float.mul(a:width, self.k)))
+    call self._out(printf('%.2f w', a:width * self.k))
   endif
 endfunction
 
 function s:fpdf.Line(x1, y1, x2, y2)
   "Draw a line
-  call self._out(s:sprintf('%.2f %.2f m %.2f %.2f l S', s:float.mul(a:x1, self.k), s:float.mul(s:float.sub(self.h, a:y1), self.k), s:float.mul(a:x2, self.k), s:float.mul(s:float.sub(self.h, a:y2), self.k)))
+  call self._out(printf('%.2f %.2f m %.2f %.2f l S', a:x1 * self.k, (self.h - a:y1) * self.k, a:x2 * self.k, (self.h - a:y2) * self.k))
 endfunction
 
 function s:fpdf.Rect(...)
@@ -720,7 +708,7 @@ function s:fpdf.Rect(...)
   else
     let op = 'S'
   endif
-  call self._out(s:sprintf('%.2f %.2f %.2f %.2f re %s', s:float.mul(x, self.k), s:float.mul(s:float.sub(self.h, y), self.k), s:float.mul(w, self.k), s:float.mul(s:float.sub(0, h), self.k), op))
+  call self._out(printf('%.2f %.2f %.2f %.2f re %s', x * self.k, (self.h - y) * self.k, w * self.k, -h * self.k, op))
 endfunction
 
 function s:fpdf.AddFont(...)
@@ -785,7 +773,7 @@ let g:fpdf_charwidths = {}
 function s:fpdf.SetFont(...)
   let family = get(a:000, 0)
   let style = get(a:000, 1, '')
-  let size = s:float.new(get(a:000, 2, 0))
+  let size = s:float(get(a:000, 2, 0))
 
   "Select a font; size given in points
 
@@ -808,11 +796,11 @@ function s:fpdf.SetFont(...)
   if style == 'IB'
     let style = 'BI'
   endif
-  if s:float.cmp(size, 0) == 0
+  if size == 0
     let size = self.FontSizePt
   endif
   "Test if font is already selected
-  if self.FontFamily == family && self.FontStyle == style && s:float.cmp(self.FontSizePt, size) == 0
+  if self.FontFamily == family && self.FontStyle == style && self.FontSizePt == size
     return
   endif
   "Test if used for the first time
@@ -841,22 +829,22 @@ function s:fpdf.SetFont(...)
   let self.FontFamily = family
   let self.FontStyle = style
   let self.FontSizePt = size
-  let self.FontSize = s:float.div(size, self.k)
+  let self.FontSize = size / self.k
   let self.CurrentFont = self.fonts[fontkey]
   if self.page > 0
-    call self._out(s:sprintf('BT /F%d %.2f Tf ET', self.CurrentFont['i'], self.FontSizePt))
+    call self._out(printf('BT /F%d %.2f Tf ET', self.CurrentFont['i'], self.FontSizePt))
   endif
 endfunction
 
 function s:fpdf.SetFontSize(size)
   "Set font size in points
-  if s:float.cmp(self.FontSizePt, a:size) == 0
+  if self.FontSizePt == a:size
     return
   endif
-  let self.FontSizePt = s:float.new(a:size)
-  let self.FontSize = s:float.div(a:size, self.k)
+  let self.FontSizePt = s:float(a:size)
+  let self.FontSize = a:size / self.k
   if self.page > 0
-    call self._out(s:sprintf('BT /F%d %.2f Tf ET', self.CurrentFont['i'], self.FontSizePt))
+    call self._out(printf('BT /F%d %.2f Tf ET', self.CurrentFont['i'], self.FontSizePt))
   endif
 endfunction
 
@@ -869,10 +857,10 @@ endfunction
 
 function s:fpdf.SetLink(...)
   let link = get(a:000, 0)
-  let y = s:float.new(get(a:000, 1, 0))
+  let y = s:float(get(a:000, 1, 0))
   let page = get(a:000, 2, -1)
   "Set destination of internal link
-  if s:float.cmp(y, -1) == 0
+  if y == -1
     let y = self.y
   endif
   if page == -1
@@ -886,12 +874,12 @@ function s:fpdf.Link(x, y, w, h, link)
   if !has_key(self.PageLinks, self.page)
     let self.PageLinks[self.page] = []
   endif
-  call add(self.PageLinks[self.page], [s:float.mul(a:x, self.k), s:float.sub(self.hPt, s:float.mul(a:y, self.k)), s:float.mul(a:w, self.k), s:float.mul(a:h, self.k), a:link])
+  call add(self.PageLinks[self.page], [a:x * self.k, self.hPt - a:y * self.k, a:w * self.k, a:h * self.k, a:link])
 endfunction
 
 function s:fpdf.Text(x, y, txt)
   "Output a string
-  let s = s:sprintf('BT %.2f %.2f Td %s Tj ET', s:float.mul(a:x, self.k), s:float.mul(s:float.sub(self.h, a:y), self.k) self._textstring(a:txt))
+  let s = printf('BT %.2f %.2f Td %s Tj ET', a:x * self.k, (self.h - a:y) * self.k self._textstring(a:txt))
   if self.underline && a:txt != ''
     let s .= ' ' . self._dounderline(a:x, a:y, a:txt)
   endif
@@ -907,8 +895,8 @@ function s:fpdf.AcceptPageBreak()
 endfunction
 
 function s:fpdf.Cell(...)
-  let w = s:float.new(get(a:000, 0))
-  let h = s:float.new(get(a:000, 1))
+  let w = s:float(get(a:000, 0))
+  let h = s:float(get(a:000, 1))
   let txt = get(a:000, 2, '')
   let border = get(a:000, 3, 0)
   let ln = get(a:000, 4, 0)
@@ -918,23 +906,23 @@ function s:fpdf.Cell(...)
 
   "Output a cell
   let k = self.k
-  if s:float.cmp(s:float.add(self.y, h), self.PageBreakTrigger) > 0 && !self.InFooter && self.AcceptPageBreak()
+  if self.y + h > self.PageBreakTrigger && !self.InFooter && self.AcceptPageBreak()
     "Automatic page break
     let x = self.x
     let ws = self.ws
-    if s:float.cmp(ws, 0) > 0
-      let self.ws = s:float.new(0)
+    if ws > 0
+      let self.ws = s:float(0)
       call self._out('0 Tw')
     endif
     call self.AddPage(self.CurOrientation)
     let self.x = x
-    if s:float.cmp(ws, 0) > 0
+    if ws > 0
       let self.ws = ws
-      call self._out(s:sprintf('%.3f Tw', s:float.mul(ws, k)))
+      call self._out(printf('%.3f Tw', ws * k))
     endif
   endif
-  if s:float.cmp(w, 0) == 0
-    let w = s:float.sub(s:float.sub(self.w, self.rMargin), self.x)
+  if w == 0
+    let w = self.w - self.rMargin - self.x
   endif
   let s = ''
   if fill == 1 || border == 1
@@ -943,44 +931,44 @@ function s:fpdf.Cell(...)
     else
       let op = 'S'
     endif
-    let s = s:sprintf('%.2f %.2f %.2f %.2f re %s ', s:float.mul(self.x, k), s:float.mul(s:float.sub(self.h, self.y), k), s:float.mul(w, k), s:float.mul(s:float.sub(0, h), k), op)
+    let s = printf('%.2f %.2f %.2f %.2f re %s ', self.x * k, (self.h - self.y) * k, w * k, -h * k, op)
   endif
   if s:is_string(border)
     let x = self.x
     let y = self.y
     if border =~? 'L'
-      let s .= s:sprintf('%.2f %.2f m %.2f %.2f l S ', s:float.mul(x, k), s:float.mul(s:float.sub(self.h, y), k), s:float.mul(x, k), s:float.mul(s:float.sub(self.h, s:float.add(y, h)), k))
+      let s .= printf('%.2f %.2f m %.2f %.2f l S ', x * k, (self.h - y) * k, x * k, (self.h - (y + h)) * k)
     endif
     if border =~? 'T'
-      let s .= s:sprintf('%.2f %.2f m %.2f %.2f l S ', s:float.mul(x, k), s:float.mul(s:float.sub(self.h, y), k), s:float.mul(s:float.add(x, w), k), s:float.mul(s:float.sub(self.h, y), k))
+      let s .= printf('%.2f %.2f m %.2f %.2f l S ', x * k, (self.h - y) * k, (x + w) * k, (self.h - y) * k)
     endif
     if border =~? 'R'
-      let s .= s:sprintf('%.2f %.2f m %.2f %.2f l S ', s:float.mul(s:float.add(x, w), k), s:float.mul(s:float.sub(self.h, y), k), s:float.mul(s:float.add(x, w), k), s:float.mul(s:float.sub(self.h, s:float.add(y, h)), k))
+      let s .= printf('%.2f %.2f m %.2f %.2f l S ', (x + w) * k, (self.h - y) * k, (x + w) * k, (self.h - (y + h)) * k)
     endif
     if border =~? 'B'
-      let s .= s:sprintf('%.2f %.2f m %.2f %.2f l S ', s:float.mul(x, k), s:float.mul(s:float.sub(self.h, s:float.add(y, h)), k), s:float.mul(s:float.add(x, w), k), s:float.mul(s:float.sub(self.h, s:float.add(y, h)), k))
+      let s .= printf('%.2f %.2f m %.2f %.2f l S ', x * k, (self.h - (y + h)) * k, (x + w) * k, (self.h - (y + h)) * k)
     endif
   endif
   if txt != ''
     if align ==? 'R'
-      let dx = s:float.sub(s:float.sub(w, self.cMargin), self.GetStringWidth(txt))
+      let dx = w - self.cMargin - self.GetStringWidth(txt)
     elseif align ==? 'C'
-      let dx = s:float.div(s:float.sub(w, self.GetStringWidth(txt)), 2)
+      let dx = (w - self.GetStringWidth(txt)) / 2.0
     else
       let dx = self.cMargin
     endif
     if self.ColorFlag
       let s .= 'q ' . self.TextColor . ' '
     endif
-    let s .= s:sprintf('BT %.2f %.2f Td %s Tj ET', s:float.mul(s:float.add(self.x, dx), k), s:float.mul(s:float.sub(self.h, s:float.add(s:float.add(self.y, s:float.mul('.5', h)), s:float.mul('.3', self.FontSize))), k), self._textstring(txt))
+    let s .= printf('BT %.2f %.2f Td %s Tj ET', (self.x + dx) * k, (self.h - (self.y + 0.5 * h + 0.3 * self.FontSize)) * k, self._textstring(txt))
     if self.underline
-      let s .= ' ' . self._dounderline(s:float.add(self.x, dx), s:float.add(s:float.add(self.y, s:float.mul('.5', h)), s:float.mul('.3', self.FontSize)), txt)
+      let s .= ' ' . self._dounderline(self.x + dx, self.y + 0.5 * h + 0.3 * self.FontSize, txt)
     endif
     if self.ColorFlag
       let s .= ' Q'
     endif
     if link != ''
-      call self.Link(s:float.add(self.x, dx), s:float.sub(s:float.add(self.y, s:float.mul('.5', h)), s:float.mul('.5', self.FontSize)), self.GetStringWidth(txt), self.FontSize, link)
+      call self.Link(self.x + dx, self.y + 0.5 * h - 0.5 * self.FontSize, self.GetStringWidth(txt), self.FontSize, link)
     endif
   endif
   if s != ''
@@ -989,18 +977,18 @@ function s:fpdf.Cell(...)
   let self.lasth = h
   if ln > 0
     "Go to next line
-    let self.y = s:float.add(self.y, h)
+    let self.y = self.y + h
     if ln == 1
       let self.x = self.lMargin
     endif
   else
-    let self.x = s:float.add(self.x, w)
+    let self.x = self.x + w
   endif
 endfunction
 
 function s:fpdf.MultiCell(...)
-  let w = s:float.cast(get(a:000, 0))
-  let h = s:float.cast(get(a:000, 1))
+  let w = s:float(get(a:000, 0))
+  let h = s:float(get(a:000, 1))
   let txt = get(a:000, 2)
   let border = get(a:000, 3, 0)
   let align = get(a:000, 4, 'J')
@@ -1008,10 +996,10 @@ function s:fpdf.MultiCell(...)
 
   "Output text with automatic or explicit line breaks
   let cw = self.CurrentFont['cw']
-  if s:float.cmp(w, 0) == 0
-    let w = s:float.sub(s:float.sub(self.w, self.rMargin), self.x)
+  if w == 0
+    let w = self.w - self.rMargin - self.x
   endif
-  let wmax = s:float.div(s:float.mul(s:float.sub(w, s:float.mul(2, self.cMargin)), 1000), self.FontSize)
+  let wmax = (w - 2 * self.cMargin) * 1000.0 / self.FontSize
   let s = substitute(txt, "\r", '', 'g')
   let nb = s:mb_strlen(s)
   if nb > 0 && s:mb_substr(s, nb - 1, 1) == "\n"
@@ -1046,8 +1034,8 @@ function s:fpdf.MultiCell(...)
     let c = s:mb_substr(s, i, 1)
     if c == "\n"
       "Explicit line break
-      if s:float.cmp(ws, 0) > 0
-        let self.ws = s:float.new(0)
+      if ws > 0
+        let self.ws = 0.0
         call self._out('0 Tw')
       endif
       call self.Cell(w,h,s:mb_substr(s,j,i-j),b,2,align,fill)
@@ -1068,25 +1056,25 @@ function s:fpdf.MultiCell(...)
       let ns += 1
     endif
     let l += self.GetStringWidthPoint(c)
-    if s:float.cmp(l, wmax) > 0
+    if l > wmax
       "Automatic line break
       if sep == -1
         if i == j
           let i += 1
         endif
-        if s:float.cmp(self.ws, 0) > 0
-          let self.ws = s:float.new(0)
+        if self.ws > 0
+          let self.ws = 0.0
           call self._out('0 Tw')
         endif
         call self.Cell(w,h,s:mb_substr(s,j,i-j),b,2,align,fill)
       else
         if align ==? 'J'
           if ns > 1
-            let self.ws = s:float.div(s:float.mul(s:float.div(s:float.sub(wmax, ls), 1000), self.FontSize), ns - 1)
+            let self.ws = (wmax - ls) / 1000.0 * self.FontSize / (ns - 1)
           else
-            let self.ws = s:float.new(0)
+            let self.ws = 0.0
           endif
-          call self._out(s:sprintf('%.3f Tw',s:float.mul(self.ws, self.k)))
+          call self._out(printf('%.3f Tw', self.ws * self.k))
         endif
         call self.Cell(w,h,s:mb_substr(s,j,sep-j),b,2,align,fill)
         let i = sep + 1
@@ -1104,8 +1092,8 @@ function s:fpdf.MultiCell(...)
     endif
   endwhile
   "Last chunk
-  if s:float.cmp(self.ws, 0) > 0
-    let self.ws = s:float.new(0)
+  if self.ws > 0
+    let self.ws = 0.0
     call self._out('0 Tw')
   endif
   if border =~? 'B'
@@ -1116,13 +1104,13 @@ function s:fpdf.MultiCell(...)
 endfunction
 
 function s:fpdf.Write(...)
-  let h = s:float.new(get(a:000, 0))
+  let h = s:float(get(a:000, 0))
   let txt = get(a:000, 1)
   let link = get(a:000, 2, '')
 
   "Output text in flowing mode
-  let w = s:float.sub(s:float.sub(self.w, self.rMargin), self.x)
-  let wmax = s:float.div(s:float.mul(s:float.sub(w, s:float.mul(2, self.cMargin)), 1000), self.FontSize)
+  let w = self.w - self.rMargin - self.x
+  let wmax = (w - 2.0 * self.cMargin) * 1000.0 / self.FontSize
   let s = substitute(txt, "\r", '', 'g')
   let nb = s:mb_strlen(s)
   let sep = -1
@@ -1142,8 +1130,8 @@ function s:fpdf.Write(...)
       let l = 0
       if nl == 1
         let self.x = self.lMargin
-        let w = s:float.sub(s:float.sub(self.w, self.rMargin), s:float.sub(0, self.x))
-        let wmax = s:float.div(s:float.mul(s:float.sub(w, s:float.mul(2, self.cMargin)), 1000), self.FontSize)
+        let w = self.w - self.rMargin - self.x
+        let wmax = (w - 2.0 * self.cMargin) * 1000.0 / self.FontSize
       endif
       let nl += 1
       continue
@@ -1152,15 +1140,15 @@ function s:fpdf.Write(...)
       let sep = i
     endif
     let l += self.GetStringWidthPoint(c)
-    if s:float.cmp(l, wmax) > 0
+    if l > wmax
       "Automatic line break
       if sep == -1
-        if s:float.cmp(self.x, self.lMargin) > 0
+        if self.x > self.lMargin
           "Move to next line
           let self.x = self.lMargin
-          let self.y = s:float.add(self.y, h)
-          let w = s:float.sub(s:float.sub(self.w, self.rMargin), self.x)
-          let wmax = s:float.div(s:float.mul(s:float.sub(w, s:float.mul(2, self.cMargin)), 1000), self.FontSize)
+          let self.y = self.y + h
+          let w = self.w - self.rMargin - self.x
+          let wmax = (w - 2.0 * self.cMargin) * 1000.0 / self.FontSize
           let i += 1
           let nl += 1
           continue
@@ -1178,8 +1166,8 @@ function s:fpdf.Write(...)
       let l = 0
       if nl == 1
         let self.x = self.lMargin
-        let w = s:float.sub(s:float.sub(self.w, self.rMargin), self.x)
-        let wmax = s:float.div(s:float.mul(s:float.sub(w, s:float.mul(2, self.cMargin)), 1000), self.FontSize)
+        let w = self.w - self.rMargin - self.x
+        let wmax = (w - 2.0 * self.cMargin) * 1000.0 / self.FontSize
       endif
       let nl += 1
     else
@@ -1188,16 +1176,16 @@ function s:fpdf.Write(...)
   endwhile
   "Last chunk
   if i != j
-    call self.Cell(s:float.mul(s:float.div(l, 1000), self.FontSize), h, s:mb_substr(s, j), 0, 0, '', 0, link)
+    call self.Cell(l / 1000.0 * self.FontSize, h, s:mb_substr(s, j), 0, 0, '', 0, link)
   endif
 endfunction
 
 function s:fpdf.Image(...)
   let file = get(a:000, 0)
-  let x = s:float.new(get(a:000, 1))
-  let y = s:float.new(get(a:000, 2))
-  let w = s:float.new(get(a:000, 3, 0))
-  let h = s:float.new(get(a:000, 4, 0))
+  let x = s:float(get(a:000, 1))
+  let y = s:float(get(a:000, 2))
+  let w = s:float(get(a:000, 3, 0))
+  let h = s:float(get(a:000, 4, 0))
   let type = get(a:000, 5, '')
   let link = get(a:000, 6, '')
 
@@ -1229,18 +1217,18 @@ function s:fpdf.Image(...)
     let info = self.images[file]
   endif
   "Automatic width and height calculation if needed
-  if s:float.cmp(w, 0) == 0 && s:float.cmp(h, 0) == 0
+  if w == 0 && h == 0
     "Put image at 72 dpi
-    let w = s:float.div(info['w'], self.k)
-    let h = s:float.div(info['h'], self.k)
+    let w = info['w'] / self.k
+    let h = info['h'] / self.k
   endif
-  if s:float.cmp(w, 0) == 0
-    let w = s:float.div(s:float.mul(h, info['w']), info['h'])
+  if w == 0
+    let w = h * info['w'] / info['h']
   endif
-  if s:float.cmp(h, 0) == 0
-    let h = s:float.div(s:float.mul(w, info['h']), info['w'])
+  if h == 0
+    let h = w * info['h'] / info['w']
   endif
-  call self._out(s:sprintf('q %.2f 0 0 %.2f %.2f %.2f cm /I%d Do Q', s:float.mul(w, self.k), s:float.mul(h, self.k), s:float.mul(x, self.k), s:float.mul(s:float.sub(self.h, s:float.add(y, h)), self.k), info['i']))
+  call self._out(printf('q %.2f 0 0 %.2f %.2f %.2f cm /I%d Do Q', w * self.k, h * self.k, x * self.k, (self.h - (y + h)) * self.k, info['i']))
   if link != ''
     call self.Link( x, y, w, h, link)
   endif
@@ -1251,9 +1239,9 @@ function s:fpdf.Ln(...)
   "Line feed; default value is last cell height
   let self.x = self.lMargin
   if s:is_string(h)
-    let self.y = s:float.add(self.y, self.lasth)
+    let self.y = self.y + self.lasth
   else
-    let self.y = s:float.add(self.y, h)
+    let self.y = self.y + h
   endif
 endfunction
 
@@ -1263,12 +1251,12 @@ function s:fpdf.GetX()
 endfunction
 
 function s:fpdf.SetX(x)
-  let x = s:float.new(a:x)
+  let x = s:float(a:x)
   "Set x position
-  if s:float.cmp(x, 0) >= 0
+  if x >= 0
     let self.x = x
   else
-    let self.x = s:float.add(self.w, x)
+    let self.x = self.w + x
   endif
 endfunction
 
@@ -1278,13 +1266,13 @@ function s:fpdf.GetY()
 endfunction
 
 function s:fpdf.SetY(y)
-  let y = s:float.new(a:y)
+  let y = s:float(a:y)
   "Set y position and reset x
   let self.x = self.lMargin
-  if s:float.cmp(y, 0) >= 0
+  if y >= 0
     let self.y = y
   else
-    let self.y = s:float.add(self.h, a:y)
+    let self.y = self.h + a:y
   endif
 endfunction
 
@@ -1339,21 +1327,21 @@ function s:fpdf._putpages()
     call self._out('<</Type /Page')
     call self._out('/Parent 1 0 R')
     if has_key(self.OrientationChanges, n)
-      call self._out(s:sprintf('/MediaBox [0 0 %.2f %.2f]', hPt, wPt))
+      call self._out(printf('/MediaBox [0 0 %.2f %.2f]', hPt, wPt))
     endif
     call self._out('/Resources 2 0 R')
     if has_key(self.PageLinks, n)
       "Links
       let annots = '/Annots ['
       for pl in self.PageLinks[n]
-        let rect = s:sprintf('%.2f %.2f %.2f %.2f', pl[0], pl[1], s:float.add(pl[0], pl[2]), s:float.sub(pl[1], pl[3]))
+        let rect = printf('%.2f %.2f %.2f %.2f', pl[0], pl[1], pl[0] + pl[2], pl[1] - pl[3])
         let annots .= '<</Type /Annot /Subtype /Link /Rect [' . rect . '] /Border [0 0 0] '
         if s:is_string(pl[4])
           let annots .= '/A <</S /URI /URI ' . self._textstring(pl[4]) . '>>>>'
         else
           let l = self.links[pl[4]]
           let h = has_key(self.OrientationChanges, l[0]) ? wPt : hPt
-          let annots .= s:sprintf('/Dest [%d 0 R /XYZ 0 %.2f null]>>', 1 + 2 * l[0], s:float.sub(h, s:float.mul(l[1], self.k)))
+          let annots .= printf('/Dest [%d 0 R /XYZ 0 %.2f null]>>', 1 + 2 * l[0], h - l[1] * self.k)
         endif
       endfor
       call self._out(annots . ']')
@@ -1384,7 +1372,7 @@ function s:fpdf._putpages()
   endfor
   call self._out(kids . ']')
   call self._out('/Count ' . nb)
-  call self._out(s:sprintf('/MediaBox [0 0 %.2f %.2f]', wPt, hPt))
+  call self._out(printf('/MediaBox [0 0 %.2f %.2f]', wPt, hPt))
   call self._out('>>')
   call self._out('endobj')
 endfunction
@@ -1652,7 +1640,7 @@ function s:fpdf._enddoc()
   call self._out('0 ' . (self.n + 1))
   call self._out('0000000000 65535 f ')
   for i in range(1, self.n)
-    call self._out(s:sprintf('%010d 00000 n ', self.offsets[i]))
+    call self._out(printf('%010d 00000 n ', self.offsets[i]))
   endfor
   "Trailer
   call self._out('trailer')
@@ -1718,8 +1706,8 @@ function s:fpdf._dounderline(x, y, txt)
   "Underline text
   let up = self.CurrentFont['up']
   let ut = self.CurrentFont['ut']
-  let w = s:float.add(self.GetStringWidth(txt), s:float.mul(self.ws, s:substr_count(txt, ' ')))
-  return s:sprintf('%.2f %.2f %.2f %.2f re f', s:float.mul(x, self.k), s:float.mul(s:float.sub(self.h, s:float.sub(y, s:float.mul(s:float.div(up, 1000), self.FontSize))), self.k), s:float.mul(w, self.k), s:float.mul(s:float.div(s:float.sub(0, ut), 1000), self.FontSizePt))
+  let w = self.GetStringWidth(txt) + self.ws * s:substr_count(txt, ' ')
+  return printf('%.2f %.2f %.2f %.2f re f', x * self.k, (self.h - (y - up / 1000.0 * self.FontSize)) * self.k, w * self.k, -ut / 1000.0 * self.FontSizePt)
 endfunction
 
 function s:fpdf._parsejpg(file)
