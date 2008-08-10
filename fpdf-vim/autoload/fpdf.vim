@@ -8,6 +8,7 @@
 " You may use, modify and redistribute this software as you wish.              *
 "******************************************************************************/
 " 2008-03-20: ported to vim by Yukihiro Nakadaira <yukihiri.nakadaira@gmail.com>
+" Last Change: 2008-08-10
 
 function fpdf#import()
   return s:fpdf
@@ -16,7 +17,7 @@ endfunction
 let s:__file__ = expand("<sfile>:p")
 
 let s:FPDF_VERSION = '1.53'
-let s:FPDF_VIM_VERSION = '0.1'
+let s:FPDF_VIM_VERSION = '0.2'
 
 let s:false = 0
 let s:true = 1
@@ -732,12 +733,12 @@ function s:fpdf.AddFont(...)
     throw 'Font already added: ' . family . ' ' . style
   endif
   call s:include(self._getfontpath() . file)
-  " _font should have type, name, desc, up, ut, cw, enc, file, diff
-  if !has_key(s:fpdf, '_font')
+  " g:fpdf_font should have type, name, desc, up, ut, cw, enc, file, diff
+  if !exists('g:fpdf_font')
     throw 'Could not include font definition file'
   endif
-  let font = s:fpdf._font
-  unlet s:fpdf._font
+  let font = g:fpdf_font
+  unlet g:fpdf_font
   let i = len(self.fonts) + 1
   let font['i'] = i
   let self.fonts[fontkey] = font
@@ -1862,100 +1863,15 @@ endfunction
 
 
 
-"-----------------------------------------------------------
-" MBFPDF features
-"-----------------------------------------------------------
-
-" Encoding & CMap List (CMap information from Acrobat Reader Resource/CMap folder)
-let s:fpdf.MBCMAP = {
-      \ 'UniCNS' : {'Encoding' : 'UniCNS-UTF16-H', 'Ordering' : 'CNS1',   'Supplement' : 0},
-      \ 'UniGB'  : {'Encoding' : 'UniGB-UTF16-H',  'Ordering' : 'GB1',    'Supplement' : 2},
-      \ 'UniKS'  : {'Encoding' : 'UniKS-UTF16-H',  'Ordering' : 'Korea1', 'Supplement' : 0},
-      \ 'UniJIS' : {'Encoding' : 'UniJIS-UTF16-H', 'Ordering' : 'Japan1', 'Supplement' : 5},
-      \ }
-
-let s:fpdf.MBTTFDEF_MONO = {
-      \ 'ut' : 74,
-      \ 'up' : -66,
-      \ 'cw' : {
-      \   char2nr(' '):500  ,char2nr('!'):500  ,char2nr('"'):500  ,char2nr('#'):500  ,char2nr('$'):500  ,char2nr('%'):500  ,char2nr('&'):500  ,
-      \   char2nr("'"):500  ,char2nr('('):500  ,char2nr(')'):500  ,char2nr('*'):500  ,char2nr('+'):500  ,char2nr(','):500  ,char2nr('-'):500  ,
-      \   char2nr('.'):500  ,char2nr('/'):500  ,char2nr('0'):500  ,char2nr('1'):500  ,char2nr('2'):500  ,char2nr('3'):500  ,char2nr('4'):500  ,
-      \   char2nr('5'):500  ,char2nr('6'):500  ,char2nr('7'):500  ,char2nr('8'):500  ,char2nr('9'):500  ,char2nr(':'):500  ,char2nr(';'):500  ,
-      \   char2nr('<'):500  ,char2nr('='):500  ,char2nr('>'):500  ,char2nr('?'):500  ,char2nr('@'):500  ,char2nr('A'):500  ,char2nr('B'):500  ,
-      \   char2nr('C'):500  ,char2nr('D'):500  ,char2nr('E'):500  ,char2nr('F'):500  ,char2nr('G'):500  ,char2nr('H'):500  ,char2nr('I'):500  ,
-      \   char2nr('J'):500  ,char2nr('K'):500  ,char2nr('L'):500  ,char2nr('M'):500  ,char2nr('N'):500  ,char2nr('O'):500  ,char2nr('P'):500  ,
-      \   char2nr('Q'):500  ,char2nr('R'):500  ,char2nr('S'):500  ,char2nr('T'):500  ,char2nr('U'):500  ,char2nr('V'):500  ,char2nr('W'):500  ,
-      \   char2nr('X'):500  ,char2nr('Y'):500  ,char2nr('Z'):500  ,char2nr('['):500  ,char2nr('\'):500  ,char2nr(']'):500  ,char2nr('^'):500  ,
-      \   char2nr('_'):500  ,char2nr('`'):500  ,char2nr('a'):500  ,char2nr('b'):500  ,char2nr('c'):500  ,char2nr('d'):500  ,char2nr('e'):500  ,
-      \   char2nr('f'):500  ,char2nr('g'):500  ,char2nr('h'):500  ,char2nr('i'):500  ,char2nr('j'):500  ,char2nr('k'):500  ,char2nr('l'):500  ,
-      \   char2nr('m'):500  ,char2nr('n'):500  ,char2nr('o'):500  ,char2nr('p'):500  ,char2nr('q'):500  ,char2nr('r'):500  ,char2nr('s'):500  ,
-      \   char2nr('t'):500  ,char2nr('u'):500  ,char2nr('v'):500  ,char2nr('w'):500  ,char2nr('x'):500  ,char2nr('y'):500  ,char2nr('z'):500  ,
-      \   char2nr('{'):500  ,char2nr('|'):500  ,char2nr('}'):500  ,char2nr('~'):500,
-      \   },
-      \ }
-
-let s:fpdf.MBTTFDEF_PROPORTIONAL = {
-      \ 'ut' : 74,
-      \ 'up' : -66,
-      \ 'cw' : {
-      \   char2nr(' '):305  ,char2nr('!'):219  ,'\"':500 ,char2nr('#'):500  ,char2nr('$'):500  ,char2nr('%'):500  ,char2nr('&'):594  ,
-      \   char2nr("'"):203 ,char2nr('('):305  ,char2nr(')'):305  ,char2nr('*'):500  ,char2nr('+'):500  ,char2nr(','):203  ,char2nr('-'):500  ,
-      \   char2nr('.'):203  ,char2nr('/'):500  ,char2nr('0'):500  ,char2nr('1'):500  ,char2nr('2'):500  ,char2nr('3'):500  ,char2nr('4'):500  ,
-      \   char2nr('5'):500  ,char2nr('6'):500  ,char2nr('7'):500  ,char2nr('8'):500  ,char2nr('9'):500  ,char2nr(':'):203  ,char2nr(';'):203  ,
-      \   char2nr('<'):500  ,char2nr('='):500  ,char2nr('>'):500  ,char2nr('?'):453  ,char2nr('@'):668  ,char2nr('A'):633  ,char2nr('B'):637  ,
-      \   char2nr('C'):664  ,char2nr('D'):648  ,char2nr('E'):566  ,char2nr('F'):551  ,char2nr('G'):680  ,char2nr('H'):641  ,char2nr('I'):246  ,
-      \   char2nr('J'):543  ,char2nr('K'):598  ,char2nr('L'):539  ,char2nr('M'):742  ,char2nr('N'):641  ,char2nr('O'):707  ,char2nr('P'):617  ,
-      \   char2nr('Q'):707  ,char2nr('R'):625  ,char2nr('S'):602  ,char2nr('T'):590  ,char2nr('U'):641  ,char2nr('V'):633  ,char2nr('W'):742  ,
-      \   char2nr('X'):602  ,char2nr('Y'):590  ,char2nr('Z'):566  ,char2nr('['):336  ,'\\':504 ,char2nr(']'):336  ,char2nr('^'):414  ,
-      \   char2nr('_'):305  ,char2nr('`'):414  ,char2nr('a'):477  ,char2nr('b'):496  ,char2nr('c'):500  ,char2nr('d'):496  ,char2nr('e'):500  ,
-      \   char2nr('f'):305  ,char2nr('g'):461  ,char2nr('h'):500  ,char2nr('i'):211  ,char2nr('j'):219  ,char2nr('k'):461  ,char2nr('l'):211  ,
-      \   char2nr('m'):734  ,char2nr('n'):500  ,char2nr('o'):508  ,char2nr('p'):496  ,char2nr('q'):496  ,char2nr('r'):348  ,char2nr('s'):461  ,
-      \   char2nr('t'):352  ,char2nr('u'):500  ,char2nr('v'):477  ,char2nr('w'):648  ,char2nr('x'):461  ,char2nr('y'):477  ,char2nr('z'):457  ,
-      \   char2nr('{'):234  ,char2nr('|'):234  ,char2nr('}'):234  ,char2nr('~'):414,
-      \   },
-      \ }
-
-function s:fpdf.AddCIDFont(family, style, name, cw, Encoding, Registry, ut, up)
-  let i = len(self.fonts) + 1
-  let fontkey = tolower(a:family) . toupper(a:style)
-  let self.fonts[fontkey] = {'i' : i, 'type' : 'Type0', 'name' : a:name, 'up' : a:up, 'ut' : a:ut, 'cw' : a:cw, 'Encoding' : a:Encoding, 'Registry' : a:Registry}
-endfunction
-
-function s:fpdf.AddMBFont(...)
-  let family = get(a:000, 0)
-  let cmap = get(a:000, 1)
-  let gt = get(a:000, 2, {})
-
-  if !has_key(self.MBCMAP, cmap)
-    throw "AddMBFont: ERROR CMap " . cmap . " Undefine."
-  endif
-  if gt == {}
-    let gt = self.MBTTFDEF_MONO
-  endif
-  let gc = self.MBCMAP[cmap]
-  let ut = gt['ut']
-  let up = gt['up']
-  let cw = gt['cw']
-  let ec = gc['Encoding']
-  let od = gc['Ordering']
-  let sp = gc['Supplement']
-  let Registry = {'Ordering' : od, 'Supplement' : sp}
-  call self.AddCIDFont(family,''  , family                , cw, ec, Registry, ut, up)
-  call self.AddCIDFont(family,'B' , family . ",Bold"      , cw, ec, Registry, ut, up)
-  call self.AddCIDFont(family,'I' , family . ",Italic"    , cw, ec, Registry, ut, up)
-  call self.AddCIDFont(family,'BI', family . ",BoldItalic", cw, ec, Registry, ut, up)
-endfunction
-
-function s:fpdf._putType0(font)
+function s:fpdf._putcidfont0(font)
   let font = a:font
 
   "Type0
   call self._newobj()
   call self._out('<</Type /Font')
   call self._out('/Subtype /Type0')
-  call self._out('/BaseFont /' . font['name'] . '-' . font['Encoding'])
-  call self._out('/Encoding /' . font['Encoding'])
+  call self._out('/BaseFont /' . font['name'] . '-' . font['enc'])
+  call self._out('/Encoding /' . font['enc'])
   call self._out('/DescendantFonts [' . (self.n + 1) . ' 0 R]')
   call self._out('>>')
   call self._out('endobj')
@@ -1963,106 +1879,61 @@ function s:fpdf._putType0(font)
   call self._newobj()
   call self._out('<</Type /Font')
   call self._out('/Subtype /CIDFontType0')
-  call self._out('/BaseFont /' . font['name'] . '-' . font['Encoding'])
+  call self._out('/BaseFont /' . font['name'])
   call self._out('/CIDSystemInfo ' . (self.n + 1) . ' 0 R')
   call self._out('/FontDescriptor ' . (self.n + 2) . ' 0 R')
-  call self._out('/W [1 [ ' . join(values(font['cw']), ' ') . ' ]')
-  if font['Registry']['Ordering'] == 'Japan1'
-    call self._out(' 231 325 500 631 [500] 326 389 500')
-  endif
-  call self._out(']')
+  call self._out('/DW ' . font['dw'])
+  call self._outfontwidths(font)
   call self._out('>>')
   call self._out('endobj')
   "CIDSystemInfo
   call self._newobj()
-  call self._out('<</Registry (Adobe)')
-  call self._out('/Ordering (' . font['Registry']['Ordering'] . ')')
-  call self._out('/Supplement ' . font['Registry']['Supplement'])
+  call self._out('<</Registry (' . font['cidinfo']['Registry'] . ')')
+  call self._out('/Ordering (' . font['cidinfo']['Ordering'] . ')')
+  call self._out('/Supplement ' . font['cidinfo']['Supplement'])
   call self._out('>>')
   call self._out('endobj')
   "Font descriptor
   call self._newobj()
   call self._out('<</Type /FontDescriptor')
-  call self._out('/FontName /' . font['name'])
-  call self._out('/Flags 6')
-  call self._out('/FontBBox [0 0 1000 1000]')
-  call self._out('/ItalicAngle 0')
-  call self._out('/Ascent 1000')
-  call self._out('/Descent 0')
-  call self._out('/CapHeight 1000')
-  call self._out('/StemV 10')
+  call self._out(' /FontName /' . font['name'])
+  for [k,v] in items(font['desc'])
+    call self._out(' /' . k . ' ' . v)
+  endfor
   call self._out('>>')
   call self._out('endobj')
 endfunction
 
-function s:fpdf._putType0_test(font)
+function s:fpdf._outfontwidths(font)
   let font = a:font
+  " convert unicode to cid
+  let uni2cid = get(font['cidinfo'], 'uni2cid', {})
+  let cw = {}
+  for uni in keys(font['cw'])
+    if has_key(uni2cid, uni)
+      let cid = uni2cid[uni]
+      let cw[cid] = font['cw'][uni]
+    elseif uni <= 255
+      let cid = uni - 31
+      let cw[cid] = font['cw'][uni]
+    else
+      " unknown character
+    endif
+  endfor
+  " TODO: optimize
+  " /W [
+  "   <start> <end> <width> ...
+  "   <start> [ <width of s+1> <width of s+2> ]
+  " ]
+  call self._out('/W [')
+  for cid in sort(keys(cw), 's:cmpnum')
+    call self._out(printf(" %d [%d] ", cid, cw[cid]))
+  endfor
+  cal self._out(']')
+endfunction
 
-  "Type0
-  call self._newobj()
-  call self._out('<</Type /Font')
-  call self._out('/Subtype /Type0')
-  call self._out('/BaseFont /' . font['name'])
-  call self._out('/Encoding /Identity-H')
-  call self._out('/DescendantFonts [' . (self.n + 1) . ' 0 R]')
-  call self._out('/ToUnicode ' . (self.n + 2) . ' 0 R')
-  call self._out('>>')
-  call self._out('endobj')
-  "CIDFont
-  call self._newobj()
-  call self._out('<</Type /Font')
-  call self._out('/Subtype /CIDFontType2')
-  call self._out('/BaseFont /' . font['name'])
-  call self._out('/CIDSystemInfo ' . (self.n + 2) . ' 0 R')
-  call self._out('/FontDescriptor ' . (self.n + 3) . ' 0 R')
-  call self._out('/CIDToGIDMap /Identity')
-  call self._out('>>')
-  call self._out('endobj')
-  "ToUnicode
-  call self._newobj()
-  let s = ""
-        \ . "/CIDInit /ProcSet findresource begin \n"
-        \ . "/12 dict begin \n"
-        \ . "/begincmap \n"
-        \ . "/CIDSystemInfoc \n"
-        \ . "<</Registry (Adobe) \n"
-        \ . "/Ordering (UCS) \n"
-        \ . "/Supplement 0 \n"
-        \ . ">> def \n"
-        \ . "/CMapName /Adobe-Identity-UCS def \n"
-        \ . "/CMapType 2 def \n"
-        \ . "1 begincodespacerange \n"
-        \ . "<0000> <FFFF> \n"
-        \ . "endcodespacerange \n"
-        \ . "1 beginbfrange \n"
-        \ . "<0000> <FFFF> <0000> \n"
-        \ . "endbfrange \n"
-        \ . "endcmap \n"
-        \ . "CMapName currentdict /CMap defineresource pop \n"
-        \ . "end \n"
-        \ . "end"
-  call self._out('<</Length ' . strlen(s) . '>>')
-  call self._putstream(s)
-  call self._out('endobj')
-  "CIDSystemInfo
-  call self._newobj()
-  call self._out('<</Registry (Adobe)')
-  call self._out('/Ordering (UCS)')
-  call self._out('/Supplement 0')
-  call self._out('>>')
-  call self._out('endobj')
-  "Font descriptor
-  call self._newobj()
-  call self._out('<</Type /FontDescriptor')
-  call self._out('/FontName /' . font['name'])
-  call self._out('/Flags 96')
-  call self._out('/FontBBox [0 0 1000 1000]')
-  call self._out('/ItalicAngle 0')
-  call self._out('/Ascent 1000')
-  call self._out('/Descent 0')
-  call self._out('/CapHeight 1000')
-  call self._out('/StemV 10')
-  call self._out('>>')
-  call self._out('endobj')
+function s:cmpnum(a, b)
+  let d = a:a - a:b
+  return d == 0 ? 0 : d > 0 ? 1 : -1
 endfunction
 
