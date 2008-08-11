@@ -14,6 +14,9 @@ function fpdf#import()
   return s:fpdf
 endfunction
 
+" temporary variable
+let fpdf#font = {}
+
 let s:__file__ = expand("<sfile>:p")
 
 let s:FPDF_VERSION = '1.53'
@@ -205,6 +208,12 @@ function s:nr2utf16hex(char)
     let w2 = 0xDC00 + (char % 0x400)
     return printf("%02X%02X%02X%02X", w1 / 0x100, w1 & 0xFF, w2 / 0x100, w2 % 0x100)
   endif
+endfunction
+
+" TODO:
+function s:bin2hex_winansi(s)
+  let s = (&enc == 'latin1') ? a:s : iconv(a:s, &enc, 'latin1')
+  return s:bin2hex(s)
 endfunction
 
 function s:GetImageSizeJpeg(data)
@@ -732,13 +741,13 @@ function s:fpdf.AddFont(...)
   if has_key(self.fonts, fontkey)
     throw 'Font already added: ' . family . ' ' . style
   endif
+  let g:fpdf#font = {}
   call s:include(self._getfontpath() . file)
-  " g:fpdf_font should have type, name, desc, up, ut, cw, enc, file, diff
-  if !exists('g:fpdf_font')
+  " fpdf#font should have type, name, desc, up, ut, cw, enc, file, diff
+  if empty(g:fpdf#font)
     throw 'Could not include font definition file'
   endif
-  let font = g:fpdf_font
-  unlet g:fpdf_font
+  let font = g:fpdf#font
   let i = len(self.fonts) + 1
   let font['i'] = i
   if font['type'] == 'cidfont0'
@@ -1839,6 +1848,8 @@ function s:fpdf._textstring(s, ...)
   "Format a text string
   if a:s =~ '^[\x00-\x7F]*$'
     return '(' . self._escape(a:s) . ')'
+  elseif self.CurrentFont['type'] == 'core'
+    return '<' . s:bin2hex_winansi(a:s) . '>'
   else
     return '<' . (bom ? 'FEFF' : '') . s:bin2hex_utf16(a:s) . '>'
   endif

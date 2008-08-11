@@ -1,4 +1,4 @@
-let g:fpdf_font['cidinfo']['uni2cid'] = {
+let g:fpdf#font['cidinfo']['uni2cid'] = {
       \ 160 : 1,
       \ 32 : 1,
       \ 33 : 2,
