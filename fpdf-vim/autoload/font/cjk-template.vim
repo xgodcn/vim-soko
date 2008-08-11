@@ -1,27 +1,27 @@
 " This file is template for CJK cidfont.
 
-let g:fpdf_font = {}
+let g:fpdf#font = {}
 
-let g:fpdf_font['type'] = 'cidfont0'
+let g:fpdf#font['type'] = 'cidfont0'
 
 " You can use any font name which PDF viewer know.
-let g:fpdf_font['name'] = 'MS-PMincho'
+let g:fpdf#font['name'] = 'MS-PMincho'
 
 " you can get actual information with
 " fpdf/font/makefont/makefont.php or tcpdf/fonts/utils/makefont.php
 " http://www.fpdf.org/
 " http://www.tecnick.com/public/code/cp_dpage.php?aiocp_dp=tcpdf
 
-let g:fpdf_font['desc'] = {'Ascent' : 859, 'Descent' : -141, 'CapHeight' : 27, 'Flags' : 32, 'FontBBox' : '[-82 -137 996 859]', 'ItalicAngle' : 0, 'StemV' : 70, 'MissingWidth' : 600}
+let g:fpdf#font['desc'] = {'Ascent' : 859, 'Descent' : -141, 'CapHeight' : 27, 'Flags' : 32, 'FontBBox' : '[-82 -137 996 859]', 'ItalicAngle' : 0, 'StemV' : 70, 'MissingWidth' : 600}
 
-let g:fpdf_font['up'] = -94
-let g:fpdf_font['ut'] = 47
+let g:fpdf#font['up'] = -94
+let g:fpdf#font['ut'] = 47
 " default character width
-let g:fpdf_font['dw'] = 1000
+let g:fpdf#font['dw'] = 1000
 " character width (unicode=>width)
 " This is for monospace.
 " When using monospace font, you don't need to add all characters.
-let g:fpdf_font['cw'] = {
+let g:fpdf#font['cw'] = {
       \ 32 : 500   ,33 : 500   ,34 : 500   ,35 : 500   ,36 : 500   ,37 : 500   ,38 : 500  ,
       \ 39 : 500   ,40 : 500   ,41 : 500   ,42 : 500   ,43 : 500   ,44 : 500   ,45 : 500  ,
       \ 46 : 500   ,47 : 500   ,48 : 500   ,49 : 500   ,50 : 500   ,51 : 500   ,52 : 500  ,
@@ -44,21 +44,21 @@ let g:fpdf_font['cw'] = {
 " ftp://ftp.oreilly.com/pub/examples/nutshell/cjkv/adobe/
 " cid2code.txt in ac16.tar.Z, ag15.tar.Z, ak12.tar.Z and aj16.tar.Z.
 
-"let g:fpdf_font['enc'] = 'UniCNS-UTF16-H'
-"let g:fpdf_font['cidinfo'] = {'Registry' : 'Adobe', 'Ordering' : 'CNS1', 'Supplement' : 0}
+"let g:fpdf#font['enc'] = 'UniCNS-UTF16-H'
+"let g:fpdf#font['cidinfo'] = {'Registry' : 'Adobe', 'Ordering' : 'CNS1', 'Supplement' : 0}
 "so <sfile>:p:h/uni2cid_ac16.vim
 
-"let g:fpdf_font['enc'] = 'UniGB-UTF16-H'
-"let g:fpdf_font['cidinfo'] = {'Registry' : 'Adobe', 'Ordering' : 'GB1', 'Supplement' : 2}
+"let g:fpdf#font['enc'] = 'UniGB-UTF16-H'
+"let g:fpdf#font['cidinfo'] = {'Registry' : 'Adobe', 'Ordering' : 'GB1', 'Supplement' : 2}
 "so <sfile>:p:h/uni2cid_ag15.vim
 
-"let g:fpdf_font['enc'] = 'UniKS-UTF16-H'
-"let g:fpdf_font['cidinfo'] = {'Registry' : 'Adobe', 'Ordering' : 'Korea1', 'Supplement' : 0}
+"let g:fpdf#font['enc'] = 'UniKS-UTF16-H'
+"let g:fpdf#font['cidinfo'] = {'Registry' : 'Adobe', 'Ordering' : 'Korea1', 'Supplement' : 0}
 "so <sfile>:p:h/uni2cid_ak12.vim
 
-"let g:fpdf_font['enc'] = 'UniJIS-UTF16-H'
-"let g:fpdf_font['cidinfo'] = {'Registry' : 'Adobe', 'Ordering' : 'Japan1', 'Supplement' : 5}
+"let g:fpdf#font['enc'] = 'UniJIS-UTF16-H'
+"let g:fpdf#font['cidinfo'] = {'Registry' : 'Adobe', 'Ordering' : 'Japan1', 'Supplement' : 5}
 "so <sfile>:p:h/uni2cid_aj16.vim
 
-let g:fpdf_font['file'] = ''
-let g:fpdf_font['diff'] = ''
+let g:fpdf#font['file'] = ''
+let g:fpdf#font['diff'] = ''

@@ -1,11 +1,11 @@
-let g:fpdf_font = {}
-let g:fpdf_font['type'] = 'cidfont0'
-let g:fpdf_font['name'] = 'MS-Mincho'
-let g:fpdf_font['desc'] = {'Ascent' : 859, 'Descent' : -141, 'CapHeight' : 27, 'Flags' : 32, 'FontBBox' : '[-82 -137 996 859]', 'ItalicAngle' : 0, 'StemV' : 70, 'MissingWidth' : 600}
-let g:fpdf_font['up'] = -94
-let g:fpdf_font['ut'] = 47
-let g:fpdf_font['dw'] = 1000
-let g:fpdf_font['cw'] = {
+let g:fpdf#font = {}
+let g:fpdf#font['type'] = 'cidfont0'
+let g:fpdf#font['name'] = 'MS-Mincho'
+let g:fpdf#font['desc'] = {'Ascent' : 859, 'Descent' : -141, 'CapHeight' : 27, 'Flags' : 32, 'FontBBox' : '[-82 -137 996 859]', 'ItalicAngle' : 0, 'StemV' : 70, 'MissingWidth' : 600}
+let g:fpdf#font['up'] = -94
+let g:fpdf#font['ut'] = 47
+let g:fpdf#font['dw'] = 1000
+let g:fpdf#font['cw'] = {
       \ 32:500  ,33:500  ,34:500  ,35:500  ,36:500  ,37:500  ,38:500  ,
       \ 39:500  ,40:500  ,41:500  ,42:500  ,43:500  ,44:500  ,45:500  ,
       \ 46:500  ,47:500  ,48:500  ,49:500  ,50:500  ,51:500  ,52:500  ,
@@ -21,8 +21,8 @@ let g:fpdf_font['cw'] = {
       \ 116:500  ,117:500  ,118:500  ,119:500  ,120:500  ,121:500  ,122:500  ,
       \ 123:500  ,124:500  ,125:500  ,126:500,
       \ }
-let g:fpdf_font['enc'] = 'UniJIS-UTF16-H'
-let g:fpdf_font['cidinfo'] = {'Registry' : 'Adobe', 'Ordering' : 'Japan1', 'Supplement' : 5}
+let g:fpdf#font['enc'] = 'UniJIS-UTF16-H'
+let g:fpdf#font['cidinfo'] = {'Registry' : 'Adobe', 'Ordering' : 'Japan1', 'Supplement' : 5}
 so <sfile>:p:h/uni2cid_aj16.vim
-let g:fpdf_font['file'] = ''
-let g:fpdf_font['diff'] = ''
+let g:fpdf#font['file'] = ''
+let g:fpdf#font['diff'] = ''
