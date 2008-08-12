@@ -8,7 +8,7 @@
 " You may use, modify and redistribute this software as you wish.              *
 "******************************************************************************/
 " 2008-03-20: ported to vim by Yukihiro Nakadaira <yukihiri.nakadaira@gmail.com>
-" Last Change: 2008-08-12
+" Last Change: 2008-08-13
 
 function fpdf#import()
   return s:fpdf
@@ -900,7 +900,7 @@ function s:fpdf.Text(x, y, txt)
   if self.underline && a:txt != ''
     let s .= ' ' . self._dounderline(a:x, a:y, a:txt)
   endif
-  if(self.ColorFlag)
+  if self.ColorFlag
     let s = 'q ' . self.TextColor . ' ' . s . ' Q'
   endif
   call self._out(s)
@@ -913,7 +913,7 @@ endfunction
 
 function s:fpdf.Cell(...)
   let w = s:float(get(a:000, 0))
-  let h = s:float(get(a:000, 1))
+  let h = s:float(get(a:000, 1, 0))
   let txt = get(a:000, 2, '')
   let border = get(a:000, 3, 0)
   let ln = get(a:000, 4, 0)
@@ -1124,6 +1124,7 @@ function s:fpdf.Write(...)
   let h = s:float(get(a:000, 0))
   let txt = get(a:000, 1)
   let link = get(a:000, 2, '')
+  let fill = get(a:000, 3, 0)   " XXX: added
 
   "Output text in flowing mode
   let w = self.w - self.rMargin - self.x
@@ -1140,7 +1141,7 @@ function s:fpdf.Write(...)
     let c = s:mb_substr(s, i, 1)
     if c == "\n"
       "Explicit line break
-      call self.Cell(w, h, s:mb_substr(s, j, i-j), 0, 2, '', 0, link)
+      call self.Cell(w, h, s:mb_substr(s, j, i-j), 0, 2, '', fill, link)
       let i += 1
       let sep = -1
       let j = i
@@ -1173,9 +1174,9 @@ function s:fpdf.Write(...)
         if i == j
           let i += 1
         endif
-        call self.Cell(w, h, s:mb_substr(s, j, i - j), 0, 2, '', 0, link)
+        call self.Cell(w, h, s:mb_substr(s, j, i - j), 0, 2, '', fill, link)
       else
-        call self.Cell(w, h, s:mb_substr(s, j, sep - j), 0, 2, '', 0, link)
+        call self.Cell(w, h, s:mb_substr(s, j, sep - j), 0, 2, '', fill, link)
         let i = sep + 1
       endif
       let sep = -1
@@ -1193,7 +1194,7 @@ function s:fpdf.Write(...)
   endwhile
   "Last chunk
   if i != j
-    call self.Cell(l / 1000.0 * self.FontSize, h, s:mb_substr(s, j), 0, 0, '', 0, link)
+    call self.Cell(l / 1000.0 * self.FontSize, h, s:mb_substr(s, j), 0, 0, '', fill, link)
   endif
 endfunction
 
