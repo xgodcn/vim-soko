@@ -8,7 +8,7 @@
 " You may use, modify and redistribute this software as you wish.              *
 "******************************************************************************/
 " 2008-03-20: ported to vim by Yukihiro Nakadaira <yukihiri.nakadaira@gmail.com>
-" Last Change: 2008-08-10
+" Last Change: 2008-08-12
 
 function fpdf#import()
   return s:fpdf
@@ -1884,6 +1884,14 @@ endfunction
 function s:fpdf._putcidfont0(font)
   let font = a:font
 
+  if has_key(font, 'prebuild')
+    let obj = substitute(font['prebuild'], '{\(.\{-}\)}', '\=eval(submatch(1))', 'g')
+    call self._newobj()
+    call self._out(obj)
+    call self._out('endobj')
+    return
+  endif
+
   "Type0
   call self._newobj()
   call self._out('<</Type /Font')
@@ -1938,19 +1946,55 @@ function s:fpdf._outfontwidths(font)
       " unknown character
     endif
   endfor
-  " TODO: optimize
   " /W [
   "   <start> <end> <width> ...
-  "   <start> [ <width of s+1> <width of s+2> ]
+  "   <start> [ <width of start> <width of start+2> ... ]
   " ]
+  let cids = sort(keys(cw), 's:cmpnum')
+  let ranges = [[cids[0], cids[0], cw[cids[0]]]] " [[start, end, width], ...]
+  for cid in cids
+    if cw[cid] != ranges[-1][2]
+      call add(ranges, [cid, cid, cw[cid]])
+    else
+      let ranges[-1][1] = cid
+    endif
+  endfor
+  " optimize
+  let threshold = 4
+  let i = 0
+  while i + 1 < len(ranges)
+    let j = i
+    let [start1,end1,width1] = ranges[j]
+    let [start2,end2,width2] = ranges[j + 1]
+    while end1 - start1 <= threshold && end2 - start2 <= threshold && start2 - end1 <= threshold
+      let j += 1
+      if j + 1 >= len(ranges)
+        break
+      endif
+      let [start1, end1, width1] = ranges[j]
+      let [start2, end2, width2] = ranges[j + 1]
+    endwhile
+    if i != j
+      let [start1, end1, width1] = ranges[i]
+      let [start2, end2, width2] = ranges[j]
+      call remove(ranges, i + 1, j)
+      let widths = map(range(start1, end2), 'get(cw, v:val, 0)')
+      let ranges[i] = [start1, start1, join(widths)]
+    endif
+    let i += 1
+  endwhile
   call self._out('/W [')
-  for cid in sort(keys(cw), 's:cmpnum')
-    call self._out(printf(" %d [%d] ", cid, cw[cid]))
+  for [start,end,width] in ranges
+    if start == end
+      call self._out(printf(" %s [%s] ", start, width))
+    else
+      call self._out(printf(" %s %s %s ", start, end, width))
+    endif
   endfor
   cal self._out(']')
 endfunction
 
-function s:cmpnum(a, b)
+function! s:cmpnum(a, b)
   let d = a:a - a:b
   return d == 0 ? 0 : d > 0 ? 1 : -1
 endfunction

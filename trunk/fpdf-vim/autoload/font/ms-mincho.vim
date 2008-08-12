@@ -26,3 +26,43 @@ let g:fpdf#font['cidinfo'] = {'Registry' : 'Adobe', 'Ordering' : 'Japan1', 'Supp
 so <sfile>:p:h/uni2cid_aj16.vim
 let g:fpdf#font['file'] = ''
 let g:fpdf#font['diff'] = ''
+
+let s:lines = readfile(expand('<sfile>'))
+call remove(s:lines, 0, index(s:lines, 'finish'))
+let g:fpdf#font['prebuild'] = join(s:lines, "\n")
+unlet s:lines
+
+finish
+<<
+  /Type /Font
+  /Subtype /Type0
+  /BaseFont /{font['name'] . '-' . font['enc']}
+  /Encoding /UniJIS-UTF16-H
+  /DescendantFonts
+  [<<
+    /Type /Font
+    /Subtype /CIDFontType0
+    /BaseFont /{font['name']}
+    /CIDSystemInfo
+    <<
+      /Registry (Adobe)
+      /Ordering (Japan1)
+      /Supplement 5
+    >>
+    /FontDescriptor
+    <<
+      /Type /FontDescriptor
+      /FontName /{font['name']}
+      /Flags 32
+      /FontBBox [-82 -137 996 859]
+      /Ascent 859
+      /MissingWidth 600
+      /ItalicAngle 0
+      /StemV 70
+      /CapHeight 27
+      /Descent -141
+    >>
+    /DW 1000
+    /W [1 100 500]
+  >>]
+>>
