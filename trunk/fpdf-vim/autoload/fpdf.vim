@@ -839,7 +839,11 @@ function s:fpdf.SetFont(...)
       let i = len(self.fonts) + 1
       let self.fonts[fontkey] = {'i' : i, 'type' : 'core', 'name' : self.CoreFonts[fontkey], 'up' : -100, 'ut' : 50, 'cw' : g:fpdf_charwidths[fontkey]}
     else
-      throw 'Undefined font: ' . family . ' ' . style
+      try
+        call self.AddFont(family, style)
+      catch
+        call self.AddFont(family, '')
+      endtry
     endif
   endif
   "Select it
