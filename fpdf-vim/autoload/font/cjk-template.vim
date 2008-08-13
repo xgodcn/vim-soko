@@ -57,7 +57,7 @@ let g:fpdf#font['cw'] = {
 "so <sfile>:p:h/uni2cid_ak12.vim
 
 "let g:fpdf#font['enc'] = 'UniJIS-UTF16-H'
-"let g:fpdf#font['cidinfo'] = {'Registry' : 'Adobe', 'Ordering' : 'Japan1', 'Supplement' : 5}
+"let g:fpdf#font['cidinfo'] = {'Registry' : 'Adobe', 'Ordering' : 'Japan1', 'Supplement' : 6}
 "so <sfile>:p:h/uni2cid_aj16.vim
 
 let g:fpdf#font['file'] = ''
