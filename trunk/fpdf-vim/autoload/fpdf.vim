@@ -1221,15 +1221,16 @@ endfunction
 function s:fpdf._textstring(s)
   "TODO: encoding
   "Format a text string
-  if self.CurrentFont['type'] == 'core'
+  if get(self.CurrentFont, 'enc', '') =~? 'utf16'
+    return '<' . self._bin2hex_utf16(a:s) . '>'
+  else
     return '(' . self._escape(a:s) . ')'
   else
-    return '<' . self._bin2hex_utf16(a:s) . '>'
   endif
 endfunction
 
 function s:fpdf._infostring(s)
-  if a:s =~ '^[\x00-\x7F]*$'
+  if a:s =~ '^[\x00-\xFF]*$'
     return '(' . self._escape(a:s) . ')'
   else
     return '<FEFF' . self._bin2hex_utf16(a:s) . '>'
@@ -1611,8 +1612,8 @@ function s:fpdf._putfonts()
       call self._out('/FirstChar 32 /LastChar 255')
       call self._out('/Widths ' . (self.n + 1) . ' 0 R')
       call self._out('/FontDescriptor ' . (self.n + 2) . ' 0 R')
-      if font['enc']
-        if has_key(font['diff'])
+      if font['enc'] != ''
+        if get(font, 'diff', 0) != 0
           call self._out('/Encoding ' . (nf + font['diff']) . ' 0 R')
         else
           call self._out('/Encoding /WinAnsiEncoding')
