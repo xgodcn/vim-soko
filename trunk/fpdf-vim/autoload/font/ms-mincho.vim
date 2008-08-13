@@ -22,7 +22,7 @@ let g:fpdf#font['cw'] = {
       \ 123:500  ,124:500  ,125:500  ,126:500,
       \ }
 let g:fpdf#font['enc'] = 'UniJIS-UTF16-H'
-let g:fpdf#font['cidinfo'] = {'Registry' : 'Adobe', 'Ordering' : 'Japan1', 'Supplement' : 5}
+let g:fpdf#font['cidinfo'] = {'Registry' : 'Adobe', 'Ordering' : 'Japan1', 'Supplement' : 6}
 " not required when prebuild is defined
 "so <sfile>:p:h/uni2cid_aj16.vim
 let g:fpdf#font['file'] = ''
@@ -48,7 +48,7 @@ finish
     <<
       /Registry (Adobe)
       /Ordering (Japan1)
-      /Supplement 5
+      /Supplement 6
     >>
     /FontDescriptor
     <<

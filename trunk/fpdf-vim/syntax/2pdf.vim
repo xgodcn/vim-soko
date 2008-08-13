@@ -95,10 +95,7 @@ function! s:topdf() abort
     if !empty(_)
       let name = _[1]
       let style[name] = {}
-      let m = s:lib.Matcher.new(_[2], '\([A-Za-z-]\+\):\s*\([0-9A-Za-z#]\+\);')
-      while m.find()
-        let style[name][m[1]] = m[2]
-      endwhile
+      call substitute(_[2], '\([A-Za-z-]\+\):\s*\([0-9A-Za-z#]\+\);', '\=empty(extend(style[name],{submatch(1):submatch(2)}))', 'g')
     endif
     let lnum += 1
   endwhile
