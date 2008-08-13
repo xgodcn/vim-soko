@@ -20,8 +20,8 @@ let s:topdf.config['font_size'] = get(g:, 'topdf_font_size', 10)
 let s:topdf.config['line_height'] = get(g:, 'topdf_line_height', s:topdf.config['font_size'] / 2.0)
 let s:topdf.config['header_font'] = get(g:, 'topdf_header_font', s:topdf.config['font'])
 let s:topdf.config['footer_font'] = get(g:, 'topdf_footer_font', s:topdf.config['font'])
-let s:topdf.config['header'] = get(g:, 'topdf_font', '')
-let s:topdf.config['footer'] = get(g:, 'topdf_font', 'Page {n}/{nb}')
+let s:topdf.config['header'] = get(g:, 'topdf_header', '')
+let s:topdf.config['footer'] = get(g:, 'topdf_footer', 'Page {n}/{nb}')
 
 function! s:topdf.Header()
   let header = self.config['header']
