@@ -1,6 +1,6 @@
 " Last Chage: 2008-08-13
 " Options:
-"   g:topdf_font          (default: "Helvetica")
+"   g:topdf_font          (default: "Courier")
 "   g:topdf_font_size     (default: 10)
 "   g:topdf_header_font   (default: g:topdf_font)
 "   g:topdf_footer_font   (default: g:topdf_font)
@@ -15,9 +15,9 @@ let s:fpdf = fpdf#import()
 let s:topdf = copy(s:fpdf)
 
 let s:topdf.config = {}
-let s:topdf.config['font'] = get(g:, 'topdf_font', 'Helvetica')
+let s:topdf.config['font'] = get(g:, 'topdf_font', 'Courier')
 let s:topdf.config['font_size'] = get(g:, 'topdf_font_size', 10)
-let s:topdf.config['font_height'] = s:topdf.config['font_size'] / 2.0
+let s:topdf.config['line_height'] = get(g:, 'topdf_line_height', s:topdf.config['font_size'] / 2.0)
 let s:topdf.config['header_font'] = get(g:, 'topdf_header_font', s:topdf.config['font'])
 let s:topdf.config['footer_font'] = get(g:, 'topdf_footer_font', s:topdf.config['font'])
 let s:topdf.config['header'] = get(g:, 'topdf_font', '')
@@ -29,7 +29,7 @@ function! s:topdf.Header()
     let header = substitute(header, '{\(.\{-}\)}', '\=eval(submatch(1))', 'g')
     call self.setstyle('body')
     call self.SetFont(self.config['header_font'], 'B', self.config['font_size'])
-    call self.Cell(0, self.config['font_height'], header, 0, 0, 'C')
+    call self.Cell(0, self.config['line_height'], header, 0, 0, 'C')
     call self.Ln()
   endif
 endfunction
@@ -43,7 +43,7 @@ function! s:topdf.Footer()
     call self.SetY(-15)
     call self.setstyle('body')
     call self.SetFont(self.config['footer_font'], 'I', self.config['font_size'])
-    call self.Cell(0, self.config['font_height'], footer, 0, 0, 'C')
+    call self.Cell(0, self.config['line_height'], footer, 0, 0, 'C')
   endif
 endfunction
 
@@ -120,15 +120,15 @@ function! s:topdf() abort
     while m.find()
       if m.head() != ''
         call topdf.setstyle('body')
-        call topdf.Write(topdf.config['font_height'], topdf.unescape_entity(m.head()), '')
+        call topdf.Write(topdf.config['line_height'], topdf.unescape_entity(m.head()), '')
       endif
       let fill = has_key(style[m[1]], 'background-color')
       call topdf.setstyle(m[1])
-      call topdf.Write(topdf.config['font_height'], topdf.unescape_entity(m[2]), '', fill)
+      call topdf.Write(topdf.config['line_height'], topdf.unescape_entity(m[2]), '', fill)
     endwhile
     if m.tail() != ''
       call topdf.setstyle('body')
-      call topdf.Write(topdf.config['font_height'], topdf.unescape_entity(m.tail()), '')
+      call topdf.Write(topdf.config['line_height'], topdf.unescape_entity(m.tail()), '')
     endif
     call topdf.Ln()
     let lnum += 1
