@@ -17,7 +17,7 @@
 " IMPLIED.
 "===============================================================================
 " 2008-03-20: ported to vim by Yukihiro Nakadaira <yukihiri.nakadaira@gmail.com>
-" 2008-08-13: update to 1.6
+" 2008-08-13: updated to fpdf1.6
 " Last Change: 2008-08-13
 
 function fpdf#import()
@@ -123,7 +123,6 @@ let s:fpdf = {}
 "var $x,$y;               "current position in user unit
 "var $lasth;              "height of last printed cell
 "var $LineWidth;          "line width in user unit
-"var $CoreFonts;          "array of standard font names
 "var $fonts;              "array of used fonts
 "var $FontFiles;          "array of font files
 "var $diffs;              "array of encoding differences
@@ -199,13 +198,6 @@ function s:fpdf.__construct(...)
   let self.TextColor = '0 g'
   let self.ColorFlag = s:false
   let self.ws = 0
-  "Standard fonts
-  let self.CoreFonts= {
-        \ 'courier':'Courier', 'courierB':'Courier-Bold', 'courierI':'Courier-Oblique', 'courierBI':'Courier-BoldOblique',
-        \ 'helvetica':'Helvetica', 'helveticaB':'Helvetica-Bold', 'helveticaI':'Helvetica-Oblique', 'helveticaBI':'Helvetica-BoldOblique',
-        \ 'times':'Times-Roman', 'timesB':'Times-Bold', 'timesI':'Times-Italic', 'timesBI':'Times-BoldItalic',
-        \ 'symbol':'Symbol', 'zapfdingbats':'ZapfDingbats'
-        \ }
   "Scale factor
   if unit == 'pt'
     let self.k = 1.0
@@ -585,7 +577,9 @@ function s:fpdf.AddFont(...)
   let font = g:fpdf#font
   let i = len(self.fonts) + 1
   let font['i'] = i
-  if font['type'] == 'cidfont0'
+  if font['type'] == 'core'
+    let self.fonts[fontkey] = font
+  elseif font['type'] == 'cidfont0'
     let self.fonts[family] = font
     let self.fonts[family.'B'] = extend({'name':font['name'].',Bold'}, font, 'keep')
     let self.fonts[family.'I'] = extend({'name':font['name'].',Italic'}, font, 'keep')
@@ -593,8 +587,8 @@ function s:fpdf.AddFont(...)
   else
     let self.fonts[fontkey] = font
   endif
-  let file = font['file']
-  let diff = font['diff']
+  let file = get(font, 'file', '')
+  let diff = get(font, 'diff', 0)
   if diff != 0
     "Search existing encodings
     let d = 0
@@ -658,33 +652,17 @@ function s:fpdf.SetFont(...)
   "Test if used for the first time
   let fontkey = family . style
   if !has_key(self.fonts, fontkey)
-    "Check if one of the standard fonts
-    if has_key(self.CoreFonts, fontkey)
-      if !has_key(g:fpdf_charwidths, fontkey)
-        "Load metric file
-        let file = family
-        if family == 'times' || family == 'helvetica'
-          let file .= tolower(style)
-        endif
-        call s:include(self._getfontpath() . file . '.vim')
-        if !has_key(g:fpdf_charwidths, fontkey)
-          throw 'Could not include font metric file'
-        endif
-      endif
-      let i = len(self.fonts) + 1
-      let name = self.CoreFonts[fontkey]
-      let cw = g:fpdf_charwidths[fontkey]
-      let self.fonts[fontkey] = {'i' : i, 'type' : 'core', 'name' : name, 'up' : -100, 'ut' : 50, 'cw' : cw}
-    else
+    try
       try
-        try
-          call self.AddFont(family, style)
-        catch
-          call self.AddFont(family, '')
-        endtry
+        call self.AddFont(family, style)
       catch
-        throw 'Undefined font: ' . family . ' ' . style
+        call self.AddFont(family, '')
       endtry
+    catch
+      throw 'Undefined font: ' . family . ' ' . style
+    endtry
+    if !has_key(self.fonts, fontkey)
+      throw 'Undefined font: ' . family . ' ' . style
     endif
   endif
   "Select it
