@@ -20,7 +20,7 @@ let fpdf#font = {}
 let s:__file__ = expand("<sfile>:p")
 
 let s:FPDF_VERSION = '1.53'
-let s:FPDF_VIM_VERSION = '0.2'
+let s:FPDF_VIM_VERSION = '0.3'
 
 let s:false = 0
 let s:true = 1
