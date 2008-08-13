@@ -1221,10 +1221,8 @@ endfunction
 function s:fpdf._textstring(s)
   "TODO: encoding
   "Format a text string
-  if a:s =~ '^[\x00-\x7F]*$'
+  if self.CurrentFont['type'] == 'core'
     return '(' . self._escape(a:s) . ')'
-  elseif self.CurrentFont['type'] == 'core'
-    return '<' . self._bin2hex_winansi(a:s) . '>'
   else
     return '<' . self._bin2hex_utf16(a:s) . '>'
   endif
@@ -1257,12 +1255,6 @@ function s:fpdf._nr2utf16hex(char)
     let w2 = 0xDC00 + (char % 0x400)
     return printf("%02X%02X%02X%02X", w1 / 0x100, w1 & 0xFF, w2 / 0x100, w2 % 0x100)
   endif
-endfunction
-
-" TODO:
-function s:fpdf._bin2hex_winansi(s)
-  let s = (&enc == 'latin1') ? a:s : iconv(a:s, &enc, 'latin1')
-  return self._bin2hex(s)
 endfunction
 
 function s:fpdf._dounderline(x, y, txt)
