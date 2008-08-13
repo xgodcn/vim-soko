@@ -134,6 +134,7 @@ function! s:topdf() abort
   bwipeout!
   new
   put =topdf.Output()
+  1delete _
 endfunction
 
 function! s:tohtml()
