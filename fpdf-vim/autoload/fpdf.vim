@@ -38,7 +38,7 @@ let s:null = {}
 
 " cast
 function! s:float(f)
-  if [a:f] == [s:null]
+  if [a:f] == [s:null] || type(a:f) == type(0.0)
     return a:f
   endif
   return str2float(a:f)
