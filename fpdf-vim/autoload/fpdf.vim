@@ -41,7 +41,7 @@ function! s:float(f)
   if [a:f] == [s:null]
     return a:f
   endif
-  return a:f * 1.0
+  return str2float(a:f)
 endfunction
 
 function! s:mb_strlen(s)
@@ -614,8 +614,6 @@ function s:fpdf.AddFont(...)
   endif
 endfunction
 
-let g:fpdf_charwidths = {}
-
 function s:fpdf.SetFont(...)
   let family = get(a:000, 0)
   let style = get(a:000, 1, '')
@@ -657,13 +655,13 @@ function s:fpdf.SetFont(...)
         call self.AddFont(family, style)
       catch
         call self.AddFont(family, '')
+        if !has_key(self.fonts, fontkey)
+          throw "exception"
+        endif
       endtry
     catch
       throw 'Undefined font: ' . family . ' ' . style
     endtry
-    if !has_key(self.fonts, fontkey)
-      throw 'Undefined font: ' . family . ' ' . style
-    endif
   endif
   "Select it
   let self.FontFamily = family
@@ -1225,7 +1223,6 @@ function s:fpdf._textstring(s)
     return '<' . self._bin2hex_utf16(a:s) . '>'
   else
     return '(' . self._escape(a:s) . ')'
-  else
   endif
 endfunction
 
@@ -1414,12 +1411,6 @@ function s:fpdf._parsepng(file)
     throw 'Missing palette in ' . file
   endif
   return {'w' : w, 'h' : h, 'cs' : colspace, 'bpc' : bpc, 'f' : filter, 'parms' : parms, 'pal' : pal, 'trns' : trns, 'data' : join(block, '')}
-endfunction
-
-function s:fpdf._readstream(data, n)
-  let n = remove(a:data, 0, a:n - 1)
-  call map(n, '"\\x" . v:val')
-  return eval('"' . join(n, '') . '"')
 endfunction
 
 function s:fpdf._readstr(data, n)
@@ -2008,7 +1999,6 @@ function s:fpdf._outfontwidths(font)
 endfunction
 
 function! s:cmpnum(a, b)
-  let d = a:a - a:b
-  return d == 0 ? 0 : d > 0 ? 1 : -1
+  return a:a == a:b ? 0 : a:a > a:b ? 1 : -1
 endfunction
 
