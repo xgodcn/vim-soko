@@ -12,7 +12,7 @@
 "     {nb}    Number of pages
 
 let s:fpdf = fpdf#import()
-let s:topdf = copy(s:fpdf)
+let s:topdf = deepcopy(s:fpdf)
 
 let s:topdf.config = {}
 let s:topdf.config['font'] = get(g:, 'topdf_font', 'Courier')
@@ -155,6 +155,8 @@ function! s:tohtml()
 
   runtime syntax/2html.vim
 
+  unlet g:html_use_css
+  unlet g:html_no_pre
   for [k,v] in items(save)
     let {k} = v
   endfor
