@@ -17,7 +17,7 @@
 " IMPLIED.
 "===============================================================================
 " 2008-03-20: ported to vim by Yukihiro Nakadaira <yukihiri.nakadaira@gmail.com>
-" 2008-08-13: updated to fpdf1.6
+" 2008-08-13: updated codebase to fpdf1.6
 " Last Change: 2008-08-15
 
 function fpdf#import()
@@ -1225,14 +1225,14 @@ function s:fpdf._textstring(s)
   let enc = get(self.CurrentFont, 'enc', '')
   if enc =~? 'utf-\?16'
     return '<' . self._bin2hex_utf16(a:s) . '>'
-  elseif enc != ''
+  elseif enc != '' && has('iconv')
     " TODO: which is best?
     " 1. ascii text, escaping non-ascii bytes
     " 2. hex encode
     return '(' . self._escape_oct(self._escape(iconv(a:s, &encoding, enc))) . ')'
     return '<' . self._bin2hex(iconv(a:s, &encoding, enc)) . '>'
   else
-    return '(' . self._escape(a:s) . ')'
+    return '(' . self._escape_oct(self._escape(a:s)) . ')'
   endif
 endfunction
 
