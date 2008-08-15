@@ -7,3 +7,4 @@ let g:fpdf#font['cw'] = {}
 for i in range(256)
   let g:fpdf#font['cw'][i] = 600
 endfor
+let g:fpdf#font['enc'] = 'cp1254'

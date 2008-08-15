@@ -18,7 +18,7 @@
 "===============================================================================
 " 2008-03-20: ported to vim by Yukihiro Nakadaira <yukihiri.nakadaira@gmail.com>
 " 2008-08-13: updated to fpdf1.6
-" Last Change: 2008-08-13
+" Last Change: 2008-08-15
 
 function fpdf#import()
   return s:fpdf
@@ -1216,18 +1216,28 @@ function s:fpdf._escape(s)
   return escape(a:s, "\\()\r")
 endfunction
 
+function s:fpdf._escape_oct(s)
+  return join(map(range(len(a:s)), 'char2nr(a:s[v:val]) <= 0x7F ? a:s[v:val] : printf(''\%03o'', char2nr(a:s[v:val]))'), '')
+endfunction
+
 function s:fpdf._textstring(s)
-  "TODO: encoding
   "Format a text string
-  if get(self.CurrentFont, 'enc', '') =~? 'utf16'
+  let enc = get(self.CurrentFont, 'enc', '')
+  if enc =~? 'utf-\?16'
     return '<' . self._bin2hex_utf16(a:s) . '>'
+  elseif enc != ''
+    " TODO: which is best?
+    " 1. ascii text, escaping non-ascii bytes
+    " 2. hex encode
+    return '(' . self._escape_oct(self._escape(iconv(a:s, &encoding, enc))) . ')'
+    return '<' . self._bin2hex(iconv(a:s, &encoding, enc)) . '>'
   else
     return '(' . self._escape(a:s) . ')'
   endif
 endfunction
 
 function s:fpdf._infostring(s)
-  if a:s =~ '^[\x00-\xFF]*$'
+  if a:s =~ '^[\x00-\x7F]*$'
     return '(' . self._escape(a:s) . ')'
   else
     return '<FEFF' . self._bin2hex_utf16(a:s) . '>'
@@ -1900,8 +1910,8 @@ function s:fpdf._putcidfont0(font)
   call self._newobj()
   call self._out('<</Type /Font')
   call self._out('/Subtype /Type0')
-  call self._out('/BaseFont /' . font['name'] . '-' . font['enc'])
-  call self._out('/Encoding /' . font['enc'])
+  call self._out('/BaseFont /' . font['name'] . '-' . font['cmap'])
+  call self._out('/Encoding /' . font['cmap'])
   call self._out('/DescendantFonts [' . (self.n + 1) . ' 0 R]')
   call self._out('>>')
   call self._out('endobj')
