@@ -46,7 +46,7 @@ endfunction
 
 function PDF.ChapterBody(file)
   "Read text file
-  let txt = iconv(join(readfile(a:file), ''), 'latin1', &enc)
+  let txt = iconv(join(readfile(a:file), "\n"), 'latin1', &enc)
   "Times 12
   call self.SetFont('Times','',12)
   "Output justified text

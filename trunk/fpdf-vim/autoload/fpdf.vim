@@ -872,7 +872,7 @@ function s:fpdf.MultiCell(...)
     let c = s:mb_substr(s, i, 1)
     if c == "\n"
       "Explicit line break
-      if ws > 0
+      if self.ws > 0
         let self.ws = 0.0
         call self._out('0 Tw')
       endif
