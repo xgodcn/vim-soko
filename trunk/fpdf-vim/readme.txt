@@ -9,6 +9,7 @@ About FPDF:
 Requirement:
   :set encoding=utf-8 and iconv() feature for non-ascii text.
   xxd for image/font embedding.
+  xxd and gzip for compression.
 
 
 Usage:
