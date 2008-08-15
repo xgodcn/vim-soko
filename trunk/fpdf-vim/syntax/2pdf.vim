@@ -70,11 +70,17 @@ function! s:topdf.setstyle(name)
   if !has_key(s, 'background-color')
     let s['background-color'] = get(self.style['body'], 'background-color', '#FFFFFF')
   endif
-  if get(s, 'font-weight') == 'bold'
-    call self.SetFont(self.config['font'], 'B', self.config['font_size'])
-  else
-    call self.SetFont(self.config['font'], '', self.config['font_size'])
+  let style = ''
+  if get(s, 'font-weight', '') =~ 'bold'
+    let style .= 'B'
   endif
+  if get(s, 'font-style', '') =~ 'italic'
+    let style .= 'I'
+  endif
+  if get(s, 'text-decoration', '') =~ 'underline'
+    let style .= 'U'
+  endif
+  call self.SetFont(self.config['font'], style, self.config['font_size'])
   let [r, g, b] = self.hex2rgb(s['color'])
   call self.SetTextColor(r, g, b)
   let [r, g, b] = self.hex2rgb(s['background-color'])
