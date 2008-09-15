@@ -7,7 +7,6 @@
  * Require:
  *  Unix-like system.
  *  Vim compiled with -rdynamic option.
- *  FEAT_PYTHON to access vim's Dictionary (dict_lookup() function).
  *
  * Compile:
  *  g++ -I/path/to/spidermonkey/include -shared -o if_spidermonkey.so \
@@ -202,12 +201,23 @@ struct dictvar_S
 #define NOT_VALID		40  /* buffer needs complete redraw */
 #define CLEAR			50  /* screen messed up, clear it */
 
+/*
+ * In a hashtab item "hi_key" points to "di_key" in a dictitem.
+ * This avoids adding a pointer to the hashtab item.
+ * DI2HIKEY() converts a dictitem pointer to a hashitem key pointer.
+ * HIKEY2DI() converts a hashitem key pointer to a dictitem pointer.
+ * HI2DI() converts a hashitem pointer to a dictitem pointer.
+ */
+static dictitem_T dumdi;
+#define DI2HIKEY(di) ((di)->di_key)
+#define HIKEY2DI(p)  ((dictitem_T *)(p - (dumdi.di_key - (char_u *)&dumdi)))
+#define HI2DI(hi)     HIKEY2DI((hi)->hi_key)
+
 static struct vim {
   typval_T * (*eval_expr) (char_u *arg, char_u **nextcmd);
   int (*do_cmdline_cmd) (char_u *cmd);
   void (*free_tv) (typval_T *varp);
   char_u *hash_removed;
-  dictitem_T * (*dict_lookup) (hashitem_T *hi);
   void (*ui_breakcheck) ();
   int *got_int;
   void (*update_screen) (int type);
@@ -302,11 +312,6 @@ init_vim()
   GETSYMBOL(do_cmdline_cmd);
   GETSYMBOL(free_tv);
   GETSYMBOL(hash_removed);
-  do {
-    /* can be null */
-    void **p = (void **)&vim.dict_lookup;
-    *p = dlsym(vim_handle, "dict_lookup");
-  } while (0);
   GETSYMBOL(ui_breakcheck);
   GETSYMBOL(got_int);
   GETSYMBOL(update_screen);
@@ -475,10 +480,6 @@ vim_to_spidermonkey(JSContext *cx, typval_T *tv, int depth, LookupMap *lookup_ma
       return OBJECT_TO_JSVAL(res);
     }
   case VAR_DICT:
-    /* require FEAT_PYTHON */
-    if (vim.dict_lookup == NULL)
-      return JSVAL_VOID;
-
     {
       hashtab_T *ht = &tv->vval.v_dict->dv_hashtab;
       long_u todo = ht->ht_used;
@@ -488,7 +489,7 @@ vim_to_spidermonkey(JSContext *cx, typval_T *tv, int depth, LookupMap *lookup_ma
       for (hi = ht->ht_array; todo > 0; ++hi) {
         if (!HASHITEM_EMPTY(hi)) {
           --todo;
-          di = vim.dict_lookup(hi);
+          di = HI2DI(hi);
           jsval v = vim_to_spidermonkey(cx, &di->di_tv, depth + 1, lookup_map);
           JS_SetProperty(cx, res, (char *)hi->hi_key, &v);
         }
