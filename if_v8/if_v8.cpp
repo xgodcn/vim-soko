@@ -1,7 +1,7 @@
 /*
  * v8 interface to Vim
  *
- * Last Change: 2008-09-15
+ * Last Change: 2008-12-14
  * Maintainer: Yukihiro Nakadaira <yukihiro.nakadaira@gmail.com>
  *
  * Require:
