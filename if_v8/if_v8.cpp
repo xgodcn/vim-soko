@@ -1,7 +1,7 @@
 /*
  * v8 interface to Vim
  *
- * Last Change: 2008-12-14
+ * Last Change: 2008-12-26
  * Maintainer: Yukihiro Nakadaira <yukihiro.nakadaira@gmail.com>
  *
  * Require:
@@ -208,11 +208,19 @@ static dictitem_T dumdi;
 #define HIKEY2DI(p)  ((dictitem_T *)(p - (dumdi.di_key - (char_u *)&dumdi)))
 #define HI2DI(hi)     HIKEY2DI((hi)->hi_key)
 
+struct condstack;
+struct msglist;
+
 static struct vim {
+  // variables
+  char_u *hash_removed;
+  struct msglist ***msg_list;
+  // functions
   typval_T * (*eval_expr) (char_u *arg, char_u **nextcmd);
   int (*do_cmdline_cmd) (char_u *cmd);
   void (*free_tv) (typval_T *varp);
-  char_u *hash_removed;
+  int (*emsg) (char_u *s);
+  void (*do_errthrow) (struct condstack *cstack, char_u *cmdname);
 } vim;
 
 static void *dll_handle = NULL;
@@ -237,7 +245,7 @@ static v8::Handle<v8::Value> vim_execute(const v8::Arguments& args);
 static v8::Handle<v8::Value> vim_to_v8(typval_T *tv, int depth, LookupMap *lookup_map);
 static v8::Handle<v8::Value> Load(const v8::Arguments& args);
 static v8::Handle<v8::String> ReadFile(const char* name);
-static std::string ExecuteString(v8::Handle<v8::String> source, v8::Handle<v8::Value> name);
+static bool ExecuteString(v8::Handle<v8::String> source, v8::Handle<v8::Value> name, std::string* err);
 
 const char *
 init(const char *dll_path)
@@ -262,13 +270,23 @@ init(const char *dll_path)
 const char *
 execute(const char *expr)
 {
-  static std::string err;
   if (vim.eval_expr == NULL)
     return "not initialized";
   v8::HandleScope handle_scope;
   v8::Context::Scope context_scope(context);
-  err = ExecuteString(v8::String::New(expr), v8::Undefined());
-  return err.c_str();
+  std::string err;
+  if (!ExecuteString(v8::String::New(expr), v8::Undefined(), &err)) {
+    // see vim/src/ex_docmd.c:do_cmdline()
+    struct msglist **saved_msg_list;
+    struct msglist *private_msg_list;
+    saved_msg_list = (*vim.msg_list);
+    (*vim.msg_list) = &private_msg_list;
+    private_msg_list = NULL;
+    vim.emsg((char_u*)err.c_str());
+    vim.do_errthrow(NULL, (char_u *)"v8");
+    (*vim.msg_list) = saved_msg_list;
+  }
+  return NULL;
 }
 
 #ifdef WIN32
@@ -298,10 +316,15 @@ init_vim()
   if ((vim_handle = dlopen(NULL, RTLD_NOW)) == NULL)
     return dlerror();
 #endif
+  // variables
+  GETSYMBOL(hash_removed);
+  GETSYMBOL(msg_list);
+  // functions
   GETSYMBOL(eval_expr);
   GETSYMBOL(do_cmdline_cmd);
   GETSYMBOL(free_tv);
-  GETSYMBOL(hash_removed);
+  GETSYMBOL(emsg);
+  GETSYMBOL(do_errthrow);
   return NULL;
 }
 
@@ -309,11 +332,16 @@ static const char *
 init_v8()
 {
   v8::HandleScope handle_scope;
-  v8::Handle<v8::ObjectTemplate> global = v8::ObjectTemplate::New();
-  global->Set(v8::String::New("load"), v8::FunctionTemplate::New(Load));
+  v8::Handle<v8::ObjectTemplate> internal = v8::ObjectTemplate::New();
+  internal->Set(v8::String::New("load"), v8::FunctionTemplate::New(Load));
+  internal->Set(v8::String::New("vim_eval"), v8::FunctionTemplate::New(vim_eval));
+  internal->Set(v8::String::New("vim_execute"), v8::FunctionTemplate::New(vim_execute));
   v8::Handle<v8::ObjectTemplate> vimobj = v8::ObjectTemplate::New();
   vimobj->Set(v8::String::New("eval"), v8::FunctionTemplate::New(vim_eval));
   vimobj->Set(v8::String::New("execute"), v8::FunctionTemplate::New(vim_execute));
+  v8::Handle<v8::ObjectTemplate> global = v8::ObjectTemplate::New();
+  global->Set(v8::String::New("%internal%"), internal);
+  global->Set(v8::String::New("load"), v8::FunctionTemplate::New(Load));
   global->Set(v8::String::New("vim"), vimobj);
   context = v8::Context::New(NULL, global);
   return NULL;
@@ -325,8 +353,11 @@ vim_eval(const v8::Arguments& args)
   if (args.Length() != 1 || !args[0]->IsString())
     return v8::Undefined();
   v8::HandleScope handle_scope;
-  v8::String::AsciiValue str(args[0]);
+  v8::String::Utf8Value str(args[0]);
   typval_T *tv = vim.eval_expr((char_u *)*str, NULL);
+  if (tv == NULL) {
+    return v8::ThrowException(v8::String::New("invalid expression"));
+  }
   LookupMap lookup_map;
   v8::Handle<v8::Value> res = vim_to_v8(tv, 1, &lookup_map);
   lookup_map.clear();
@@ -340,7 +371,7 @@ vim_execute(const v8::Arguments& args)
   if (args.Length() != 1 || !args[0]->IsString())
     return v8::Undefined();
   v8::HandleScope handle_scope;
-  v8::String::AsciiValue str(args[0]);
+  v8::String::Utf8Value str(args[0]);
   vim.do_cmdline_cmd((char_u *)*str);
   return v8::Undefined();
 }
@@ -359,6 +390,9 @@ vim_to_v8(typval_T *tv, int depth, LookupMap *lookup_map)
   case VAR_FLOAT:
     return v8::Number::New(tv->vval.v_float);
   case VAR_STRING:
+    if (tv->vval.v_string == NULL) {
+      return v8::String::New("");
+    }
     return v8::String::New((char *)tv->vval.v_string);
   case VAR_FUNC:
     return v8::String::New("[function]");
@@ -403,12 +437,15 @@ vim_to_v8(typval_T *tv, int depth, LookupMap *lookup_map)
 v8::Handle<v8::Value> Load(const v8::Arguments& args) {
   for (int i = 0; i < args.Length(); i++) {
     v8::HandleScope handle_scope;
-    v8::String::AsciiValue file(args[i]);
+    v8::String::Utf8Value file(args[i]);
     v8::Handle<v8::String> source = ReadFile(*file);
     if (source.IsEmpty()) {
       return v8::ThrowException(v8::String::New("Error loading file"));
     }
-    ExecuteString(source, v8::String::New(*file));
+    std::string err;
+    if (!ExecuteString(source, v8::String::New(*file), &err)) {
+      return v8::ThrowException(v8::String::New(err.c_str()));
+    }
   }
   return v8::Undefined();
 }
@@ -434,18 +471,26 @@ v8::Handle<v8::String> ReadFile(const char* name) {
   return result;
 }
 
-std::string ExecuteString(v8::Handle<v8::String> source, v8::Handle<v8::Value> name) {
+bool ExecuteString(v8::Handle<v8::String> source,
+                   v8::Handle<v8::Value> name,
+                   std::string* err) {
   v8::HandleScope handle_scope;
   v8::TryCatch try_catch;
   v8::Handle<v8::Script> script = v8::Script::Compile(source, name);
   if (script.IsEmpty()) {
-    v8::String::AsciiValue error(try_catch.Exception());
-    return std::string(*error);
+    if (err != NULL) {
+      v8::String::Utf8Value error(try_catch.Exception());
+      err->assign(*error);
+    }
+    return false;
   }
   v8::Handle<v8::Value> result = script->Run();
   if (result.IsEmpty()) {
-    v8::String::AsciiValue error(try_catch.Exception());
-    return std::string(*error);
+    if (err != NULL) {
+      v8::String::Utf8Value error(try_catch.Exception());
+      err->assign(*error);
+    }
+    return false;
   }
-  return std::string("");
+  return true;
 }
