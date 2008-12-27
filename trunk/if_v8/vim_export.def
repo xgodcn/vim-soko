@@ -1,5 +1,10 @@
 EXPORTS
+  ; variables
+  hash_removed
+  msglist
+  ; functions
   eval_expr
   do_cmdline_cmd
   free_tv
-  hash_removed
+  emsg
+  do_errthrow
