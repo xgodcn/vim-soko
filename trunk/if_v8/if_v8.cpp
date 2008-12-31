@@ -381,48 +381,57 @@ vim_to_v8(typval_T *tv, int depth, LookupMap *lookup_map)
 {
   if (tv == NULL || depth > 100)
     return v8::Undefined();
-  LookupMap::iterator it = lookup_map->find(tv);
-  if (it != lookup_map->end())
-    return it->second;
+
   switch (tv->v_type) {
   case VAR_NUMBER:
     return v8::Integer::New(tv->vval.v_number);
   case VAR_FLOAT:
     return v8::Number::New(tv->vval.v_float);
   case VAR_STRING:
-    if (tv->vval.v_string == NULL) {
+    if (tv->vval.v_string == NULL)
       return v8::String::New("");
-    }
     return v8::String::New((char *)tv->vval.v_string);
   case VAR_FUNC:
     return v8::String::New("[function]");
   case VAR_LIST:
     {
+      v8::Handle<v8::Array> res = v8::Array::New(0);
       list_T *list = tv->vval.v_list;
       if (list == NULL)
-        return v8::Undefined();
+        return res;
+      LookupMap::iterator it = lookup_map->find(list);
+      if (it != lookup_map->end())
+        return it->second;
+      lookup_map->insert(LookupMap::value_type(list, res));
       int i = 0;
-      v8::Handle<v8::Array> res = v8::Array::New(0);
-      for (listitem_T *curr = list->lv_first; curr != NULL; curr = curr->li_next)
-        res->Set(v8::Number::New(i++), vim_to_v8(&curr->li_tv, depth + 1, lookup_map));
-      lookup_map->insert(LookupMap::value_type(tv, res));
+      for (listitem_T *curr = list->lv_first; curr != NULL; curr = curr->li_next) {
+        v8::Handle<v8::Value> v = vim_to_v8(&curr->li_tv, depth + 1, lookup_map);
+        res->Set(v8::Integer::New(i++), v);
+      }
       return res;
     }
   case VAR_DICT:
     {
-      hashtab_T *ht = &tv->vval.v_dict->dv_hashtab;
+      v8::Handle<v8::Object> res = v8::Object::New();
+      dict_T *dict = tv->vval.v_dict;
+      if (dict == NULL)
+        return res;
+      LookupMap::iterator it = lookup_map->find(dict);
+      if (it != lookup_map->end())
+        return it->second;
+      lookup_map->insert(LookupMap::value_type(dict, res));
+      hashtab_T *ht = &dict->dv_hashtab;
       long_u todo = ht->ht_used;
       hashitem_T *hi;
       dictitem_T *di;
-      v8::Handle<v8::Object> res = v8::Object::New();
       for (hi = ht->ht_array; todo > 0; ++hi) {
         if (!HASHITEM_EMPTY(hi)) {
           --todo;
           di = HI2DI(hi);
-          res->Set(v8::String::New((char *)hi->hi_key), vim_to_v8(&di->di_tv, depth + 1, lookup_map));
+          v8::Handle<v8::Value> v = vim_to_v8(&di->di_tv, depth + 1, lookup_map);
+          res->Set(v8::String::New((char *)hi->hi_key), v);
         }
       }
-      lookup_map->insert(LookupMap::value_type(tv, res));
       return res;
     }
   case VAR_UNKNOWN:
