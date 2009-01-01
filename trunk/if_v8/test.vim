@@ -42,27 +42,53 @@ function s:test.test5()
   echo x
 endfunction
 
-" test6: passing value using vson
+" test6: invoking vim's function
 function s:test.test6()
-  let x = 1
-  call V8Execute(printf('print(%s)', VsonEncode(x)))
-  let json = V8Eval('vim.VSON.stringify([1, 2, 3])')
-  echo VsonDecode(json)
-endfunction
-
-" test7: invoking vim's function
-function s:test.test7()
   new
   call V8Execute('vim.append("$", "line1")')
-  redraw! | sleep 500m
+  redraw! | sleep 200m
   call V8Execute('vim.append("$", "line2")')
-  redraw! | sleep 500m
+  redraw! | sleep 200m
   call V8Execute('vim.append("$", "line3")')
-  redraw! | sleep 500m
+  redraw! | sleep 200m
   quit!
+endfunction
+
+" test7: recursive object: vim -> v8
+function s:test.test7()
+  let x = {}
+  let x.x = x
+  let y = []
+  let y += [y]
+  call eval(V8ExecuteX('var x = vim.eval("x")'))
+  call eval(V8ExecuteX('var y = vim.eval("y")'))
+  call eval(V8ExecuteX('if (x === x.x) {print("x === x.x");} else {throw "x !== x.x";}'))
+  call eval(V8ExecuteX('if (y === y[0]) {print("y === y[0]");} else {throw "y !== y[0]";}'))
+endfunction
+
+" test8: recursive object: v8 -> vim
+function s:test.test8()
+  call V8Execute('var x = {}')
+  call V8Execute('x.x = x')
+  call V8Execute('var y = []')
+  call V8Execute('y[0] = y')
+  let x = V8Eval('x')
+  let y = V8Eval('y')
+  if x is x.x
+    echo "x is x.x"
+  else
+    throw "x isnot x.x"
+  endif
+  if y is y[0]
+    echo "y is y[0]"
+  else
+    throw "y isnot y[0]"
+  endif
 endfunction
 
 for s:name in sort(keys(s:test))
   echo "\n" . s:name . "\n"
   call s:test[s:name]()
+  " XXX: message is not shown when more prompt is not fired.
+  sleep 100m
 endfor
