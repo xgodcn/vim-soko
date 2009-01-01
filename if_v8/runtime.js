@@ -4,17 +4,13 @@ var vim = {};
 
   var internal = global['%internal%'];
 
-  var toVSON = function(obj) {
-    return vim.VSON.stringify(obj);
-  };
-
   var makefunc = function(name) {
     return function() {
-      var args = [name];
+      var args = [];
       for (var i = 0; i < arguments.length; i++) {
         args.push(arguments[i]);
       }
-      return vim.call.apply(this, args);
+      return vim.call(name, args);
     };
   };
 
@@ -34,45 +30,13 @@ var vim = {};
 
   global.print = global.echo;
 
-  vim.eval = function(str) {
-    vim.execute('let _____v8_eval = eval(' + toVSON(str) + ')');
-    var res = internal.vim_eval('_____v8_eval');
-    vim.execute('unlet! _____v8_eval');
-    return res;
-  };
-
-  vim.execute = function(str) {
-    internal.vim_execute('try|execute ' + toVSON(str) + '|catch|let g:_____v8_exception = v:exception|endtry');
-    var exception = internal.vim_eval('get(g:, "_____v8_exception", "")');
-    internal.vim_execute('unlet! g:_____v8_exception');
-    if (exception != '') {
-      throw exception;
-    }
-  };
-
-  vim.call = function() {
-    var param = [];
-    param.push(arguments[0]);
-    var args = [];
-    for (var i = 1; i < arguments.length; ++i) {
-      args.push(arguments[i]);
-    }
-    param.push(args);
-    var cmd = 'call("call", ' + toVSON(param) + ')';
-    return vim.eval(cmd);
-  };
-
-  vim.let = function(name, value) {
-    var cmd = 'let ' + name + ' = ' + toVSON(value);
-    return vim.execute(cmd);
-  };
+  vim.execute = internal['vim_execute'];
+  vim.call = internal['vim_call'];
+  vim.let = internal['vim_let'];
 
   vim.echo = function(obj) {
-    var expr = toVSON(obj);
-    if (typeof obj == 'object' && !(obj instanceof Date)) {
-      var expr = toVSON(expr);
-    }
-    vim.execute('echo ' + expr);
+    vim.let("g:['%v8_tmp%']", obj);
+    vim.execute("echo g:['%v8_tmp%']");
   };
 
   vim.abs = makefunc('abs');
@@ -115,7 +79,7 @@ var vim = {};
   vim.diff_hlID = makefunc('diff_hlID');
   vim.empty = makefunc('empty');
   vim.escape = makefunc('escape');
-  //vim.eval = makefunc('eval');
+  vim.eval = makefunc('eval');
   vim.eventhandler = makefunc('eventhandler');
   vim.executable = makefunc('executable');
   vim.exists = makefunc('exists');
