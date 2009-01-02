@@ -1,7 +1,6 @@
 EXPORTS
   ; variables
   hash_removed
-  msglist
   ; functions
   eval_expr
   eval_to_string
@@ -9,7 +8,6 @@ EXPORTS
   free_tv
   clear_tv
   emsg
-  do_errthrow
   alloc
   vim_free
   vim_strsave

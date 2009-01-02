@@ -12,7 +12,7 @@ function! V8Init()
   let s:init = 1
   echo libcall(s:dll, 'init', s:dll)
   for file in s:runtime
-    call V8Load(file)
+    echo libcall(s:dll, 'execute', printf("this['%%internal%%'].load(\"%s\")", escape(file, '\"')))
   endfor
 endfunction
 
