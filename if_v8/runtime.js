@@ -30,13 +30,20 @@ var vim = {};
 
   global.print = global.echo;
 
-  vim.execute = internal['vim_execute'];
-  vim.call = internal['vim_call'];
-  vim.let = internal['vim_let'];
+  vim.execute = function(cmd) {
+    internal.vim_execute("execute g:['%v8_args%'][1] | let g:['%v8_result%'] = 0", cmd);
+  };
+
+  vim.call = function(funcname, args) {
+    return internal.vim_execute("let g:['%v8_result%'] = call(g:['%v8_args%'][1], g:['%v8_args%'][2])", funcname, args);
+  };
+
+  vim.let = function(varname, value) {
+    internal.vim_execute("execute 'let ' . g:['%v8_args%'][1] . ' = g:[''%v8_args%''][2]' | let g:['%v8_result%'] = 0", varname, value);
+  };
 
   vim.echo = function(obj) {
-    vim.let("g:['%v8_tmp%']", obj);
-    vim.execute("echo g:['%v8_tmp%']");
+    internal.vim_execute("echo g:['%v8_args%'][1] | let g:['%v8_result%'] = 0", obj);
   };
 
   vim.abs = makefunc('abs');
@@ -73,7 +80,8 @@ var vim = {};
   vim.cscope_connection = makefunc('cscope_connection');
   vim.cursor = makefunc('cursor');
   vim.deepcopy = makefunc('deepcopy');
-  //vim.delete = makefunc('delete');
+  vim['delete'] = makefunc('delete');
+  vim._delete = vim['delete'];
   vim.did_filetype = makefunc('did_filetype');
   vim.diff_filler = makefunc('diff_filler');
   vim.diff_hlID = makefunc('diff_hlID');
@@ -101,7 +109,8 @@ var vim = {};
   vim.foldtext = makefunc('foldtext');
   vim.foldtextresult = makefunc('foldtextresult');
   vim.foreground = makefunc('foreground');
-  //vim.function = makefunc('function');
+  vim['function'] = makefunc('function');
+  vim._function = vim['function'];
   vim.garbagecollect = makefunc('garbagecollect');
   vim.get = makefunc('get');
   vim.getbufline = makefunc('getbufline');

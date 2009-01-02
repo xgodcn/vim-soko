@@ -24,6 +24,9 @@
  *  let err = libcall(if_v8, 'execute', 'vim.eval("&tw")')
  *  let err = libcall(if_v8, 'execute', 'load("foo.js")')
  *
+ *  if_v8 returns error message for initialization error.  Normal
+ *  execution time error is raised in the same way as :echoerr command.
+ *
  *
  * Note:
  *  g:['%v8*%'] variables are internally used.
@@ -38,7 +41,6 @@
 #include <cstring>
 #include <string>
 #include <map>
-#include <list>
 #include <v8.h>
 
 #define FEAT_FLOAT 1
@@ -217,11 +219,9 @@ static dictitem_T dumdi;
 #define HI2DI(hi)     HIKEY2DI((hi)->hi_key)
 
 struct condstack;
-struct msglist;
 
 // variables
 static char_u *p_hash_removed;
-static struct msglist ***p_msg_list;
 // functions
 static typval_T * (*eval_expr) (char_u *arg, char_u **nextcmd);
 static char_u * (*eval_to_string) (char_u *arg, char_u **nextcmd, int convert);
@@ -229,7 +229,6 @@ static int (*do_cmdline_cmd) (char_u *cmd);
 static void (*free_tv) (typval_T *varp);
 static void (*clear_tv) (typval_T *varp);
 static int (*emsg) (char_u *s);
-static void (*do_errthrow) (struct condstack *cstack, char_u *cmdname);
 static char_u * (*alloc) (unsigned size);
 static void * (*vim_free) (void *x);
 static char_u * (*vim_strsave) (char_u *string);
@@ -240,9 +239,6 @@ static void (*list_free) (list_T *l, int recurse);
 static dict_T * (*dict_alloc)();
 static int (*hash_add) (hashtab_T *ht, char_u *key);
 static hashitem_T * (*hash_find) (hashtab_T *ht, char_u *key);
-
-#define hash_removed (*p_hash_removed)
-#define msg_list (*p_msg_list)
 
 #define FALSE 0
 #define TRUE 1
@@ -434,11 +430,7 @@ DLLEXPORT const char *execute(const char *expr);
 
 static const char *init_vim();
 static const char *init_v8();
-static v8::Handle<v8::Value> vim_eval(const v8::Arguments& args);
 static v8::Handle<v8::Value> vim_execute(const v8::Arguments& args);
-static v8::Handle<v8::Value> vim_call(const v8::Arguments& args);
-static v8::Handle<v8::Value> vim_let(const v8::Arguments& args);
-static v8::Handle<v8::Value> vim_execute_internal(const char *expr, const v8::Arguments& args, bool needresult);
 static bool let_global(const char *name, typval_T *tv, std::string *err);
 static bool vim_to_v8(typval_T *vimobj, v8::Handle<v8::Value> *v8obj, int depth, LookupMap *lookup, std::string *err);
 static LookupMap::iterator LookupMapFindV8Value(LookupMap* lookup, v8::Handle<v8::Value> v);
@@ -475,17 +467,8 @@ execute(const char *expr)
   v8::HandleScope handle_scope;
   v8::Context::Scope context_scope(context);
   std::string err;
-  if (!ExecuteString(v8::String::New(expr), v8::Undefined(), &err)) {
-    // see vim/src/ex_docmd.c:do_cmdline()
-    struct msglist **saved_msg_list;
-    struct msglist *private_msg_list;
-    saved_msg_list = msg_list;
-    msg_list = &private_msg_list;
-    private_msg_list = NULL;
+  if (!ExecuteString(v8::String::New(expr), v8::Undefined(), &err))
     emsg((char_u*)err.c_str());
-    do_errthrow(NULL, (char_u *)"v8");
-    msg_list = saved_msg_list;
-  }
   return NULL;
 }
 
@@ -520,7 +503,6 @@ init_vim()
 #endif
   // variables
   GETSYMBOL2(p_hash_removed, "hash_removed");
-  GETSYMBOL2(p_msg_list, "msg_list");
   // functions
   GETSYMBOL(eval_expr);
   GETSYMBOL(eval_to_string);
@@ -528,7 +510,6 @@ init_vim()
   GETSYMBOL(free_tv);
   GETSYMBOL(clear_tv);
   GETSYMBOL(emsg);
-  GETSYMBOL(do_errthrow);
   GETSYMBOL(alloc);
   GETSYMBOL(vim_free);
   GETSYMBOL(vim_strsave);
@@ -548,33 +529,11 @@ init_v8()
   v8::HandleScope handle_scope;
   v8::Handle<v8::ObjectTemplate> internal = v8::ObjectTemplate::New();
   internal->Set(v8::String::New("load"), v8::FunctionTemplate::New(Load));
-  internal->Set(v8::String::New("vim_eval"), v8::FunctionTemplate::New(vim_eval));
   internal->Set(v8::String::New("vim_execute"), v8::FunctionTemplate::New(vim_execute));
-  internal->Set(v8::String::New("vim_call"), v8::FunctionTemplate::New(vim_call));
-  internal->Set(v8::String::New("vim_let"), v8::FunctionTemplate::New(vim_let));
-  v8::Handle<v8::ObjectTemplate> vimobj = v8::ObjectTemplate::New();
-  vimobj->Set(v8::String::New("eval"), v8::FunctionTemplate::New(vim_eval));
-  vimobj->Set(v8::String::New("execute"), v8::FunctionTemplate::New(vim_execute));
-  vimobj->Set(v8::String::New("call"), v8::FunctionTemplate::New(vim_call));
-  vimobj->Set(v8::String::New("let"), v8::FunctionTemplate::New(vim_let));
   v8::Handle<v8::ObjectTemplate> global = v8::ObjectTemplate::New();
   global->Set(v8::String::New("%internal%"), internal);
-  global->Set(v8::String::New("load"), v8::FunctionTemplate::New(Load));
-  global->Set(v8::String::New("vim"), vimobj);
   context = v8::Context::New(NULL, global);
   return NULL;
-}
-
-// XXX: no longer needed by vim_call
-static v8::Handle<v8::Value>
-vim_eval(const v8::Arguments& args)
-{
-  v8::HandleScope handle_scope;
-
-  if (args.Length() != 1 || !args[0]->IsString())
-    return v8::ThrowException(v8::String::New("usage: eval(string expr)"));
-
-  return vim_execute_internal("let g:['%v8_result%'] = eval(g:['%v8_args%'][0])", args, true);
 }
 
 static v8::Handle<v8::Value>
@@ -582,37 +541,9 @@ vim_execute(const v8::Arguments& args)
 {
   v8::HandleScope handle_scope;
 
-  if (args.Length() != 1 || !args[0]->IsString())
-    return v8::ThrowException(v8::String::New("usage: execute(string cmd)"));
+  if (args.Length() <= 1 || !args[0]->IsString())
+    return v8::ThrowException(v8::String::New("usage: vim_execute(string cmd [, ...])"));
 
-  return vim_execute_internal("execute g:['%v8_args%'][0]", args, false);
-}
-
-static v8::Handle<v8::Value>
-vim_call(const v8::Arguments& args)
-{
-  v8::HandleScope handle_scope;
-
-  if (args.Length() != 2 || !args[0]->IsString() || !args[1]->IsArray())
-    return v8::ThrowException(v8::String::New("usage: call(string funcname, array args)"));
-
-  return vim_execute_internal("let g:['%v8_result%'] = call('call', g:['%v8_args%'])", args, true);
-}
-
-static v8::Handle<v8::Value>
-vim_let(const v8::Arguments& args)
-{
-  v8::HandleScope handle_scope;
-
-  if (args.Length() != 2 || !args[0]->IsString())
-    return v8::ThrowException(v8::String::New("usage: let(string varname, object value)"));
-
-  return vim_execute_internal("execute 'let ' . g:['%v8_args%'][0] . ' = g:[''%v8_args%''][1]'", args, false);
-}
-
-static v8::Handle<v8::Value>
-vim_execute_internal(const char *expr, const v8::Arguments& args, bool needresult)
-{
   v8::Handle<v8::Array> v8_args = v8::Array::New(args.Length());
   for (int i = 0; i < args.Length(); ++i )
     v8_args->Set(v8::Integer::New(i), args[i]);
@@ -637,9 +568,8 @@ vim_execute_internal(const char *expr, const v8::Arguments& args, bool needresul
 
   // execute
   {
-    std::string exprbuf;
-    exprbuf.append("try |").append(expr).append(" | let g:['%v8_exception%'] = '' | catch | let g:['%v8_exception%'] = v:exception | endtry");
-    if (!do_cmdline_cmd((char_u*)exprbuf.c_str())) {
+    char exprbuf[] = "try | execute g:['%v8_args%'][0] | let g:['%v8_exception%'] = '' | catch | let g:['%v8_exception%'] = v:exception | endtry";
+    if (!do_cmdline_cmd((char_u*)exprbuf)) {
       return v8::ThrowException(v8::String::New("vim_call(): error do_cmdline_cmd()"));
     }
   }
@@ -659,10 +589,6 @@ vim_execute_internal(const char *expr, const v8::Arguments& args, bool needresul
     }
 
     vim_free(e);
-  }
-
-  if (!needresult) {
-    return v8::Undefined();
   }
 
   // return g:['%v8_result']
@@ -1049,7 +975,7 @@ bool ExecuteString(v8::Handle<v8::String> source,
   if (script.IsEmpty()) {
     if (err != NULL) {
       v8::String::Utf8Value error(try_catch.Exception());
-      err->assign(*error);
+      *err = *error;
     }
     return false;
   }
@@ -1057,7 +983,7 @@ bool ExecuteString(v8::Handle<v8::String> source,
   if (result.IsEmpty()) {
     if (err != NULL) {
       v8::String::Utf8Value error(try_catch.Exception());
-      err->assign(*error);
+      *err = *error;
     }
     return false;
   }
