@@ -15,6 +15,8 @@ EXPORTS
   vim_strncpy
   list_alloc
   list_free
+  list_unref
   dict_alloc
   hash_add
   hash_find
+  hash_remove

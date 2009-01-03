@@ -30,12 +30,43 @@ var vim = {};
 
   global.print = global.echo;
 
+  vim.List = internal.VimList;
+  vim.Dict = internal.VimDict;
+
+  vim.ListToArray = function(list) {
+    var arr = new Array(list.length);
+    for (var i in list) {
+      arr.push(list[i]);
+    }
+    return arr;
+  };
+
+  vim.ArrayToList = function(arr) {
+    return vim.extend(new vim.List(), arr);
+  };
+
+  vim.DictToObject = function(dict) {
+    var o = {}
+    for (var key in dict) {
+      o[key] = dict[key];
+    }
+    return o;
+  };
+
+  vim.ObjectToDict = function(obj) {
+    return vim.extend(new vim.Dict(), obj);
+  };
+
   vim.execute = function(cmd) {
     internal.vim_execute("execute g:['%v8_args%'][1] | let g:['%v8_result%'] = 0", cmd);
   };
 
-  vim.call = function(funcname, args) {
-    return internal.vim_execute("let g:['%v8_result%'] = call(g:['%v8_args%'][1], g:['%v8_args%'][2])", funcname, args);
+  vim.call = function(funcname, args, obj) {
+    if (obj === undefined) {
+      return internal.vim_execute("let g:['%v8_result%'] = call(g:['%v8_args%'][1], g:['%v8_args%'][2])", funcname, args);
+    } else {
+      return internal.vim_execute("let g:['%v8_result%'] = call(g:['%v8_args%'][1], g:['%v8_args%'][2])", funcname, args, obj);
+    }
   };
 
   vim.let = function(varname, value) {
