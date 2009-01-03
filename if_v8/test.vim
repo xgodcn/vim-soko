@@ -86,7 +86,38 @@ function s:test.test8()
   endif
 endfunction
 
-for s:name in sort(keys(s:test))
+" test9: VimList 1
+function s:test.test9()
+  let x = [1, 2, 3]
+  echo x
+  call eval(V8ExecuteX('var x = vim.eval("x")'))
+  call eval(V8ExecuteX('x[0] += 100; x[1] += 100; x[2] += 100;'))
+  echo x
+  if x[0] != 101 || x[1] != 102 || x[2] != 103
+    throw "test9 faield"
+  endif
+endfunction
+
+" test10: VimList 2
+function s:test.test10()
+  call eval(V8ExecuteX('var x = new vim.List()'))
+  call eval(V8ExecuteX('vim.extend(x, [1, 2, 3])'))
+  let x = V8Eval('x')
+  echo x
+  let x[0] += 100
+  let x[1] += 100
+  let x[2] += 100
+  call eval(V8ExecuteX('print(x[0] + " " + x[1] + " " + x[2])'))
+  call eval(V8ExecuteX('if (x[0] != 101 || x[1] != 102 || x[2] != 103) { throw "test10 failed"; }'))
+endfunction
+
+function! s:mysort(a, b)
+  let a = matchstr(a:a, '\d\+')
+  let b = matchstr(a:b, '\d\+')
+  return a - b
+endfunction
+
+for s:name in sort(keys(s:test), 's:mysort')
   echo "\n" . s:name . "\n"
   call s:test[s:name]()
   " XXX: message is not shown when more prompt is not fired.
