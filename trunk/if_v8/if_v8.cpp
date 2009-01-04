@@ -1178,6 +1178,11 @@ v8_to_vim(v8::Handle<v8::Value> v8obj, typval_T *vimobj, int depth, LookupMap *l
       v8::Handle<v8::Value> key = keys->Get(v8::Integer::New(i));
       v8::Handle<v8::Value> v = o->Get(key);
       v8::String::Utf8Value keystr(key);
+      if (keystr.length() == 0) {
+        dict_free(dict, TRUE);
+        *err = "v8_to_vim(): Cannot use empty key for Dictionary";
+        return false;
+      }
       dictitem_T *di = dictitem_alloc((char_u*)*keystr);
       if (di == NULL) {
         dict_free(dict, TRUE);
