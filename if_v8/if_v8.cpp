@@ -4,34 +4,6 @@
  *
  * Last Change: 2009-01-04
  * Maintainer: Yukihiro Nakadaira <yukihiro.nakadaira@gmail.com>
- *
- * Require:
- *  linux or windows.
- *  Vim executable file with some exported symbol that if_v8 requires.
- *    On linux:
- *      Compile with gcc's -rdynamic option.
- *    On windows (msvc):
- *      Use vim_export.def and add linker flag "/DEF:vim_export.def".
- *      nmake -f Make_mvc.mak linkdebug=/DEF:vim_export.def
- *
- * Compile:
- *  g++ -I/path/to/v8/include -shared -o if_v8.so if_v8.cpp \
- *      -L/path/to/v8 -lv8 -lpthread
- *
- * Usage:
- *  let if_v8 = '/path/to/if_v8.so'
- *  let err = libcall(if_v8, 'init', if_v8)
- *  let err = libcall(if_v8, 'execute', 'vim.execute("echo \"hello, v8\"")')
- *  let err = libcall(if_v8, 'execute', 'vim.eval("&tw")')
- *  let err = libcall(if_v8, 'execute', 'load("foo.js")')
- *
- *  if_v8 returns error message for initialization error.  Normal
- *  execution time error is raised in the same way as :echoerr command.
- *
- *
- * Note:
- *  g:['%v8*%'] variables are internally used.
- *
  */
 #ifdef WIN32
 # include <windows.h>
