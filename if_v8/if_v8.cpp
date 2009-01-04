@@ -1205,6 +1205,7 @@ VimListCreate(const v8::Arguments& args)
   list_T *list = list_alloc();
   if (list == NULL)
     return v8::ThrowException(v8::String::New("VimListCreate(): list_alloc(): out of memory"));
+  ++list->lv_refcount;
 
   v8::Persistent<v8::Object> self = v8::Persistent<v8::Object>::New(args.Holder());
   self.MakeWeak(list, VimListDestroy);
@@ -1303,6 +1304,7 @@ VimDictCreate(const v8::Arguments& args)
   dict_T *dict = dict_alloc();
   if (dict == NULL)
     return v8::ThrowException(v8::String::New("VimDictCreate(): dict_alloc(): out of memory"));
+  ++dict->dv_refcount;
 
   v8::Persistent<v8::Object> self = v8::Persistent<v8::Object>::New(args.Holder());
   self.MakeWeak(dict, VimDictDestroy);
