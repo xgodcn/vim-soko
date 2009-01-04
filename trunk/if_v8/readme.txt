@@ -17,9 +17,10 @@ Requirements:
 Usage:
   let if_v8 = '/path/to/if_v8.so'
   let err = libcall(if_v8, 'init', if_v8)
-  let err = libcall(if_v8, 'execute', 'load("runtime.js")')
+  let err = libcall(if_v8, 'execute', 'load("/path/to/runtime.js")')
   let err = libcall(if_v8, 'execute', 'vim.execute("echo \"hello, v8\"")')
-  let err = libcall(if_v8, 'execute', 'vim.eval("&tw")')
+  let err = libcall(if_v8, 'execute', 'var tw = vim.eval("&tw")')
+  let err = libcall(if_v8, 'execute', 'print(tw)')
   let err = libcall(if_v8, 'execute', 'load("foo.js")')
 
 

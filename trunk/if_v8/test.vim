@@ -111,6 +111,26 @@ function s:test.test10()
   call eval(V8ExecuteX('if (x[0] != 101 || x[1] != 102 || x[2] != 103) { throw "test10 failed"; }'))
 endfunction
 
+" test11: VimDict 1
+function s:test.test11()
+  let x = {}
+  call eval(V8ExecuteX('var x = vim.eval("x")'))
+  call eval(V8ExecuteX('x["apple"] = "orange"'))
+  echo x
+  if x["apple"] != "orange"
+    throw "test11 failed"
+  endif
+endfunction
+
+" test12: VimDict 2
+function s:test.test12()
+  call eval(V8ExecuteX('var x = new vim.Dict()'))
+  let x = V8Eval('x')
+  let x["apple"] = "orange"
+  call eval(V8ExecuteX('print("x[\"apple\"] = " + x["apple"])'))
+  call eval(V8ExecuteX('if (x["apple"] != "orange") { throw "test12 failed"; }'))
+endfunction
+
 function! s:mysort(a, b)
   let a = matchstr(a:a, '\d\+')
   let b = matchstr(a:b, '\d\+')
