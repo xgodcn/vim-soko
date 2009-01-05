@@ -4,6 +4,19 @@ var vim = {};
 
   var internal = global['%internal%'];
 
+  var vim_execute = function() {
+    var args = [];
+    for (var i = 0; i < arguments.length; i++) {
+      args.push(arguments[i]);
+    }
+    internal.v['%v8_args%'] = args;
+    internal.vim_execute("try | execute v:['%v8_args%'][0] | let v:['%v8_exception%'] = '' | catch | let v:['%v8_exception%'] = v:exception | endtry");
+    if (internal.v['%v8_exception%'] != '') {
+      throw internal.v['%v8_exception%'];
+    }
+    return internal.v['%v8_result%'];
+  };
+
   var makefunc = function(name) {
     return function() {
       var args = [];
@@ -58,23 +71,23 @@ var vim = {};
   };
 
   vim.execute = function(cmd) {
-    internal.vim_execute("execute g:['%v8_args%'][1] | let g:['%v8_result%'] = 0", cmd);
+    vim_execute("execute v:['%v8_args%'][1]", cmd);
   };
 
   vim.call = function(funcname, args, obj) {
     if (obj === undefined) {
-      return internal.vim_execute("let g:['%v8_result%'] = call(g:['%v8_args%'][1], g:['%v8_args%'][2])", funcname, args);
+      return vim_execute("let v:['%v8_result%'] = call(v:['%v8_args%'][1], v:['%v8_args%'][2])", funcname, args);
     } else {
-      return internal.vim_execute("let g:['%v8_result%'] = call(g:['%v8_args%'][1], g:['%v8_args%'][2])", funcname, args, obj);
+      return vim_execute("let v:['%v8_result%'] = call(v:['%v8_args%'][1], v:['%v8_args%'][2], v:['%v8_args%'][3])", funcname, args, obj);
     }
   };
 
   vim.let = function(varname, value) {
-    internal.vim_execute("execute 'let ' . g:['%v8_args%'][1] . ' = g:[''%v8_args%''][2]' | let g:['%v8_result%'] = 0", varname, value);
+    vim_execute("execute 'let ' . v:['%v8_args%'][1] . ' = v:[''%v8_args%''][2]'", varname, value);
   };
 
   vim.echo = function(obj) {
-    internal.vim_execute("echo g:['%v8_args%'][1] | let g:['%v8_result%'] = 0", obj);
+    vim_execute("echo v:['%v8_args%'][1]", obj);
   };
 
   vim.abs = makefunc('abs');
