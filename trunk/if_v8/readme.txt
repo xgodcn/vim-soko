@@ -28,7 +28,7 @@ if_v8 libcall returns error message for initialization error.  Normal
 execution time error is raised in the same way as :echoerr command.
 
 
-if_v8 uses g:['%v8*%'] variables for internal purpose.
+if_v8 uses v:['%v8*%'] variables for internal purpose.
 
 
 You can access Vim's List and Dictionary from JavaScript.
