@@ -54,6 +54,19 @@ Or
   :call libcall(if_v8, 'execute', 'var dict = new vim.Dict()')
 
 
+Also, Funcref can be called as function from JavaScript:
+
+  :let d = {}
+  :function d.func()
+  :  echo "d.func()"
+  :endfunction
+  :call libcall(if_v8, 'execute', 'var d = vim.eval("d")')
+  :call libcall(if_v8, 'execute', 'd.func()')
+  :call libcall(if_v8, 'execute', 'var f = vim._function("printf")')
+  :call libcall(if_v8, 'execute', 'print(f("%s", "this is printf"))')
+
+  (Since function is keyword, use vim._function or vim['function'])
+
 When calling Vim's function, JavaScript's Array and Object are
 automatically converted to Vim's List and Dictionary (copy by value).
 Number and String are simply copied.
@@ -63,5 +76,4 @@ wrapper object, VimList and VimDict (copy by reference).
 
 
 TODO:
-- V8 execute garbage collector not so often as Vim does.
-- Convert Funcref to function.  VimFunc object?
+- V8 don't run garbage collector as often as possible.

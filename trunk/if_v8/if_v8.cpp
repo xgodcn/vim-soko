@@ -2,7 +2,7 @@
  *
  * v8 interface to Vim
  *
- * Last Change: 2009-01-04
+ * Last Change: 2009-01-06
  * Maintainer: Yukihiro Nakadaira <yukihiro.nakadaira@gmail.com>
  */
 #ifdef WIN32
@@ -201,7 +201,6 @@ struct condstack;
 static char_u *p_hash_removed;
 // functions
 static typval_T * (*eval_expr) (char_u *arg, char_u **nextcmd);
-static char_u * (*eval_to_string) (char_u *arg, char_u **nextcmd, int convert);
 static int (*do_cmdline_cmd) (char_u *cmd);
 static void (*free_tv) (typval_T *varp);
 static void (*clear_tv) (typval_T *varp);
@@ -219,8 +218,8 @@ static int (*hash_add) (hashtab_T *ht, char_u *key);
 static hashitem_T * (*hash_find) (hashtab_T *ht, char_u *key);
 static void (*hash_remove) (hashtab_T *ht, hashitem_T *hi);
 
-static dict_T globvardict;
-static dict_T vimvardict;
+static dict_T *p_globvardict;
+static dict_T *p_vimvardict;
 
 static struct vimexport {
   const char *name;
@@ -228,7 +227,6 @@ static struct vimexport {
 } vimexports[] = {
   {"hash_removed", (void**)&p_hash_removed},
   {"eval_expr", (void**)&eval_expr},
-  {"eval_to_string", (void**)&eval_to_string},
   {"do_cmdline_cmd", (void**)&do_cmdline_cmd},
   {"free_tv", (void**)&free_tv},
   {"clear_tv", (void**)&clear_tv},
@@ -256,6 +254,32 @@ static struct vimexport {
 #define vim_memset(ptr, c, size)   memset((ptr), (c), (size))
 
 // copied static functions {{{2
+
+static void init_tv(typval_T *varp);
+static listitem_T *listitem_alloc();
+static void listitem_free(listitem_T *item);
+static listitem_T *list_find(list_T *l, long n);
+static void list_append(list_T *l, listitem_T *item);
+static void list_fix_watch(list_T *l, listitem_T *item);
+static void list_remove(list_T *l, listitem_T *item, listitem_T *item2);
+static long list_len(list_T *l);
+static dictitem_T *dictitem_alloc(char_u *key);
+static void dictitem_free(dictitem_T *item);
+static void dictitem_remove(dict_T *dict, dictitem_T *item);
+static int dict_add(dict_T *d, dictitem_T *item);
+// XXX: recurse is not supported (always TRUE)
+#define dict_free(d, recurse) wrap_dict_free(d)
+static void wrap_dict_free(dict_T *d);
+static void dict_unref(dict_T *d);
+static dictitem_T *dict_find(dict_T *d, char_u *key, int len);
+static void func_unref(char_u *name);
+static void func_ref(char_u *name);
+
+// not in vim
+static void tv_set_list(typval_T *tv, list_T *list);
+static void tv_set_dict(typval_T *tv, dict_T *dict);
+static void tv_set_func(typval_T *tv, char_u *name);
+static bool dict_set(dict_T *dict, char_u *key, typval_T *tv);
 
 /*
  * Set the value of a variable to NULL without freeing items.
@@ -541,11 +565,9 @@ dict_add(
 /*
  * Free a Dictionary, including all items it contains.
  * Ignores the reference count.
- * XXX: recurse is not supported (always TRUE)
  */
-#define dict_free(d, recurse) wrap_dict_free(d)
     static void
-wrap_dict_free(dict_T  *d)
+wrap_dict_free(dict_T *d)
 {
     typval_T tv;
     init_tv(&tv);
@@ -608,7 +630,55 @@ dict_find(
     return HI2DI(hi);
 }
 
-// utils {{{2
+// Funcref {{{2
+
+/*
+ * Unreference a Function: decrement the reference count and free it when it
+ * becomes zero.  Only for numbered functions.
+ * XXX: WORKAROUND
+ */
+    static void
+func_unref(
+    char_u	*name
+    )
+{
+  typval_T tv;
+  tv.v_type = VAR_FUNC;
+  tv.v_lock = 0;
+  tv.vval.v_string = vim_strsave(name);
+  clear_tv(&tv);
+}
+
+/*
+ * Count a reference to a Function.
+ * XXX: WORKAROUND
+ * XXX: wish no error
+ */
+    static void
+func_ref(
+    char_u	*name
+    )
+{
+  typval_T tv;
+  dictitem_T *di;
+  hashitem_T *hi;
+  char exprbuf[] = "let v:['%v8_func2%'] = v:['%v8_func1%']";
+  tv.v_type = VAR_FUNC;
+  tv.v_lock = 0;
+  tv.vval.v_string = name;
+  dict_set(p_vimvardict, (char_u*)"%v8_func1%", &tv);
+  do_cmdline_cmd((char_u*)exprbuf);
+  hi = hash_find(&p_vimvardict->dv_hashtab, (char_u*)"%v8_func1%");
+  di = HI2DI(hi);
+  hash_remove(&p_vimvardict->dv_hashtab, hi);
+  vim_free(di);
+  hi = hash_find(&p_vimvardict->dv_hashtab, (char_u*)"%v8_func2%");
+  di = HI2DI(hi);
+  hash_remove(&p_vimvardict->dv_hashtab, hi);
+  vim_free(di);
+}
+
+// not in vim {{{2
 
 static void
 tv_set_list(typval_T *tv, list_T *list)
@@ -628,15 +698,24 @@ tv_set_dict(typval_T *tv, dict_T *dict)
   ++dict->dv_refcount;
 }
 
+static void
+tv_set_func(typval_T *tv, char_u *name)
+{
+  tv->v_type = VAR_FUNC;
+  tv->v_lock = 0;
+  tv->vval.v_string = vim_strsave(name);
+  func_ref(name);
+}
+
 /*
  * let dict[key] = tv without incrementing reference count.
  */
 static bool
-dict_set(dict_T *dict, const char *key, typval_T *tv)
+dict_set(dict_T *dict, char_u *key, typval_T *tv)
 {
-  dictitem_T *di = dict_find(dict, (char_u*)key, -1);
+  dictitem_T *di = dict_find(dict, key, -1);
   if (di == NULL) {
-    di = dictitem_alloc((char_u*)key);
+    di = dictitem_alloc(key);
     if (di == NULL) {
       return false;
     }
@@ -659,9 +738,8 @@ typedef std::map<list_or_dict_ptr, v8::Handle<v8::Value> > LookupMap;
 static void *dll_handle = NULL;
 static v8::Handle<v8::Context> context;
 static v8::Handle<v8::FunctionTemplate> VimList;
-static v8::Handle<v8::ObjectTemplate> VimListTemplate;
 static v8::Handle<v8::FunctionTemplate> VimDict;
-static v8::Handle<v8::ObjectTemplate> VimDictTemplate;
+static v8::Handle<v8::FunctionTemplate> VimFunc;
 
 // ensure the following condition:
 //   var x = new vim.Dict();
@@ -693,19 +771,25 @@ static v8::Handle<v8::Value> VimListCreate(const v8::Arguments& args);
 static void VimListDestroy(v8::Persistent<v8::Value> object, void* parameter);
 static v8::Handle<v8::Value> VimListGet(uint32_t index, const v8::AccessorInfo& info);
 static v8::Handle<v8::Value> VimListSet(uint32_t index, v8::Local<v8::Value> value, const v8::AccessorInfo& info);
+static v8::Handle<v8::Boolean> VimListQuery(uint32_t index, const v8::AccessorInfo& info);
 static v8::Handle<v8::Boolean> VimListDelete(uint32_t index, const v8::AccessorInfo& info);
 static v8::Handle<v8::Array> VimListEnumerate(const v8::AccessorInfo& info);
 static v8::Handle<v8::Value> VimListLength(v8::Local<v8::String> property, const v8::AccessorInfo& info);
 static v8::Handle<v8::Value> MakeVimDict(dict_T *dict, v8::Handle<v8::Object> obj);
-static v8::Handle<v8::Value> VimDictCreate(const v8::Arguments& args);
 static void VimDictDestroy(v8::Persistent<v8::Value> object, void* parameter);
+static v8::Handle<v8::Value> VimDictCreate(const v8::Arguments& args);
 static v8::Handle<v8::Value> VimDictIdxGet(uint32_t index, const v8::AccessorInfo& info);
 static v8::Handle<v8::Value> VimDictIdxSet(uint32_t index, v8::Local<v8::Value> value, const v8::AccessorInfo& info);
+static v8::Handle<v8::Boolean> VimDictIdxQuery(uint32_t index, const v8::AccessorInfo& info);
 static v8::Handle<v8::Boolean> VimDictIdxDelete(uint32_t index, const v8::AccessorInfo& info);
 static v8::Handle<v8::Value> VimDictGet(v8::Local<v8::String> property, const v8::AccessorInfo& info);
 static v8::Handle<v8::Value> VimDictSet(v8::Local<v8::String> property, v8::Local<v8::Value> value, const v8::AccessorInfo& info);
+static v8::Handle<v8::Boolean> VimDictQuery(v8::Local<v8::String> property, const v8::AccessorInfo& info);
 static v8::Handle<v8::Boolean> VimDictDelete(v8::Local<v8::String> property, const v8::AccessorInfo& info);
 static v8::Handle<v8::Array> VimDictEnumerate(const v8::AccessorInfo& info);
+static v8::Handle<v8::Value> MakeVimFunc(const char *name, v8::Handle<v8::Object> obj);
+static void VimFuncDestroy(v8::Persistent<v8::Value> object, void* parameter);
+static v8::Handle<v8::Value> VimFuncCall(const v8::Arguments& args);
 static v8::Handle<v8::Value> Load(const v8::Arguments& args);
 static v8::Handle<v8::String> ReadFile(const char* name);
 static bool ExecuteString(v8::Handle<v8::String> source, v8::Handle<v8::Value> name, std::string* err);
@@ -773,14 +857,14 @@ init_vim()
   tv = eval_expr((char_u*)exprbuf, NULL);
   if (tv == NULL)
     return "error: cannot get g:";
-  globvardict = *tv->vval.v_dict;
+  p_globvardict = tv->vval.v_dict;
   free_tv(tv);
 
   strcpy(exprbuf, "v:");
   tv = eval_expr((char_u*)exprbuf, NULL);
   if (tv == NULL)
     return "error: cannot get v:";
-  vimvardict = *tv->vval.v_dict;
+  p_vimvardict = tv->vval.v_dict;
   free_tv(tv);
 
   return NULL;
@@ -793,23 +877,31 @@ init_v8()
 
   VimList = v8::Persistent<v8::FunctionTemplate>::New(v8::FunctionTemplate::New(VimListCreate));
   VimList->SetClassName(v8::String::New("VimList"));
-  VimListTemplate = v8::Persistent<v8::ObjectTemplate>::New(VimList->InstanceTemplate());
+  v8::Handle<v8::ObjectTemplate> VimListTemplate = VimList->InstanceTemplate();
   VimListTemplate->SetInternalFieldCount(1);
-  VimListTemplate->SetIndexedPropertyHandler(VimListGet, VimListSet, NULL, VimListDelete, VimListEnumerate);
+  VimListTemplate->SetIndexedPropertyHandler(VimListGet, VimListSet, VimListQuery, VimListDelete, VimListEnumerate);
   VimListTemplate->SetAccessor(v8::String::New("length"), VimListLength, NULL, v8::Handle<v8::Value>(), v8::DEFAULT, (v8::PropertyAttribute)(v8::DontEnum|v8::DontDelete));
 
   VimDict = v8::Persistent<v8::FunctionTemplate>::New(v8::FunctionTemplate::New(VimDictCreate));
   VimDict->SetClassName(v8::String::New("VimDict"));
-  VimDictTemplate = v8::Persistent<v8::ObjectTemplate>::New(VimDict->InstanceTemplate());
+  v8::Handle<v8::ObjectTemplate> VimDictTemplate = VimDict->InstanceTemplate();
   VimDictTemplate->SetInternalFieldCount(1);
-  VimDictTemplate->SetIndexedPropertyHandler(VimDictIdxGet, VimDictIdxSet, NULL, VimDictIdxDelete);
-  VimDictTemplate->SetNamedPropertyHandler(VimDictGet, VimDictSet, NULL, VimDictDelete, VimDictEnumerate);
+  VimDictTemplate->SetIndexedPropertyHandler(VimDictIdxGet, VimDictIdxSet, VimDictIdxQuery, VimDictIdxDelete);
+  VimDictTemplate->SetNamedPropertyHandler(VimDictGet, VimDictSet, VimDictQuery, VimDictDelete, VimDictEnumerate);
+
+  VimFunc = v8::Persistent<v8::FunctionTemplate>::New(v8::FunctionTemplate::New());
+  VimFunc->SetClassName(v8::String::New("VimFunc"));
+  v8::Handle<v8::ObjectTemplate> VimFuncTemplate = VimFunc->InstanceTemplate();
+  // [0] = funcname [1] = self or undef
+  VimFuncTemplate->SetInternalFieldCount(2);
+  VimFuncTemplate->SetCallAsFunctionHandler(VimFuncCall);
 
   v8::Handle<v8::ObjectTemplate> internal = v8::ObjectTemplate::New();
   internal->Set("load", v8::FunctionTemplate::New(Load));
   internal->Set("vim_execute", v8::FunctionTemplate::New(vim_execute));
   internal->Set("VimList", VimList);
   internal->Set("VimDict", VimDict);
+  internal->Set("VimFunc", VimFunc);
 
   v8::Handle<v8::ObjectTemplate> global = v8::ObjectTemplate::New();
   global->Set("%internal%", internal);
@@ -819,8 +911,8 @@ init_v8()
   {
     v8::Context::Scope context_scope(context);
     v8::Handle<v8::Object> obj = v8::Handle<v8::Object>::Cast(context->Global()->Get(v8::String::New("%internal%")));
-    obj->Set(v8::String::New("g"), MakeVimDict(&globvardict, VimDictTemplate->NewInstance()));
-    obj->Set(v8::String::New("v"), MakeVimDict(&vimvardict, VimDictTemplate->NewInstance()));
+    obj->Set(v8::String::New("g"), MakeVimDict(p_globvardict, VimDict->InstanceTemplate()->NewInstance()));
+    obj->Set(v8::String::New("v"), MakeVimDict(p_vimvardict, VimDict->InstanceTemplate()->NewInstance()));
   }
 
   return NULL;
@@ -879,13 +971,8 @@ vim_to_v8(typval_T *vimobj, v8::Handle<v8::Value> *v8obj, int depth, LookupMap *
       *v8obj = it->second;
       return true;
     }
-    it = objcache.find(list);
-    if (it != objcache.end()) {
-      *v8obj = it->second;
-      return true;
-    }
     if (wrap) {
-      *v8obj = MakeVimList(list, VimListTemplate->NewInstance());
+      *v8obj = MakeVimList(list, VimList->InstanceTemplate()->NewInstance());
     } else {
       v8::Handle<v8::Array> o = v8::Array::New(0);
       v8::Handle<v8::Value> v;
@@ -912,13 +999,8 @@ vim_to_v8(typval_T *vimobj, v8::Handle<v8::Value> *v8obj, int depth, LookupMap *
       *v8obj = it->second;
       return true;
     }
-    it = objcache.find(dict);
-    if (it != objcache.end()) {
-      *v8obj = it->second;
-      return true;
-    }
     if (wrap) {
-      *v8obj = MakeVimDict(dict, VimDictTemplate->NewInstance());
+      *v8obj = MakeVimDict(dict, VimDict->InstanceTemplate()->NewInstance());
     } else {
       v8::Handle<v8::Object> o = v8::Object::New();
       v8::Handle<v8::Value> v;
@@ -941,12 +1023,11 @@ vim_to_v8(typval_T *vimobj, v8::Handle<v8::Value> *v8obj, int depth, LookupMap *
     return true;
   }
 
-  // TODO:
   if (vimobj->v_type == VAR_FUNC) {
     if (vimobj->vval.v_string == NULL)
-      *v8obj = v8::String::New("");
+      *v8obj = v8::Undefined();
     else
-      *v8obj = v8::String::New((char *)vimobj->vval.v_string);
+      *v8obj = MakeVimFunc((char *)vimobj->vval.v_string, VimFunc->InstanceTemplate()->NewInstance());
     return true;
   }
 
@@ -992,6 +1073,14 @@ v8_to_vim(v8::Handle<v8::Value> v8obj, typval_T *vimobj, int depth, LookupMap *l
     v8::Handle<v8::Object> o = v8::Handle<v8::Object>::Cast(v8obj);
     v8::Handle<v8::External> external = v8::Handle<v8::External>::Cast(o->GetInternalField(0));
     tv_set_dict(vimobj, static_cast<dict_T*>(external->Value()));
+    return true;
+  }
+
+  if (VimFunc->HasInstance(v8obj)) {
+    v8::Handle<v8::Object> o = v8::Handle<v8::Object>::Cast(v8obj);
+    v8::Handle<v8::String> name = v8::Handle<v8::String>::Cast(o->GetInternalField(0));
+    v8::String::Utf8Value str(name);
+    tv_set_func(vimobj, (char_u*)*str);
     return true;
   }
 
@@ -1158,6 +1247,13 @@ MakeVimList(list_T *list, v8::Handle<v8::Object> obj)
   return self;
 }
 
+static void
+VimListDestroy(v8::Persistent<v8::Value> object, void* parameter)
+{
+  objcache.erase(parameter);
+  list_unref(static_cast<list_T*>(parameter));
+}
+
 static v8::Handle<v8::Value>
 VimListCreate(const v8::Arguments& args)
 {
@@ -1170,13 +1266,6 @@ VimListCreate(const v8::Arguments& args)
   return MakeVimList(list, args.Holder());
 }
 
-static void
-VimListDestroy(v8::Persistent<v8::Value> object, void* parameter)
-{
-  objcache.erase(parameter);
-  list_unref(static_cast<list_T*>(parameter));
-}
-
 static v8::Handle<v8::Value>
 VimListGet(uint32_t index, const v8::AccessorInfo& info)
 {
@@ -1186,10 +1275,9 @@ VimListGet(uint32_t index, const v8::AccessorInfo& info)
   listitem_T *li = list_find(list, index);
   if (li == NULL)
     return v8::Undefined();
-  LookupMap lookup;
   std::string err;
   v8::Handle<v8::Value> v8obj;
-  if (!vim_to_v8(&li->li_tv, &v8obj, 1, &lookup, true, &err))
+  if (!vim_to_v8(&li->li_tv, &v8obj, 1, &objcache, true, &err))
     return v8::ThrowException(v8::String::New(err.c_str()));
   return v8obj;
 }
@@ -1211,6 +1299,18 @@ VimListSet(uint32_t index, v8::Local<v8::Value> value, const v8::AccessorInfo& i
   clear_tv(&li->li_tv);
   li->li_tv = vimobj;
   return value;
+}
+
+static v8::Handle<v8::Boolean>
+VimListQuery(uint32_t index, const v8::AccessorInfo& info)
+{
+  v8::Handle<v8::Object> self = info.Holder();
+  v8::Handle<v8::External> external = v8::Handle<v8::External>::Cast(self->GetInternalField(0));
+  list_T *list = static_cast<list_T*>(external->Value());
+  listitem_T *li = list_find(list, index);
+  if (li == NULL)
+    return v8::False();
+  return v8::True();
 }
 
 static v8::Handle<v8::Boolean>
@@ -1262,6 +1362,13 @@ MakeVimDict(dict_T *dict, v8::Handle<v8::Object> obj)
   return self;
 }
 
+static void
+VimDictDestroy(v8::Persistent<v8::Value> object, void* parameter)
+{
+  objcache.erase(parameter);
+  dict_unref(static_cast<dict_T*>(parameter));
+}
+
 static v8::Handle<v8::Value>
 VimDictCreate(const v8::Arguments& args)
 {
@@ -1274,13 +1381,6 @@ VimDictCreate(const v8::Arguments& args)
   return MakeVimDict(dict, args.Holder());
 }
 
-static void
-VimDictDestroy(v8::Persistent<v8::Value> object, void* parameter)
-{
-  objcache.erase(parameter);
-  dict_unref(static_cast<dict_T*>(parameter));
-}
-
 static v8::Handle<v8::Value>
 VimDictIdxGet(uint32_t index, const v8::AccessorInfo& info)
 {
@@ -1291,6 +1391,12 @@ static v8::Handle<v8::Value>
 VimDictIdxSet(uint32_t index, v8::Local<v8::Value> value, const v8::AccessorInfo& info)
 {
   return VimDictSet(v8::Integer::New(index)->ToString(), value, info);
+}
+
+static v8::Handle<v8::Boolean>
+VimDictIdxQuery(uint32_t index, const v8::AccessorInfo& info)
+{
+  return VimDictQuery(v8::Integer::New(index)->ToString(), info);
 }
 
 static v8::Handle<v8::Boolean>
@@ -1315,11 +1421,16 @@ VimDictGet(v8::Local<v8::String> property, const v8::AccessorInfo& info)
     v8::Handle<v8::Object> prototype = v8::Handle<v8::Object>::Cast(self->GetPrototype());
     return prototype->Get(property);
   }
-  LookupMap lookup;
   std::string err;
   v8::Handle<v8::Value> v8obj;
-  if (!vim_to_v8(&di->di_tv, &v8obj, 1, &lookup, true, &err))
+  if (!vim_to_v8(&di->di_tv, &v8obj, 1, &objcache, true, &err))
     return v8::ThrowException(v8::String::New(err.c_str()));
+  // XXX: When obj.func(), args.Holder() and args.This() are VimFunc
+  // insted of obj.  Use internal field for now.
+  if (VimFunc->HasInstance(v8obj)) {
+    v8::Handle<v8::Object> func = v8::Handle<v8::Object>::Cast(v8obj);
+    func->SetInternalField(1, self);
+  }
   return v8obj;
 }
 
@@ -1337,9 +1448,22 @@ VimDictSet(v8::Local<v8::String> property, v8::Local<v8::Value> value, const v8:
   typval_T vimobj;
   if (!v8_to_vim(value, &vimobj, 1, &lookup, &err))
     return v8::ThrowException(v8::String::New(err.c_str()));
-  if (!dict_set(dict, *key, &vimobj))
+  if (!dict_set(dict, (char_u*)*key, &vimobj))
     return v8::ThrowException(v8::String::New("error dict_set()"));
   return value;
+}
+
+static v8::Handle<v8::Boolean>
+VimDictQuery(v8::Local<v8::String> property, const v8::AccessorInfo& info)
+{
+  v8::Handle<v8::Object> self = info.Holder();
+  v8::Handle<v8::External> external = v8::Handle<v8::External>::Cast(self->GetInternalField(0));
+  v8::String::Utf8Value key(property);
+  dict_T *dict = static_cast<dict_T*>(external->Value());
+  dictitem_T *di = dict_find(dict, (char_u*)*key, -1);
+  if (di == NULL)
+    return v8::False();
+  return v8::True();
 }
 
 static v8::Handle<v8::Boolean>
@@ -1376,6 +1500,46 @@ VimDictEnumerate(const v8::AccessorInfo& info)
     }
   }
   return keys;
+}
+
+static v8::Handle<v8::Value>
+MakeVimFunc(const char *name, v8::Handle<v8::Object> obj)
+{
+  v8::Persistent<v8::Object> self = v8::Persistent<v8::Object>::New(obj);
+  self.MakeWeak((void*)vim_strsave((char_u*)name), VimFuncDestroy);
+  self->SetInternalField(0, v8::String::New(name));
+  self->SetInternalField(1, v8::Undefined());
+  func_ref((char_u*)name);
+  return self;
+}
+
+static void
+VimFuncDestroy(v8::Persistent<v8::Value> object, void* parameter)
+{
+  func_unref(static_cast<char_u*>(parameter));
+  vim_free(parameter);
+}
+
+static v8::Handle<v8::Value>
+VimFuncCall(const v8::Arguments& args)
+{
+  if (args.IsConstructCall())
+    return v8::ThrowException(v8::String::New("Cannot create VimFunc"));
+
+  v8::Handle<v8::Object> self = args.Holder();
+
+  v8::Handle<v8::Array> arr = v8::Array::New(args.Length());
+  for (int i = 0; i < args.Length(); ++i)
+    arr->Set(v8::Integer::New(i), args[i]);
+
+  v8::Handle<v8::Value> obj = self->GetInternalField(1);
+
+  v8::Handle<v8::Value> callargs[3] = {self, arr, obj};
+
+  // return vim.call(name, args, obj)
+  v8::Handle<v8::Object> vim = v8::Handle<v8::Object>::Cast(context->Global()->Get(v8::String::New("vim")));
+  v8::Handle<v8::Function> call = v8::Handle<v8::Function>::Cast(vim->Get(v8::String::New("call")));
+  return call->Call(vim, 3, callargs);
 }
 
 // The callback that is invoked by v8 whenever the JavaScript 'load'
