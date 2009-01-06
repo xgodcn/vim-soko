@@ -131,6 +131,27 @@ function s:test.test12()
   call eval(V8ExecuteX('if (x["apple"] != "orange") { throw "test12 failed"; }'))
 endfunction
 
+let s:d = {}
+let s:d.name = 'd'
+function s:d.func()
+  echo "my name is " . self.name
+  return self
+endfunction
+let s:d.printf = function("printf")
+
+let s:e = {}
+let s:e.name = 'e'
+
+" test13: VimFunc
+function s:test.test13()
+  call eval(V8ExecuteX('var d = vim.eval("s:d")'))
+  call eval(V8ExecuteX('var e = vim.eval("s:e")'))
+  call V8Execute('if (d.func() !== d) { throw "test13 failed"; }')
+  call V8Execute('e.func = d.func')
+  call V8Execute('if (e.func() !== e) { throw "test13 failed"; }')
+  call V8Execute('print(d.printf("%s", "this is printf"))')
+endfunction
+
 function! s:mysort(a, b)
   let a = matchstr(a:a, '\d\+')
   let b = matchstr(a:b, '\d\+')
