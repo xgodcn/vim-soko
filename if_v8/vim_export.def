@@ -3,7 +3,6 @@ EXPORTS
   hash_removed
   ; functions
   eval_expr
-  eval_to_string
   do_cmdline_cmd
   free_tv
   clear_tv
