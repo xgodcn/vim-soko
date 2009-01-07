@@ -131,6 +131,14 @@ function s:test.test12()
   call eval(V8ExecuteX('if (x["apple"] != "orange") { throw "test12 failed"; }'))
 endfunction
 
+" test13: VimDict 3: index access
+function s:test.test13()
+  call V8Execute('var x = new vim.Dict()')
+  call V8Execute('x[0] = 32')
+  call V8Execute('print(x[0])')
+  call V8Execute('if (x[0] != 32) { throw "test13 failed"; }')
+endfunction
+
 let s:d = {}
 let s:d.name = 'd'
 function s:d.func()
@@ -142,13 +150,13 @@ let s:d.printf = function("printf")
 let s:e = {}
 let s:e.name = 'e'
 
-" test13: VimFunc
-function s:test.test13()
+" test14: VimFunc
+function s:test.test14()
   call eval(V8ExecuteX('var d = vim.eval("s:d")'))
   call eval(V8ExecuteX('var e = vim.eval("s:e")'))
-  call V8Execute('if (d.func() !== d) { throw "test13 failed"; }')
+  call V8Execute('if (d.func() !== d) { throw "test14 failed"; }')
   call V8Execute('e.func = d.func')
-  call V8Execute('if (e.func() !== e) { throw "test13 failed"; }')
+  call V8Execute('if (e.func() !== e) { throw "test14 failed"; }')
   call V8Execute('print(d.printf("%s", "this is printf"))')
 endfunction
 
