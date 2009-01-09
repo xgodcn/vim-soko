@@ -10,7 +10,7 @@ var vim = {};
       args.push(arguments[i]);
     }
     internal.v['%v8_args%'] = args;
-    internal.vim_execute("try | execute v:['%v8_args%'][0] | let v:['%v8_exception%'] = '' | catch | let v:['%v8_exception%'] = v:exception | echo v:exception | endtry");
+    internal.vim_execute("try | execute v:['%v8_args%'][0] | let v:['%v8_exception%'] = '' | catch | let v:['%v8_exception%'] = v:exception | endtry");
     if (internal.v['%v8_exception%'] != '') {
       throw internal.v['%v8_exception%'];
     }
