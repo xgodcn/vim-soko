@@ -1237,15 +1237,13 @@ v8_to_vim(Handle<Value> v8obj, typval_T *vimobj, int depth, LookupMap *lookup, s
   }
 
   if (v8obj->IsFunction()) {
-    vimobj->v_type = VAR_STRING;
-    vimobj->vval.v_string = vim_strsave((char_u*)"[function]");
-    return true;
+    *err = "v8_to_vim(): cannot convert function";
+    return false;
   }
 
   if (v8obj->IsExternal()) {
-    vimobj->v_type = VAR_STRING;
-    vimobj->vval.v_string = vim_strsave((char_u*)"[external]");
-    return true;
+    *err = "v8_to_vim(): cannot convert native object";
+    return false;
   }
 
   *err = "v8_to_vim(): internal error: unknown type";
