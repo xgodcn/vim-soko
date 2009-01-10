@@ -145,6 +145,9 @@ function s:d.func()
   echo "my name is " . self.name
   return self
 endfunction
+function s:d.raise(msg)
+  throw a:msg
+endfunction
 let s:d.printf = function("printf")
 
 let s:e = {}
@@ -160,15 +163,31 @@ function s:test.test14()
   call V8Execute('print(d.printf("%s", "this is printf"))')
 endfunction
 
+" test15: VimFunc Exception
+function s:test.test15()
+  call eval(V8ExecuteX('var d = vim.eval("s:d")'))
+  try
+    call V8Execute('d.raise("error from vimfunc")')
+    let x = 1
+  catch
+    echo printf('caught in vim "%s"', v:exception)
+  endtry
+  if exists('x')
+    throw "test15 failed"
+  endif
+endfunction
+
 function! s:mysort(a, b)
   let a = matchstr(a:a, '\d\+')
   let b = matchstr(a:b, '\d\+')
   return a - b
 endfunction
 
-for s:name in sort(keys(s:test), 's:mysort')
-  echo "\n" . s:name . "\n"
-  call s:test[s:name]()
-  " XXX: message is not shown when more prompt is not fired.
-  sleep 100m
-endfor
+try
+  for s:name in sort(keys(s:test), 's:mysort')
+    echo "\n" . s:name . "\n"
+    call s:test[s:name]()
+    " XXX: message is not shown when more prompt is not fired.
+    sleep 100m
+  endfor
+endtry

@@ -1642,6 +1642,24 @@ VimFuncCall(const Arguments& args)
   // return vim.call(name, args, obj)
   Handle<Object> vim = Handle<Object>::Cast(context->Global()->Get(String::New("vim")));
   Handle<Function> call = Handle<Function>::Cast(vim->Get(String::New("call")));
+
+#if 0
+  // XXX: Exception is lost when vim.call() throw exception and caller
+  // script doesn't have try-catch block.
+  // ExecuteString() -> caller (js) -> VimFuncCall() -> vim.call() (js)
   return call->Call(vim, 3, callargs);
+#else
+  // Cannot use ThrowException() in the TryCatch block.
+  Handle<Value> res;
+  Handle<Value> exception;
+  {
+    TryCatch try_catch;
+    res = call->Call(vim, 3, callargs);
+    exception = try_catch.Exception();
+  }
+  if (!exception.IsEmpty())
+    return ThrowException(exception);
+  return res;
+#endif
 }
 
