@@ -1,27 +1,29 @@
-var vim = {};
-
 (function(global, vim){
 
-  var internal = global['%internal%'];
+  var _load = global.load;
+  var _vim_execute = vim.execute;
+  var _g = vim.g;
+  var _v = vim.v;
 
   var vim_execute = function() {
     var args = [];
     for (var i = 0; i < arguments.length; i++) {
       args.push(arguments[i]);
     }
-    internal.v['%v8_args%'] = args;
-    internal.vim_execute("try | execute v:['%v8_args%'][0] | let v:['%v8_exception%'] = '' | catch | let v:['%v8_exception%'] = v:exception | endtry");
-    if (internal.v['%v8_exception%'] != '') {
-      throw internal.v['%v8_exception%'];
+    _v['%v8_result%'] = 0;
+    _v['%v8_args%'] = args;
+    _vim_execute("try | execute v:['%v8_args%'][0] | let v:['%v8_exception%'] = '' | catch | let v:['%v8_exception%'] = v:exception | endtry");
+    if (_v['%v8_exception%'] != '') {
+      throw _v['%v8_exception%'];
     }
-    return internal.v['%v8_result%'];
+    return _v['%v8_result%'];
   };
 
   global.load = function(file) {
     var save = global['%script_name%'];
     global['%script_name%'] = file;
     try {
-      internal.load(file)
+      _load(file)
     } finally {
       global['%script_name%'] = save;
     }
@@ -32,10 +34,6 @@ var vim = {};
   };
 
   global.print = global.echo;
-
-  vim.List = internal.VimList;
-  vim.Dict = internal.VimDict;
-  vim.Func = internal.VimFunc;
 
   vim.ListToArray = function(list) {
     var arr = new Array(list.length);
