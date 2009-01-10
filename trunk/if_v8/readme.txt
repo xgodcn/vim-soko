@@ -5,6 +5,7 @@ http://code.google.com/p/v8/
 
 
 Requirements:
+  c++ compiler (gcc or visual c++).
   linux or windows.
   Vim executable file with some exported symbol that if_v8 requires.
     On linux:
@@ -15,55 +16,57 @@ Requirements:
 
 
 Usage:
-  let if_v8 = '/path/to/if_v8.so'
-  let err = libcall(if_v8, 'init', if_v8)
-  let err = libcall(if_v8, 'execute', 'load("/path/to/runtime.js")')
-  let err = libcall(if_v8, 'execute', 'vim.execute("echo \"hello, v8\"")')
-  let err = libcall(if_v8, 'execute', 'var tw = vim.eval("&tw")')
-  let err = libcall(if_v8, 'execute', 'print(tw)')
-  let err = libcall(if_v8, 'execute', 'load("foo.js")')
-
-
-if_v8 libcall returns error message for initialization error.  Normal
-execution time error is raised in the same way as :echoerr command.
-
-
-if_v8 uses v:['%v8*%'] variables for internal purpose.
+  :source /path/to/v8/init.vim
+  :V8 print('hello, world')
+  => hello, world
+  :V8 3 + 4
+  => 7
+  :V8 vim.execute('version')
+  => ... version message
+  :V8 var tw = vim.eval('&tw')
+  :V8 tw
+  => 78
+  :V8 vim.let('&tw', '40')
+  :echo &tw
+  => 40
+  :V8 load('foo.js')
 
 
 You can access Vim's List and Dictionary from JavaScript.
 For example:
 
   :let x = [1, 2, 3]
-  :call libcall(if_v8, 'execute', 'var y = vim.eval("x")')
+  :V8 var y = vim.eval('x')
 
 Now, x and y is same object.  If you change y, x is also changed:
 
-  :call libcall(if_v8, 'execute', 'y[0] = 100')
+  :V8 y[0] = 100
   :echo x
   => [100, 2, 3]
 
 To create List or Dictionary from JavaScript:
 
-  :call libcall(if_v8, 'execute', 'var list = vim.eval("[]")')
-  :call libcall(if_v8, 'execute', 'var dict = vim.eval("{}")')
+  :V8 var list = vim.eval('[]')
+  :V8 var dict = vim.eval('{}')
 
 Or
 
-  :call libcall(if_v8, 'execute', 'var list = new vim.List()')
-  :call libcall(if_v8, 'execute', 'var dict = new vim.Dict()')
+  :V8 var list = new vim.List()
+  :V8 var dict = new vim.Dict()
 
 
-Also, Funcref can be called as function from JavaScript:
+Also, you can call Funcref:
 
   :let d = {}
   :function d.func()
-  :  echo "d.func()"
+  :  echo "This is d.func()"
   :endfunction
-  :call libcall(if_v8, 'execute', 'var d = vim.eval("d")')
-  :call libcall(if_v8, 'execute', 'd.func()')
-  :call libcall(if_v8, 'execute', 'var f = vim._function("printf")')
-  :call libcall(if_v8, 'execute', 'print(f("%s", "this is printf"))')
+  :V8 var d = vim.eval('d')
+  :V8 d.func()
+  => This is d.func()
+  :V8 var f = vim._function('printf')
+  :V8 print(f("%s", "This is printf"))
+  => This is printf
 
   (Since function is keyword, use vim._function or vim['function'])
 
@@ -73,6 +76,18 @@ Number and String are simply copied.
 
 For result of Vim's function, Vim's List and Dictionary is converted to
 wrapper object, VimList and VimDict (copy by reference).
+
+
+Because of implementation limit, you cannot access script local variable
+in a script executed with :V8 command.  To access script local variable,
+use V8ExecuteX() or V8EvalX() with eval().
+
+  :let s:var = 99
+  :call eval(V8ExecuteX('var svar = vim.eval("s:var")'))
+  :let result = eval(V8EvalX('svar + 100'))
+
+
+if_v8 uses v:['%v8_*%'] variables for internal purpose.
 
 
 TODO:

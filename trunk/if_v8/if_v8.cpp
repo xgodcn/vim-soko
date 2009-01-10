@@ -2,7 +2,7 @@
  *
  * v8 interface to Vim
  *
- * Last Change: 2009-01-07
+ * Last Change: 2009-01-11
  * Maintainer: Yukihiro Nakadaira <yukihiro.nakadaira@gmail.com>
  */
 #ifdef WIN32
@@ -12,6 +12,7 @@
 #endif
 #include <cstdio>
 #include <cstring>
+#include <sstream>
 #include <string>
 #include <map>
 #include <v8.h>
@@ -251,6 +252,11 @@ static dictitem_T *dict_find(dict_T *d, char_u *key, int len);
 static void func_unref(char_u *name);
 static void func_ref(char_u *name);
 // not in vim
+static void tv_set_number(typval_T *tv, varnumber_T number);
+#ifdef FEAT_FLOAT
+static void tv_set_float(typval_T *tv, float_T v_float);
+#endif
+static void tv_set_string(typval_T *tv, char_u *string);
 static void tv_set_list(typval_T *tv, list_T *list);
 static void tv_set_dict(typval_T *tv, dict_T *dict);
 static void tv_set_func(typval_T *tv, char_u *name);
@@ -752,6 +758,32 @@ func_ref(
 // not in vim {{{2
 
 static void
+tv_set_number(typval_T *tv, varnumber_T number)
+{
+  tv->v_type = VAR_NUMBER;
+  tv->v_lock = 0;
+  tv->vval.v_number = number;
+}
+
+#ifdef FEAT_FLOAT
+static void
+tv_set_float(typval_T *tv, float_T v_float)
+{
+  tv->v_type = VAR_FLOAT;
+  tv->v_lock = 0;
+  tv->vval.v_float = v_float;
+}
+#endif
+
+static void
+tv_set_string(typval_T *tv, char_u *string)
+{
+  tv->v_type = VAR_STRING;
+  tv->v_lock = 0;
+  tv->vval.v_string = vim_strsave(string);
+}
+
+static void
 tv_set_list(typval_T *tv, list_T *list)
 {
   tv->v_type = VAR_LIST;
@@ -840,7 +872,8 @@ static bool v8_to_vim(Handle<Value> v8obj, typval_T *vimobj, int depth, LookupMa
 static LookupMap::iterator LookupMapFindV8Value(LookupMap* lookup, Handle<Value> v);
 
 static Handle<String> ReadFile(const char* name);
-static bool ExecuteString(Handle<String> source, Handle<Value> name, std::string* err);
+static bool ExecuteString(Handle<String> source, Handle<Value> name, bool print_result, bool report_exceptions, std::string& err);
+static void ReportException(TryCatch* try_catch);
 
 // functions
 static Handle<Value> vim_execute(const Arguments& args);
@@ -904,7 +937,7 @@ execute(const char *expr)
   HandleScope handle_scope;
   Context::Scope context_scope(context);
   std::string err;
-  if (!ExecuteString(String::New(expr), Undefined(), &err))
+  if (!ExecuteString(String::New(expr), String::New("(command-line)"), true, true, err))
     emsg((char_u*)err.c_str());
   return NULL;
 }
@@ -935,21 +968,21 @@ init_v8()
   VimFuncTemplate->SetInternalFieldCount(2);
   VimFuncTemplate->SetCallAsFunctionHandler(VimFuncCall);
 
-  Handle<ObjectTemplate> internal = ObjectTemplate::New();
-  internal->Set("load", FunctionTemplate::New(Load));
-  internal->Set("vim_execute", FunctionTemplate::New(vim_execute));
-  internal->Set("VimList", VimList);
-  internal->Set("VimDict", VimDict);
-  internal->Set("VimFunc", VimFunc);
+  Handle<ObjectTemplate> vim = ObjectTemplate::New();
+  vim->Set("execute", FunctionTemplate::New(vim_execute));
+  vim->Set("List", VimList);
+  vim->Set("Dict", VimDict);
+  vim->Set("Func", VimFunc);
 
   Handle<ObjectTemplate> global = ObjectTemplate::New();
-  global->Set("%internal%", internal);
+  global->Set("load", FunctionTemplate::New(Load));
+  global->Set("vim", vim);
 
   context = Context::New(NULL, global);
 
   {
     Context::Scope context_scope(context);
-    Handle<Object> obj = Handle<Object>::Cast(context->Global()->Get(String::New("%internal%")));
+    Handle<Object> obj = Handle<Object>::Cast(context->Global()->Get(String::New("vim")));
     obj->Set(String::New("g"), MakeVimDict(p_globvardict, VimDict->InstanceTemplate()->NewInstance()));
     obj->Set(String::New("v"), MakeVimDict(p_vimvardict, VimDict->InstanceTemplate()->NewInstance()));
   }
@@ -1070,11 +1103,8 @@ vim_to_v8(typval_T *vimobj, Handle<Value> *v8obj, int depth, LookupMap *lookup, 
 static bool
 v8_to_vim(Handle<Value> v8obj, typval_T *vimobj, int depth, LookupMap *lookup, std::string *err)
 {
-  vimobj->v_lock = 0;
-
   if (depth > 100) {
-    vimobj->v_type = VAR_NUMBER;
-    vimobj->vval.v_number = 0;
+    tv_set_number(vimobj, 0);
     return true;
   }
 
@@ -1101,48 +1131,39 @@ v8_to_vim(Handle<Value> v8obj, typval_T *vimobj, int depth, LookupMap *lookup, s
   }
 
   if (v8obj->IsUndefined()) {
-    vimobj->v_type = VAR_NUMBER;
-    vimobj->vval.v_number = 0;
+    tv_set_number(vimobj, 0);
     return true;
   }
 
   if (v8obj->IsNull()) {
-    vimobj->v_type = VAR_NUMBER;
-    vimobj->vval.v_number = 0;
+    tv_set_number(vimobj, 0);
     return true;
   }
 
   if (v8obj->IsBoolean()) {
-    vimobj->v_type = VAR_NUMBER;
-    vimobj->vval.v_number = v8obj->IsTrue() ? 1 : 0;
+    tv_set_number(vimobj, v8obj->IsTrue() ? 1 : 0);
     return true;
   }
 
   if (v8obj->IsInt32()) {
-    vimobj->v_type = VAR_NUMBER;
-    vimobj->vval.v_number = v8obj->Int32Value();
+    tv_set_number(vimobj, v8obj->Int32Value());
     return true;
   }
 
 #ifdef FEAT_FLOAT
   if (v8obj->IsNumber()) {
-    vimobj->v_type = VAR_FLOAT;
-    vimobj->vval.v_float = v8obj->NumberValue();
+    tv_set_float(vimobj, v8obj->NumberValue());
     return true;
   }
 #endif
 
   if (v8obj->IsString()) {
-    String::Utf8Value str(v8obj);
-    vimobj->v_type = VAR_STRING;
-    vimobj->vval.v_string = vim_strsave((char_u*)*str);
+    tv_set_string(vimobj, (char_u*)(*String::Utf8Value(v8obj)));
     return true;
   }
 
   if (v8obj->IsDate()) {
-    String::Utf8Value str(v8obj);
-    vimobj->v_type = VAR_STRING;
-    vimobj->vval.v_string = vim_strsave((char_u*)*str);
+    tv_set_string(vimobj, (char_u*)(*String::Utf8Value(v8obj)));
     return true;
   }
 
@@ -1262,7 +1283,9 @@ LookupMapFindV8Value(LookupMap* lookup, Handle<Value> v)
 }
 
 // Reads a file into a v8 string.
-Handle<String> ReadFile(const char* name) {
+static Handle<String>
+ReadFile(const char* name)
+{
   FILE* file = fopen(name, "rb");
   if (file == NULL) return Handle<String>();
 
@@ -1282,28 +1305,66 @@ Handle<String> ReadFile(const char* name) {
   return result;
 }
 
-bool ExecuteString(Handle<String> source,
-                   Handle<Value> name,
-                   std::string* err) {
+static bool
+ExecuteString(Handle<String> source, Handle<Value> name, bool print_result, bool report_exceptions, std::string& err)
+{
   HandleScope handle_scope;
   TryCatch try_catch;
   Handle<Script> script = Script::Compile(source, name);
   if (script.IsEmpty()) {
-    if (err != NULL) {
-      String::Utf8Value error(try_catch.Exception());
-      *err = *error;
-    }
+    err = *(String::Utf8Value(try_catch.Exception()));
+    if (report_exceptions)
+      ReportException(&try_catch);
     return false;
   }
   Handle<Value> result = script->Run();
   if (result.IsEmpty()) {
-    if (err != NULL) {
-      String::Utf8Value error(try_catch.Exception());
-      *err = *error;
-    }
+    err = *(String::Utf8Value(try_catch.Exception()));
+    if (report_exceptions)
+      ReportException(&try_catch);
     return false;
   }
+  if (print_result && !result->IsUndefined()) {
+    typval_T tv;
+    tv_set_string(&tv, (char_u*)(*String::Utf8Value(result)));
+    dict_set(p_vimvardict, (char_u*)"%v8_print%", &tv);
+  }
   return true;
+}
+
+static void
+ReportException(TryCatch* try_catch)
+{
+  HandleScope handle_scope;
+  String::Utf8Value exception(try_catch->Exception());
+  Handle<Message> message = try_catch->Message();
+  std::ostringstream strm;
+  if (message.IsEmpty()) {
+    // V8 didn't provide any extra information about this error; just
+    // print the exception.
+    strm << *exception << "\n";
+  } else {
+    // Print (filename):(line number): (message).
+    String::Utf8Value filename(message->GetScriptResourceName());
+    int linenum = message->GetLineNumber();
+    strm << *filename << ":" << linenum << ": " << *exception << "\n";
+    // Print line of source code.
+    String::Utf8Value sourceline(message->GetSourceLine());
+    strm << *sourceline << "\n";
+    // Print wavy underline (GetUnderline is deprecated).
+    int start = message->GetStartColumn();
+    for (int i = 0; i < start; i++) {
+      strm << " ";
+    }
+    int end = message->GetEndColumn();
+    for (int i = start; i < end; i++) {
+      strm << "^";
+    }
+    strm << "\n";
+  }
+  typval_T tv;
+  tv_set_string(&tv, (char_u*)strm.str().c_str());
+  dict_set(p_vimvardict, (char_u*)"%v8_errmsg%", &tv);
 }
 
 static Handle<Value>
@@ -1323,7 +1384,9 @@ vim_execute(const Arguments& args)
 // The callback that is invoked by v8 whenever the JavaScript 'load'
 // function is called.  Loads, compiles and executes its argument
 // JavaScript file.
-Handle<Value> Load(const Arguments& args) {
+static Handle<Value>
+Load(const Arguments& args)
+{
   for (int i = 0; i < args.Length(); i++) {
     HandleScope handle_scope;
     String::Utf8Value file(args[i]);
@@ -1332,7 +1395,7 @@ Handle<Value> Load(const Arguments& args) {
       return ThrowException(String::New("Error loading file"));
     }
     std::string err;
-    if (!ExecuteString(source, String::New(*file), &err)) {
+    if (!ExecuteString(source, String::New(*file), false, false, err)) {
       return ThrowException(String::New(err.c_str()));
     }
   }

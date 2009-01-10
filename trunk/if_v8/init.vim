@@ -5,14 +5,43 @@ let s:runtime = [
       \ s:dir . '/runtime.js',
       \ ]
 
-function! V8Init()
+command! -nargs=+ V8 execute V8CommandX(<q-args>, !exists('l:'))
+
+" This is a trick to access variable in the caller context (g:, l:)
+" We cannot access s: variable with this trick because user defined
+" command is executed in a script context where it defined.
+function! V8CommandX(cmd, interactive)
+  if a:interactive
+    " interactive mode
+    return ""
+        \ . "try\n"
+        \ . "  let v:['%v8_print%'] = ''\n"
+        \ . "  echo expand('<args>')\n"
+        \ . "  call eval(V8ExecuteX(\"" . escape(a:cmd, '\"') . "\"))\n"
+        \ . "  echo v:['%v8_print%']\n"
+        \ . "catch\n"
+        \ . "  echohl Error\n"
+        \ . "  for line in split(v:['%v8_errmsg%'], '\\n')\n"
+        \ . "    echomsg line\n"
+        \ . "  endfor\n"
+        \ . "  echohl None\n"
+        \ . "endtry\n"
+  else
+    return "call eval(V8ExecuteX(\"" . escape(a:cmd, '\"') . "\"))\n"
+  endif
+endfunction
+
+function! V8Init() abort
   if exists('s:init')
     return
   endif
   let s:init = 1
-  echo libcall(s:dll, 'init', s:dll)
+  let err = libcall(s:dll, 'init', s:dll)
+  if err != ''
+    echoerr err
+  endif
   for file in s:runtime
-    echo libcall(s:dll, 'execute', printf("this['%%internal%%'].load(\"%s\")", escape(file, '\"')))
+    call libcall(s:dll, 'execute', printf("load(\"%s\")", escape(file, '\"')))
   endfor
 endfunction
 
@@ -25,8 +54,8 @@ function! V8LoadX(file)
 endfunction
 
 function! V8EvalX(expr)
-  let x = V8ExecuteX(printf("vim.let('g:[\"%v8_result%\"]', eval(\"%s\"))", '(' . escape(a:expr, '\"') . ')'))
-  return printf("eval(get({}, %s, 'g:[\"v8_result%\"]'))", x)
+  let x = V8ExecuteX(printf("vim.let('v:[\"%%v8_result%%\"]', eval(\"%s\"))", '(' . escape(a:expr, '\"') . ')'))
+  return printf("eval(get({}, %s, 'v:[\"%%v8_result%%\"]'))", x)
 endfunction
 
 function! V8Load(file)
