@@ -1,7 +1,7 @@
 
 command! V8Start call s:lib.v8start()
 command! V8End execute V8End()
-command! -nargs=+ V8 execute V8(<q-args>, !exists('l:'), 0)
+command! -nargs=+ V8 execute V8(<q-args>, !exists('l:'))
 
 function! V8End()
   return s:lib.v8end()
@@ -14,8 +14,10 @@ endfunction
 " usage:
 "   :let res = eval(V8Eval('3 + 4'))
 function! V8Eval(expr)
-  let expr = s:lib.v8expr(printf("vim.let('v:[\"%%v8_result%%\"]', eval(\"%s\"))", '(' . escape(a:expr, '\"') . ')'))
-  return printf("eval(get({}, %s, 'v:[\"%%v8_result%%\"]'))", expr)
+  let result = '"v:[''%v8_result%'']"'
+  let jsexpr = 'vim.v["%v8_result%"] = eval("(' . escape(a:expr, '\"') . ')")'
+  let expr = s:lib.v8expr(jsexpr)
+  return printf("eval([%s, %s][0])", result, expr)
 endfunction
 
 
@@ -47,15 +49,13 @@ function s:lib.v8start()
 endfunction
 
 function s:lib.v8end()
-  return self.v8execute(join(self.script, "\n") . "\n", 0, 1)
+  let cmd = join(self.script, "\n") . "\n"
+  unlet self.script
+  return self.v8execute(cmd, 0)
 endfunction
 
 function s:lib.v8execute(cmd, ...)
   let interactive = get(a:000, 0, 0)
-  let end = get(a:000, 1, 1)
-  if end
-    unlet self.script
-  endif
   if exists('self.script')
     call add(self.script, a:cmd)
     return ''
@@ -71,8 +71,8 @@ function s:lib.v8execute(cmd, ...)
         \ . "  echo v:['%v8_print%']\n"
         \ . "catch\n"
         \ . "  echohl Error\n"
-        \ . "  for line in split(v:['%v8_errmsg%'], '\\n')\n"
-        \ . "    echomsg line\n"
+        \ . "  for v:['%v8_line%'] in split(v:['%v8_errmsg%'], '\\n')\n"
+        \ . "    echomsg v:['%v8_line%']\n"
         \ . "  endfor\n"
         \ . "  echohl None\n"
         \ . "endtry\n"
