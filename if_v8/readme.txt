@@ -78,15 +78,6 @@ For result of Vim's function, Vim's List and Dictionary is converted to
 wrapper object, VimList and VimDict (copy by reference).
 
 
-Because of implementation limit, you cannot access script local variable
-in a script executed with :V8 command.  To access script local variable,
-use V8ExecuteX() or V8EvalX() with eval().
-
-  :let s:var = 99
-  :call eval(V8ExecuteX('var svar = vim.eval("s:var")'))
-  :let result = eval(V8EvalX('svar + 100'))
-
-
 To execute multi line script, use V8Start and V8End:
 
   :V8Start
@@ -108,6 +99,20 @@ When |line-continuation| is used:
 This is same as following:
 
   :V8 function f() { print('f()'); }
+
+
+Because of implementation limit, you cannot access script local variable
+with :V8 command.  To access script local variable, use V8() or V8End()
+with :execute command.
+
+  :let s:var = 99
+  :execute V8('var svar = vim.eval("s:var")')
+
+Or
+
+  :V8Start
+  :V8 var svar = vim.eval("s:var")
+  :execute V8End()
 
 
 if_v8 uses v:['%v8_*%'] variables for internal purpose.
