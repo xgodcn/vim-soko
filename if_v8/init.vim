@@ -1,16 +1,19 @@
 
-let s:dir = expand('<sfile>:p:h')
-let s:dll = s:dir . '/if_v8' . (has('win32') ? '.dll' : '.so')
-let s:runtime = [
-      \ s:dir . '/runtime.js',
-      \ ]
-
-command! -nargs=+ V8 execute V8CommandX(<q-args>, !exists('l:'))
+command! V8Start let s:script = []
+command! V8End execute s:V8CommandX(join(s:script, "\n") . "\n", !exists('l:'), 1)
+command! -nargs=+ V8 execute s:V8CommandX(<q-args>, !exists('l:'), 0)
 
 " This is a trick to access variable in the caller context (g:, l:)
 " We cannot access s: variable with this trick because user defined
 " command is executed in a script context where it defined.
-function! V8CommandX(cmd, interactive)
+function! s:V8CommandX(cmd, interactive, end)
+  if a:end
+    unlet s:script
+  endif
+  if exists('s:script')
+    call add(s:script, a:cmd)
+    return ''
+  endif
   if a:interactive
     " interactive mode
     return ""
@@ -31,7 +34,13 @@ function! V8CommandX(cmd, interactive)
   endif
 endfunction
 
-function! V8Init() abort
+let s:dir = expand('<sfile>:p:h')
+let s:dll = s:dir . '/if_v8' . (has('win32') ? '.dll' : '.so')
+let s:runtime = [
+      \ s:dir . '/runtime.js',
+      \ ]
+
+function! s:V8Init() abort
   if exists('s:init')
     return
   endif
@@ -70,4 +79,4 @@ function! V8Eval(expr)
   return eval(V8EvalX(a:expr))
 endfunction
 
-call V8Init()
+call s:V8Init()

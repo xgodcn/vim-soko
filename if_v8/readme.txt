@@ -87,6 +87,29 @@ use V8ExecuteX() or V8EvalX() with eval().
   :let result = eval(V8EvalX('svar + 100'))
 
 
+To execute multi line script, use V8Start and V8End:
+
+  :V8Start
+  :V8 function f() {
+  :V8   print('f()');
+  :V8 }
+  :V8End
+
+Of course, you can use load() function:
+
+  :V8 load('lib.js')
+
+When |line-continuation| is used:
+
+  :V8 function f() {
+    \   print('f()');
+    \ }
+
+This is same as following:
+
+  :V8 function f() { print('f()'); }
+
+
 if_v8 uses v:['%v8_*%'] variables for internal purpose.
 
 

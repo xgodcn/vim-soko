@@ -6,12 +6,13 @@ function! s:Test(name, expr)
   return printf('if !(%s) | throw "%s" | endif', a:expr, escape(msg, '\"'))
 endfunction
 
-V8
-      \ function Test(name, expr) {
-      \   print(name + " : " + expr);
-      \   var msg = vim.printf("%s failed: %s", name, expr);
-      \   return vim.printf('if (!(%s)) { throw "%s"; }', expr, vim.escape(msg, "\\\""));
-      \ }
+V8Start
+V8 function Test(name, expr) {
+V8   print(name + " : " + expr);
+V8   var msg = vim.printf("%s failed: %s", name, expr);
+V8   return vim.printf('if (!(%s)) { throw "%s"; }', expr, vim.escape(msg, "\\\""));
+V8 }
+V8End
 
 let s:test = {}
 
@@ -34,15 +35,16 @@ endfunction
 
 " test3: exception: vim -> v8
 function s:test.test3()
-  V8
-        \ var ok = 1;
-        \ try {
-        \   vim.execute('throw "error from vim"');
-        \   ok = 0;
-        \ } catch (e) {
-        \   print('caught in v8 "' + e + '"');
-        \ }
-        \ eval(Test("test3", "ok"));
+  V8Start
+  V8 var ok = 1;
+  V8 try {
+  V8   vim.execute('throw "error from vim"');
+  V8   ok = 0;
+  V8 } catch (e) {
+  V8   print('caught in v8 "' + e + '"');
+  V8 }
+  V8 eval(Test("test3", "ok"));
+  V8End
 endfunction
 
 " test4: exception: vim -> v8 -> vim
@@ -69,15 +71,16 @@ endfunction
 
 " test6: invoking vim's function
 function s:test.test6()
-  V8
-        \ vim.execute('new');
-        \ vim.append("$", "line1");
-        \ vim.execute("redraw! | sleep 200m");
-        \ vim.append("$", "line2");
-        \ vim.execute("redraw! | sleep 200m");
-        \ vim.append("$", ["line3", "line4"]);
-        \ vim.execute("redraw! | sleep 200m");
-        \ vim.execute('quit!');
+  V8Start
+  V8 vim.execute('new');
+  V8 vim.append("$", "line1");
+  V8 vim.execute("redraw! | sleep 200m");
+  V8 vim.append("$", "line2");
+  V8 vim.execute("redraw! | sleep 200m");
+  V8 vim.append("$", ["line3", "line4"]);
+  V8 vim.execute("redraw! | sleep 200m");
+  V8 vim.execute('quit!');
+  V8End
 endfunction
 
 " test7: recursive object: vim -> v8
@@ -86,20 +89,22 @@ function s:test.test7()
   let x.x = x
   let y = []
   let y += [y]
-  V8
-        \ var x = vim.eval("x");
-        \ eval(Test("test7", "x === x.x"));
-        \ var y = vim.eval("y");
-        \ eval(Test("test7", "y === y[0]"));
+  V8Start
+  V8 var x = vim.eval("x");
+  V8 eval(Test("test7", "x === x.x"));
+  V8 var y = vim.eval("y");
+  V8 eval(Test("test7", "y === y[0]"));
+  V8End
 endfunction
 
 " test8: recursive object: v8 -> vim
 function s:test.test8()
-  V8
-        \ var x = {};
-        \ x.x = x;
-        \ var y = [];
-        \ y[0] = y;
+  V8Start
+  V8 var x = {};
+  V8 x.x = x;
+  V8 var y = [];
+  V8 y[0] = y;
+  V8End
   let x = V8Eval('x')
   execute s:Test("test8", "x is x.x")
   let y = V8Eval('y')
@@ -110,31 +115,39 @@ endfunction
 function s:test.test9()
   let x = [1, 2, 3]
   echo x
+  V8Start
   V8 var x = vim.eval('x')
   V8 x[0] += 100; x[1] += 100; x[2] += 100;
+  V8End
   echo x
   execute s:Test("test9", "x[0] == 101 && x[1] == 102 && x[2] == 103")
 endfunction
 
 " test10: VimList 2
 function s:test.test10()
+  V8Start
   V8 var x = new vim.List()
   V8 vim.extend(x, [1, 2, 3])
+  V8End
   let x = V8Eval('x')
   echo x
   let x[0] += 100
   let x[1] += 100
   let x[2] += 100
+  V8Start
   V8 print(x[0] + " " + x[1] + " " + x[2])
   V8 eval(Test("test10", "x[0] == 101 && x[1] == 102 && x[2] == 103"));
+  V8End
 endfunction
 
 " test11: VimDict 1
 function s:test.test11()
   let x = {}
+  V8Start
   V8 var x = vim.eval("x")
   V8 x["apple"] = "orange"
   V8 x[9] = "nine"
+  V8End
   echo x
   execute s:Test("test11", 'x["apple"] == "orange" && x[9] == "nine"')
 endfunction
@@ -145,9 +158,11 @@ function s:test.test12()
   let x = V8Eval('x')
   let x["apple"] = "orange"
   let x[9] = "nine"
+  V8Start
   V8 print('x["apple"] = ' + x["apple"])
   V8 print('x[9] = ' + x[9])
   V8 eval(Test("test12", 'x["apple"] == "orange" && x[9] == "nine"'));
+  V8End
 endfunction
 
 let s:d = {}
@@ -168,10 +183,12 @@ let s:e.name = 'e'
 function s:test.test13()
   call eval(V8ExecuteX('var d = vim.eval("s:d")'))
   call eval(V8ExecuteX('var e = vim.eval("s:e")'))
+  V8Start
   V8 eval(Test("test13", "d.func() === d"))
   V8 e.func = d.func
   V8 eval(Test("test13", "e.func() === e"))
   V8 print(d.printf("%s", "This is printf"))
+  V8End
 endfunction
 
 " test14: VimFunc Exception
