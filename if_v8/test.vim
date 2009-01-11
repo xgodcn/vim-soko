@@ -1,5 +1,18 @@
 so <sfile>:p:h/init.vim
 
+function! s:Test(name, expr)
+  echo a:name ":" a:expr
+  let msg = printf("%s failed: %s", a:name, a:expr)
+  return printf('if !(%s) | throw "%s" | endif', a:expr, escape(msg, '\"'))
+endfunction
+
+V8
+      \ function Test(name, expr) {
+      \   print(name + " : " + expr);
+      \   var msg = vim.printf("%s failed: %s", name, expr);
+      \   return vim.printf('if (!(%s)) { throw "%s"; }', expr, vim.escape(msg, "\\\""));
+      \ }
+
 let s:test = {}
 
 " test1: hello world
@@ -9,50 +22,62 @@ endfunction
 
 " test2: exception: v8 -> vim
 function s:test.test2()
+  let ok = 1
   try
     V8 throw "error from v8"
+    let ok = 0
   catch
     echo printf('caught in vim "%s"', v:exception)
   endtry
+  execute s:Test("test2", "ok")
 endfunction
 
 " test3: exception: vim -> v8
 function s:test.test3()
-  V8 try { vim.execute('throw "error from vim"') } catch (e) { print('caught in v8 "' + e + '"'); }
+  V8
+        \ var ok = 1;
+        \ try {
+        \   vim.execute('throw "error from vim"');
+        \   ok = 0;
+        \ } catch (e) {
+        \   print('caught in v8 "' + e + '"');
+        \ }
+        \ eval(Test("test3", "ok"));
 endfunction
 
 " test4: exception: vim -> v8 -> vim
 function s:test.test4()
+  let ok = 1
   try
     V8 vim.execute('throw "error from vim"')
+    let ok = 0
   catch
     echo printf('caught in vim "%s"', v:exception)
   endtry
+  execute s:Test("test4", "ok")
 endfunction
 
 " test5: accessing local variable
 function s:test.test5()
   let x = 1
-  " We have to use eval() trick to execute v8 script in the caller context.
-  " Otherwise we cannot access function local variable.
   V8 print(vim.eval("x"))
   V8 vim.let("x", 2)
   echo x
-  " Of course, V8Eval can be used.
   let x = V8Eval('1 + 2')
   echo x
 endfunction
 
 " test6: invoking vim's function
 function s:test.test6()
-  new
-  V8 vim.append("$", "line1")
-  redraw! | sleep 200m
-  V8 vim.append("$", "line1")
-  redraw! | sleep 200m
-  V8 vim.append("$", "line1")
-  redraw! | sleep 200m
-  quit!
+  V8
+        \ vim.execute('new');
+        \ vim.append("$", "line1");
+        \ vim.execute("redraw! | sleep 200m");
+        \ vim.append("$", "line2");
+        \ vim.execute("redraw! | sleep 200m");
+        \ vim.append("$", ["line3", "line4"]);
+        \ vim.execute("redraw! | sleep 200m");
+        \ vim.execute('quit!');
 endfunction
 
 " test7: recursive object: vim -> v8
@@ -61,30 +86,24 @@ function s:test.test7()
   let x.x = x
   let y = []
   let y += [y]
-  V8 var x = vim.eval("x")
-  V8 var y = vim.eval("y")
-  V8 if (x === x.x) { print("x === x.x"); } else { throw "x !== x.x"; }
-  V8 if (y === y[0]) { print("y === y[0]"); } else { throw "y !== y[0]"; }
+  V8
+        \ var x = vim.eval("x");
+        \ eval(Test("test7", "x === x.x"));
+        \ var y = vim.eval("y");
+        \ eval(Test("test7", "y === y[0]"));
 endfunction
 
 " test8: recursive object: v8 -> vim
 function s:test.test8()
-  V8 var x = {}
-  V8 x.x = x
-  V8 var y = []
-  V8 y[0] = y
+  V8
+        \ var x = {};
+        \ x.x = x;
+        \ var y = [];
+        \ y[0] = y;
   let x = V8Eval('x')
+  execute s:Test("test8", "x is x.x")
   let y = V8Eval('y')
-  if x is x.x
-    echo "x is x.x"
-  else
-    throw "x isnot x.x"
-  endif
-  if y is y[0]
-    echo "y is y[0]"
-  else
-    throw "y isnot y[0]"
-  endif
+  execute s:Test("test8", "y is y[0]")
 endfunction
 
 " test9: VimList 1
@@ -94,9 +113,7 @@ function s:test.test9()
   V8 var x = vim.eval('x')
   V8 x[0] += 100; x[1] += 100; x[2] += 100;
   echo x
-  if x[0] != 101 || x[1] != 102 || x[2] != 103
-    throw "test9 faield"
-  endif
+  execute s:Test("test9", "x[0] == 101 && x[1] == 102 && x[2] == 103")
 endfunction
 
 " test10: VimList 2
@@ -109,7 +126,7 @@ function s:test.test10()
   let x[1] += 100
   let x[2] += 100
   V8 print(x[0] + " " + x[1] + " " + x[2])
-  V8 if (x[0] != 101 || x[1] != 102 || x[2] != 103) { throw "test10 failed"; }
+  V8 eval(Test("test10", "x[0] == 101 && x[1] == 102 && x[2] == 103"));
 endfunction
 
 " test11: VimDict 1
@@ -119,9 +136,7 @@ function s:test.test11()
   V8 x["apple"] = "orange"
   V8 x[9] = "nine"
   echo x
-  if x["apple"] != "orange" || x[9] != "nine"
-    throw "test11 failed"
-  endif
+  execute s:Test("test11", 'x["apple"] == "orange" && x[9] == "nine"')
 endfunction
 
 " test12: VimDict 2
@@ -132,7 +147,7 @@ function s:test.test12()
   let x[9] = "nine"
   V8 print('x["apple"] = ' + x["apple"])
   V8 print('x[9] = ' + x[9])
-  V8 if (x["apple"] != "orange" || x[9] != "nine") { throw "test12 failed"; }
+  V8 eval(Test("test12", 'x["apple"] == "orange" && x[9] == "nine"'));
 endfunction
 
 let s:d = {}
@@ -153,24 +168,23 @@ let s:e.name = 'e'
 function s:test.test13()
   call eval(V8ExecuteX('var d = vim.eval("s:d")'))
   call eval(V8ExecuteX('var e = vim.eval("s:e")'))
-  V8 if (d.func() !== d) { throw "test13 failed"; }
+  V8 eval(Test("test13", "d.func() === d"))
   V8 e.func = d.func
-  V8 if (e.func() !== e) { throw "test13 failed"; }
+  V8 eval(Test("test13", "e.func() === e"))
   V8 print(d.printf("%s", "This is printf"))
 endfunction
 
-" test15: VimFunc Exception
-function s:test.test15()
+" test14: VimFunc Exception
+function s:test.test14()
   call eval(V8ExecuteX('var d = vim.eval("s:d")'))
+  let ok = 1
   try
     V8 d.raise("error from vimfunc")
-    let x = 1
+    let ok = 0
   catch
     echo printf('caught in vim "%s"', v:exception)
   endtry
-  if exists('x')
-    throw "test15 failed"
-  endif
+  execute s:Test("test14", "ok")
 endfunction
 
 function! s:mysort(a, b)
