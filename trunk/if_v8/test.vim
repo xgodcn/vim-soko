@@ -65,7 +65,7 @@ function s:test.test5()
   V8 print(vim.eval("x"))
   V8 vim.let("x", 2)
   echo x
-  let x = V8Eval('1 + 2')
+  let x = eval(V8Eval('1 + 2'))
   echo x
 endfunction
 
@@ -105,9 +105,9 @@ function s:test.test8()
   V8 var y = [];
   V8 y[0] = y;
   V8End
-  let x = V8Eval('x')
+  let x = eval(V8Eval('x'))
   execute s:Test("test8", "x is x.x")
-  let y = V8Eval('y')
+  let y = eval(V8Eval('y'))
   execute s:Test("test8", "y is y[0]")
 endfunction
 
@@ -129,7 +129,7 @@ function s:test.test10()
   V8 var x = new vim.List()
   V8 vim.extend(x, [1, 2, 3])
   V8End
-  let x = V8Eval('x')
+  let x = eval(V8Eval('x'))
   echo x
   let x[0] += 100
   let x[1] += 100
@@ -155,7 +155,7 @@ endfunction
 " test12: VimDict 2
 function s:test.test12()
   V8 var x = new vim.Dict()
-  let x = V8Eval('x')
+  let x = eval(V8Eval('x'))
   let x["apple"] = "orange"
   let x[9] = "nine"
   V8Start
@@ -181,19 +181,21 @@ let s:e.name = 'e'
 
 " test13: VimFunc
 function s:test.test13()
-  call eval(V8ExecuteX('var d = vim.eval("s:d")'))
-  call eval(V8ExecuteX('var e = vim.eval("s:e")'))
   V8Start
+  V8 var d = vim.eval("s:d")
+  V8 var e = vim.eval("s:e")
   V8 eval(Test("test13", "d.func() === d"))
   V8 e.func = d.func
   V8 eval(Test("test13", "e.func() === e"))
   V8 print(d.printf("%s", "This is printf"))
-  V8End
+  execute V8End()
 endfunction
 
 " test14: VimFunc Exception
 function s:test.test14()
-  call eval(V8ExecuteX('var d = vim.eval("s:d")'))
+  V8Start
+  V8 var d = vim.eval("s:d")
+  execute V8End()
   let ok = 1
   try
     V8 d.raise("error from vimfunc")
