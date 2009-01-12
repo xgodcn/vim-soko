@@ -2,20 +2,28 @@
  *
  * v8 interface to Vim
  *
- * Last Change: 2009-01-11
+ * Last Change: 2009-01-12
  * Maintainer: Yukihiro Nakadaira <yukihiro.nakadaira@gmail.com>
  */
-#ifdef WIN32
-# include <windows.h>
-#else
-# include <dlfcn.h>
-#endif
 #include <cstdio>
 #include <cstring>
 #include <sstream>
 #include <string>
 #include <map>
 #include <v8.h>
+
+#ifdef WIN32
+# include <windows.h>
+# define DLLEXPORT __declspec(dllexport)
+# define DLLIMPORT extern __declspec(dllimport)
+# define DLLOPEN(path) (void*)LoadLibrary(path)
+#else
+# include <dlfcn.h>
+# define DLLEXPORT
+# define DLLIMPORT extern
+# define DLLOPEN(path) dlopen(path, RTLD_NOW)
+#endif
+
 
 // Vim {{{
 // header {{{2
@@ -71,8 +79,8 @@ typedef struct hashitem_S
 
 /* The address of "hash_removed" is used as a magic number for hi_key to
  * indicate a removed item. */
-#define HI_KEY_REMOVED p_hash_removed
-#define HASHITEM_EMPTY(hi) ((hi)->hi_key == NULL || (hi)->hi_key == p_hash_removed)
+#define HI_KEY_REMOVED &hash_removed
+#define HASHITEM_EMPTY(hi) ((hi)->hi_key == NULL || (hi)->hi_key == &hash_removed)
 
 /* Initial size for a hashtable.  Our items are relatively small and growing
  * is expensive, thus use 16 as a start.  Must be a power of 2. */
@@ -264,80 +272,40 @@ static bool dict_set(dict_T *dict, char_u *key, typval_T *tv);
 
 // import {{{2
 
+extern "C" {
 // variables
-static char_u *p_hash_removed;
+DLLIMPORT char_u hash_removed;
 // functions
-static typval_T * (*eval_expr) (char_u *arg, char_u **nextcmd);
-static int (*do_cmdline_cmd) (char_u *cmd);
-static void (*free_tv) (typval_T *varp);
-static void (*clear_tv) (typval_T *varp);
-static int (*emsg) (char_u *s);
-static char_u * (*alloc) (unsigned size);
-static void (*vim_free) (void *x);
-static char_u * (*vim_strsave) (char_u *string);
-static char_u * (*vim_strnsave) (char_u *string, int len);
-static void (*vim_strncpy) (char_u *to, char_u *from, size_t len);
-static list_T * (*list_alloc)();
-static void (*list_free) (list_T *l, int recurse);
-static void (*list_unref) (list_T *l);
-static dict_T * (*dict_alloc)();
-static int (*hash_add) (hashtab_T *ht, char_u *key);
-static hashitem_T * (*hash_find) (hashtab_T *ht, char_u *key);
-static void (*hash_remove) (hashtab_T *ht, hashitem_T *hi);
+DLLIMPORT typval_T *eval_expr(char_u *arg, char_u **nextcmd);
+DLLIMPORT int do_cmdline_cmd(char_u *cmd);
+DLLIMPORT void free_tv(typval_T *varp);
+DLLIMPORT void clear_tv(typval_T *varp);
+DLLIMPORT int emsg(char_u *s);
+DLLIMPORT char_u *alloc(unsigned size);
+DLLIMPORT void vim_free(void *x);
+DLLIMPORT char_u *vim_strsave(char_u *string);
+DLLIMPORT char_u *vim_strnsave(char_u *string, int len);
+DLLIMPORT void vim_strncpy(char_u *to, char_u *from, size_t len);
+DLLIMPORT list_T *list_alloc();
+DLLIMPORT void list_free(list_T *l, int recurse);
+DLLIMPORT void list_unref(list_T *l);
+DLLIMPORT dict_T *dict_alloc();
+DLLIMPORT int hash_add(hashtab_T *ht, char_u *key);
+DLLIMPORT hashitem_T *hash_find(hashtab_T *ht, char_u *key);
+DLLIMPORT void hash_remove(hashtab_T *ht, hashitem_T *hi);
+}
 
 static dict_T *p_globvardict;
 static dict_T *p_vimvardict;
 
-static struct vimexport {
-  const char *name;
-  void **var;
-} vimexports[] = {
-  {"hash_removed", (void**)&p_hash_removed},
-  {"eval_expr", (void**)&eval_expr},
-  {"do_cmdline_cmd", (void**)&do_cmdline_cmd},
-  {"free_tv", (void**)&free_tv},
-  {"clear_tv", (void**)&clear_tv},
-  {"emsg", (void**)&emsg},
-  {"alloc", (void**)&alloc},
-  {"vim_free", (void**)&vim_free},
-  {"vim_strsave", (void**)&vim_strsave},
-  {"vim_strnsave", (void**)&vim_strnsave},
-  {"vim_strncpy", (void**)&vim_strncpy},
-  {"list_alloc", (void**)&list_alloc},
-  {"list_free", (void**)&list_free},
-  {"list_unref", (void**)&list_unref},
-  {"dict_alloc", (void**)&dict_alloc},
-  {"hash_add", (void**)&hash_add},
-  {"hash_find", (void**)&hash_find},
-  {"hash_remove", (void**)&hash_remove},
-  {NULL, NULL}
-};
+#define globvardict (*p_globvardict)
+#define vimvardict (*p_vimvardict)
 
 static const char *
 init_vim()
 {
-  void *vim_handle;
-  int i;
   typval_T *tv;
   char exprbuf[3];
-
-#ifdef WIN32
-  if ((vim_handle = (void*)GetModuleHandle(NULL)) == NULL)
-    return "error: GetModuleHandle()";
-#else
-  if ((vim_handle = dlopen(NULL, RTLD_NOW)) == NULL)
-    return dlerror();
-#endif
-
-  for (i = 0; vimexports[i].name != NULL; ++i) {
-#ifdef WIN32
-    if ((*vimexports[i].var = (void*)GetProcAddress((HMODULE)vim_handle, vimexports[i].name)) == NULL)
-      return "error: GetProcAddress()";
-#else
-    if ((*vimexports[i].var = dlsym(vim_handle, vimexports[i].name)) == NULL)
-      return dlerror();
-#endif
-  }
 
   strcpy(exprbuf, "g:");
   tv = eval_expr((char_u*)exprbuf, NULL);
@@ -743,15 +711,15 @@ func_ref(
   tv.v_type = VAR_FUNC;
   tv.v_lock = 0;
   tv.vval.v_string = name;
-  dict_set(p_vimvardict, (char_u*)"%v8_func1%", &tv);
+  dict_set(&vimvardict, (char_u*)"%v8_func1%", &tv);
   do_cmdline_cmd((char_u*)exprbuf);
-  hi = hash_find(&p_vimvardict->dv_hashtab, (char_u*)"%v8_func1%");
+  hi = hash_find(&vimvardict.dv_hashtab, (char_u*)"%v8_func1%");
   di = HI2DI(hi);
-  hash_remove(&p_vimvardict->dv_hashtab, hi);
+  hash_remove(&vimvardict.dv_hashtab, hi);
   vim_free(di);
-  hi = hash_find(&p_vimvardict->dv_hashtab, (char_u*)"%v8_func2%");
+  hi = hash_find(&vimvardict.dv_hashtab, (char_u*)"%v8_func2%");
   di = HI2DI(hi);
-  hash_remove(&p_vimvardict->dv_hashtab, hi);
+  hash_remove(&vimvardict.dv_hashtab, hi);
   vim_free(di);
 }
 
@@ -853,12 +821,6 @@ static Handle<FunctionTemplate> VimFunc;
 // the same List/Dictionary is instantiated by only one V8 object.
 static LookupMap objcache;
 
-#ifdef WIN32
-# define DLLEXPORT __declspec(dllexport)
-#else
-# define DLLEXPORT
-#endif
-
 /* API */
 extern "C" {
 DLLEXPORT const char *init(const char *dll_path);
@@ -915,13 +877,8 @@ init(const char *dll_path)
   const char *err;
   if (dll_handle != NULL)
     return NULL;
-#ifdef WIN32
-  if ((dll_handle = (void*)LoadLibrary(dll_path)) == NULL)
-    return "error: LoadLibrary()";
-#else
-  if ((dll_handle = dlopen(dll_path, RTLD_NOW)) == NULL)
-    return dlerror();
-#endif
+  if ((dll_handle = DLLOPEN(dll_path)) == NULL)
+    return "error: cannot load library";
   if ((err = init_vim()) != NULL)
     return err;
   if ((err = init_v8()) != NULL)
@@ -932,8 +889,6 @@ init(const char *dll_path)
 const char *
 execute(const char *expr)
 {
-  if (eval_expr == NULL)
-    return "not initialized";
   HandleScope handle_scope;
   Context::Scope context_scope(context);
   std::string err;
@@ -983,8 +938,8 @@ init_v8()
   {
     Context::Scope context_scope(context);
     Handle<Object> obj = Handle<Object>::Cast(context->Global()->Get(String::New("vim")));
-    obj->Set(String::New("g"), MakeVimDict(p_globvardict, VimDict->InstanceTemplate()->NewInstance()));
-    obj->Set(String::New("v"), MakeVimDict(p_vimvardict, VimDict->InstanceTemplate()->NewInstance()));
+    obj->Set(String::New("g"), MakeVimDict(&globvardict, VimDict->InstanceTemplate()->NewInstance()));
+    obj->Set(String::New("v"), MakeVimDict(&vimvardict, VimDict->InstanceTemplate()->NewInstance()));
   }
 
   return NULL;
@@ -1327,7 +1282,7 @@ ExecuteString(Handle<String> source, Handle<Value> name, bool print_result, bool
   if (print_result && !result->IsUndefined()) {
     typval_T tv;
     tv_set_string(&tv, (char_u*)(*String::Utf8Value(result)));
-    dict_set(p_vimvardict, (char_u*)"%v8_print%", &tv);
+    dict_set(&vimvardict, (char_u*)"%v8_print%", &tv);
   }
   return true;
 }
@@ -1364,7 +1319,7 @@ ReportException(TryCatch* try_catch)
   }
   typval_T tv;
   tv_set_string(&tv, (char_u*)strm.str().c_str());
-  dict_set(p_vimvardict, (char_u*)"%v8_errmsg%", &tv);
+  dict_set(&vimvardict, (char_u*)"%v8_errmsg%", &tv);
 }
 
 static Handle<Value>
