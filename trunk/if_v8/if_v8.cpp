@@ -254,10 +254,8 @@ static int dict_add(dict_T *d, dictitem_T *item);
 // XXX: recurse is not supported (always TRUE)
 #define dict_free(d, recurse) wrap_dict_free(d)
 static void wrap_dict_free(dict_T *d);
-static void dict_unref(dict_T *d);
 static dictitem_T *dict_find(dict_T *d, char_u *key, int len);
 // Funcref
-static void func_unref(char_u *name);
 static void func_ref(char_u *name);
 // not in vim
 static void tv_set_number(typval_T *tv, varnumber_T number);
@@ -288,11 +286,11 @@ DLLIMPORT char_u *vim_strnsave(char_u *string, int len);
 DLLIMPORT void vim_strncpy(char_u *to, char_u *from, size_t len);
 DLLIMPORT list_T *list_alloc();
 DLLIMPORT void list_free(list_T *l, int recurse);
-DLLIMPORT void list_unref(list_T *l);
 DLLIMPORT dict_T *dict_alloc();
 DLLIMPORT int hash_add(hashtab_T *ht, char_u *key);
 DLLIMPORT hashitem_T *hash_find(hashtab_T *ht, char_u *key);
 DLLIMPORT void hash_remove(hashtab_T *ht, hashitem_T *hi);
+DLLIMPORT int vim_snprintf(char *str, size_t str_m, char *fmt, ...);
 }
 
 static dict_T *p_globvardict;
@@ -623,19 +621,6 @@ wrap_dict_free(dict_T *d)
 }
 
 /*
- * Unreference a Dictionary: decrement the reference count and free it when it
- * becomes zero.
- */
-    static void
-dict_unref(
-    dict_T *d
-    )
-{
-    if (d != NULL && --d->dv_refcount <= 0)
-	dict_free(d, TRUE);
-}
-
-/*
  * Find item "key[len]" in Dictionary "d".
  * If "len" is negative use strlen(key).
  * Returns NULL when not found.
@@ -676,23 +661,6 @@ dict_find(
 }
 
 // Funcref {{{2
-
-/*
- * Unreference a Function: decrement the reference count and free it when it
- * becomes zero.  Only for numbered functions.
- * XXX: WORKAROUND
- */
-    static void
-func_unref(
-    char_u	*name
-    )
-{
-  typval_T tv;
-  tv.v_type = VAR_FUNC;
-  tv.v_lock = 0;
-  tv.vval.v_string = vim_strsave(name);
-  clear_tv(&tv);
-}
 
 /*
  * Count a reference to a Function.
@@ -821,6 +789,10 @@ static Handle<FunctionTemplate> VimFunc;
 // the same List/Dictionary is instantiated by only one V8 object.
 static LookupMap objcache;
 
+// v:['%v8_weak%']
+// keep reference to avoid garbage collect.
+static dict_T *v_weak;
+
 /* API */
 extern "C" {
 DLLEXPORT const char *init(const char *dll_path);
@@ -832,6 +804,9 @@ static const char *init_v8();
 static bool vim_to_v8(typval_T *vimobj, Handle<Value> *v8obj, int depth, LookupMap *lookup, bool wrap, std::string *err);
 static bool v8_to_vim(Handle<Value> v8obj, typval_T *vimobj, int depth, LookupMap *lookup, std::string *err);
 static LookupMap::iterator LookupMapFindV8Value(LookupMap* lookup, Handle<Value> v);
+
+static void weak_ref(void *p, typval_T *tv);
+static void weak_unref(void *p);
 
 static Handle<String> ReadFile(const char* name);
 static bool ExecuteString(Handle<String> source, Handle<Value> name, bool print_result, bool report_exceptions, std::string& err);
@@ -901,6 +876,13 @@ static const char *
 init_v8()
 {
   HandleScope handle_scope;
+
+  v_weak = dict_alloc();
+  if (v_weak == NULL)
+    return "init_v8(): error dict_alloc()";
+  typval_T tv;
+  tv_set_dict(&tv, v_weak);
+  dict_set(&vimvardict, (char_u*)"%v8_weak%", &tv);
 
   VimList = Persistent<FunctionTemplate>::New(FunctionTemplate::New(VimListCreate));
   VimList->SetClassName(String::New("VimList"));
@@ -1237,6 +1219,28 @@ LookupMapFindV8Value(LookupMap* lookup, Handle<Value> v)
   return it;
 }
 
+static void
+weak_ref(void *p, typval_T *tv)
+{
+  char buf[64];
+  vim_snprintf(buf, sizeof(buf), (char*)"%p", p);
+  dict_set(v_weak, (char_u*)buf, tv);
+}
+
+static void
+weak_unref(void *p)
+{
+  char buf[64];
+  dictitem_T *di;
+  vim_snprintf(buf, sizeof(buf), (char*)"%p", p);
+  di = dict_find(v_weak, (char_u*)buf, -1);
+  if (di == NULL) {
+    emsg((char_u*)"if_v8: weak_unref(): internal error");
+    return;
+  }
+  dictitem_remove(v_weak, di);
+}
+
 // Reads a file into a v8 string.
 static Handle<String>
 ReadFile(const char* name)
@@ -1360,11 +1364,14 @@ Load(const Arguments& args)
 static Handle<Value>
 MakeVimList(list_T *list, Handle<Object> obj)
 {
+  typval_T tv;
+  tv_set_list(&tv, list);
+  weak_ref((void*)list, &tv);
+
   Persistent<Object> self = Persistent<Object>::New(obj);
   self.MakeWeak(list, VimListDestroy);
   self->SetInternalField(0, External::New(list));
   objcache.insert(LookupMap::value_type(list, self));
-  ++list->lv_refcount;
   return self;
 }
 
@@ -1372,7 +1379,7 @@ static void
 VimListDestroy(Persistent<Value> object, void* parameter)
 {
   objcache.erase(parameter);
-  list_unref(static_cast<list_T*>(parameter));
+  weak_unref(parameter);
 }
 
 static Handle<Value>
@@ -1475,11 +1482,14 @@ VimListLength(Local<String> property, const AccessorInfo& info)
 static Handle<Value>
 MakeVimDict(dict_T *dict, Handle<Object> obj)
 {
+  typval_T tv;
+  tv_set_dict(&tv, dict);
+  weak_ref((void*)dict, &tv);
+
   Persistent<Object> self = Persistent<Object>::New(obj);
   self.MakeWeak(dict, VimDictDestroy);
   self->SetInternalField(0, External::New(dict));
   objcache.insert(LookupMap::value_type(dict, self));
-  ++dict->dv_refcount;
   return self;
 }
 
@@ -1487,7 +1497,7 @@ static void
 VimDictDestroy(Persistent<Value> object, void* parameter)
 {
   objcache.erase(parameter);
-  dict_unref(static_cast<dict_T*>(parameter));
+  weak_unref(parameter);
 }
 
 static Handle<Value>
@@ -1626,19 +1636,21 @@ VimDictEnumerate(const AccessorInfo& info)
 static Handle<Value>
 MakeVimFunc(const char *name, Handle<Object> obj)
 {
+  typval_T tv;
+  tv_set_func(&tv, (char_u*)name);
+  weak_ref((void*)tv.vval.v_string, &tv);
+
   Persistent<Object> self = Persistent<Object>::New(obj);
-  self.MakeWeak((void*)vim_strsave((char_u*)name), VimFuncDestroy);
+  self.MakeWeak((void*)tv.vval.v_string, VimFuncDestroy);
   self->SetInternalField(0, String::New(name));
   self->SetInternalField(1, Undefined());
-  func_ref((char_u*)name);
   return self;
 }
 
 static void
 VimFuncDestroy(Persistent<Value> object, void* parameter)
 {
-  func_unref(static_cast<char_u*>(parameter));
-  vim_free(parameter);
+  weak_unref(parameter);
 }
 
 static Handle<Value>
