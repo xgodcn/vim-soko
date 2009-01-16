@@ -1,7 +1,7 @@
 
 command! V8Start call s:lib.v8start()
 command! V8End execute V8End()
-command! -nargs=+ V8 execute V8(<q-args>, expand('<sfile>') == '')
+command! -nargs=* V8 execute V8(<q-args>, expand('<sfile>') == '')
 
 function! V8End()
   return s:lib.v8end()
