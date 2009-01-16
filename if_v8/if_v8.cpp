@@ -2,7 +2,7 @@
  *
  * v8 interface to Vim
  *
- * Last Change: 2009-01-12
+ * Last Change: 2009-01-17
  * Maintainer: Yukihiro Nakadaira <yukihiro.nakadaira@gmail.com>
  */
 #include <cstdio>
@@ -1061,9 +1061,8 @@ v8_to_vim(Handle<Value> v8obj, typval_T *vimobj, int depth, LookupMap *lookup, s
 
   if (VimFunc->HasInstance(v8obj)) {
     Handle<Object> o = Handle<Object>::Cast(v8obj);
-    Handle<String> name = Handle<String>::Cast(o->GetInternalField(0));
-    String::Utf8Value str(name);
-    tv_set_func(vimobj, (char_u*)*str);
+    Handle<External> external = Handle<External>::Cast(o->GetInternalField(0));
+    tv_set_func(vimobj, static_cast<char_u*>(external->Value()));
     return true;
   }
 
@@ -1642,7 +1641,7 @@ MakeVimFunc(const char *name, Handle<Object> obj)
 
   Persistent<Object> self = Persistent<Object>::New(obj);
   self.MakeWeak((void*)tv.vval.v_string, VimFuncDestroy);
-  self->SetInternalField(0, String::New(name));
+  self->SetInternalField(0, External::New(tv.vval.v_string));
   self->SetInternalField(1, Undefined());
   return self;
 }
