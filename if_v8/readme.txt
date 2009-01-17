@@ -16,7 +16,7 @@ Requirements:
 
 
 Usage:
-  :source /path/to/v8/init.vim
+  :source /path/to/if_v8/init.vim
   :V8 print('hello, world')
   => hello, world
   :V8 3 + 4
