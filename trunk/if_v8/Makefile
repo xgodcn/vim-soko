@@ -6,7 +6,7 @@ LDFLAGS=-L$(V8DIR) -lv8 -lpthread
 
 all: if_v8.so
 
-if_v8.so: if_v8.cpp
+if_v8.so: if_v8.cpp vimext.h
 	g++ $(CFLAGS) -shared -o if_v8.so if_v8.cpp $(LDFLAGS)
 
 clean:
