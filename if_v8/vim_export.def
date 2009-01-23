@@ -9,6 +9,7 @@ EXPORTS
   clear_tv
   emsg
   alloc
+  alloc_clear
   vim_free
   vim_strsave
   vim_strnsave
