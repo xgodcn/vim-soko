@@ -47,8 +47,8 @@ static bool vim_to_v8(typval_T *vimobj, Handle<Value> *v8obj, int depth, LookupM
 static bool v8_to_vim(Handle<Value> v8obj, typval_T *vimobj, int depth, LookupMap *lookup, std::string *err);
 static LookupMap::iterator LookupFindValue(LookupMap* lookup, Handle<Value> v);
 
-static void weak_ref(void *p, typval_T *tv);
-static void weak_unref(void *p);
+static void weak_ref(typval_T *tv);
+static void weak_unref(typval_T *tv);
 
 static Handle<String> ReadFile(const char* name);
 static bool ExecuteString(Handle<String> source, Handle<Value> name, bool print_result, bool report_exceptions, std::string& err);
@@ -124,7 +124,7 @@ init_v8()
     return "init_v8(): error dict_alloc()";
   typval_T tv;
   tv_set_dict(&tv, v_weak);
-  dict_set_nocopy(&vimvardict, (char_u*)"%v8_weak%", &tv);
+  dict_set_tv_nocopy(&vimvardict, (char_u*)"%v8_weak%", &tv);
 
   VimList = Persistent<FunctionTemplate>::New(FunctionTemplate::New(VimListCreate));
   VimList->SetClassName(String::New("VimList"));
@@ -401,10 +401,10 @@ v8_to_vim(Handle<Value> v8obj, typval_T *vimobj, int depth, LookupMap *lookup, s
         dict_free(dict, TRUE);
         return false;
       }
-      if (!dict_set_nocopy(dict, (char_u*)*keystr, &tv)) {
+      if (!dict_set_tv_nocopy(dict, (char_u*)*keystr, &tv)) {
         clear_tv(&tv);
         dict_free(dict, TRUE);
-        *err = "v8_to_vim(): error dict_set_nocopy()";
+        *err = "v8_to_vim(): error dict_set_tv_nocopy()";
         return false;
       }
     }
@@ -438,25 +438,26 @@ LookupFindValue(LookupMap* lookup, Handle<Value> v)
 }
 
 static void
-weak_ref(void *p, typval_T *tv)
+weak_ref(typval_T *tv)
 {
   char buf[64];
-  vim_snprintf(buf, sizeof(buf), (char*)"%p", p);
-  dict_set_nocopy(v_weak, (char_u*)buf, tv);
+  vim_snprintf(buf, sizeof(buf), (char*)"%p", tv);
+  dict_set_tv_nocopy(v_weak, (char_u*)buf, tv);
 }
 
 static void
-weak_unref(void *p)
+weak_unref(typval_T *tv)
 {
   char buf[64];
-  dictitem_T *di;
-  vim_snprintf(buf, sizeof(buf), (char*)"%p", p);
-  di = dict_find(v_weak, (char_u*)buf, -1);
-  if (di == NULL) {
+  hashitem_T *hi;
+  vim_snprintf(buf, sizeof(buf), (char*)"%p", tv);
+  hi = hash_find(&v_weak->dv_hashtab, (char_u*)buf);
+  if (HASHITEM_EMPTY(hi)) {
     emsg((char_u*)"if_v8: weak_unref(): internal error");
     return;
   }
-  dictitem_remove(v_weak, di);
+  hash_remove(&v_weak->dv_hashtab, hi);
+  vim_free(HI2DI(hi));
 }
 
 // Reads a file into a v8 string.
@@ -504,7 +505,7 @@ ExecuteString(Handle<String> source, Handle<Value> name, bool print_result, bool
   if (print_result && !result->IsUndefined()) {
     typval_T tv;
     tv_set_string(&tv, (char_u*)(*String::Utf8Value(result)));
-    dict_set_nocopy(&vimvardict, (char_u*)"%v8_print%", &tv);
+    dict_set_tv_nocopy(&vimvardict, (char_u*)"%v8_print%", &tv);
   }
   return true;
 }
@@ -541,7 +542,7 @@ ReportException(TryCatch* try_catch)
   }
   typval_T tv;
   tv_set_string(&tv, (char_u*)strm.str().c_str());
-  dict_set_nocopy(&vimvardict, (char_u*)"%v8_errmsg%", &tv);
+  dict_set_tv_nocopy(&vimvardict, (char_u*)"%v8_errmsg%", &tv);
 }
 
 static Handle<Value>
@@ -582,22 +583,28 @@ Load(const Arguments& args)
 static Handle<Value>
 MakeVimList(list_T *list, Handle<Object> obj)
 {
-  typval_T tv;
-  tv_set_list(&tv, list);
-  weak_ref((void*)list, &tv);
+  typval_T *tv = alloc_tv();
+  tv_set_list(tv, list);
+  weak_ref(tv);
 
   Persistent<Object> self = Persistent<Object>::New(obj);
-  self.MakeWeak(list, VimListDestroy);
+  self.MakeWeak(tv, VimListDestroy);
   self->SetInternalField(0, External::New(list));
+
   objcache.insert(LookupMap::value_type(list, self));
+
   return self;
 }
 
 static void
 VimListDestroy(Persistent<Value> object, void* parameter)
 {
-  objcache.erase(parameter);
-  weak_unref(parameter);
+  typval_T *tv = (typval_T*)parameter;
+
+  objcache.erase(tv->vval.v_list);
+
+  weak_unref(tv);
+  free_tv(tv);
 }
 
 static Handle<Value>
@@ -700,22 +707,28 @@ VimListLength(Local<String> property, const AccessorInfo& info)
 static Handle<Value>
 MakeVimDict(dict_T *dict, Handle<Object> obj)
 {
-  typval_T tv;
-  tv_set_dict(&tv, dict);
-  weak_ref((void*)dict, &tv);
+  typval_T *tv = alloc_tv();
+  tv_set_dict(tv, dict);
+  weak_ref(tv);
 
   Persistent<Object> self = Persistent<Object>::New(obj);
-  self.MakeWeak(dict, VimDictDestroy);
+  self.MakeWeak(tv, VimDictDestroy);
   self->SetInternalField(0, External::New(dict));
+
   objcache.insert(LookupMap::value_type(dict, self));
+
   return self;
 }
 
 static void
 VimDictDestroy(Persistent<Value> object, void* parameter)
 {
-  objcache.erase(parameter);
-  weak_unref(parameter);
+  typval_T *tv = (typval_T*)parameter;
+
+  objcache.erase(tv->vval.v_dict);
+
+  weak_unref(tv);
+  free_tv(tv);
 }
 
 static Handle<Value>
@@ -797,9 +810,9 @@ VimDictSet(Local<String> property, Local<Value> value, const AccessorInfo& info)
   typval_T vimobj;
   if (!v8_to_vim(value, &vimobj, 1, &lookup, &err))
     return ThrowException(String::New(err.c_str()));
-  if (!dict_set_nocopy(dict, (char_u*)*key, &vimobj)) {
+  if (!dict_set_tv_nocopy(dict, (char_u*)*key, &vimobj)) {
     clear_tv(&vimobj);
-    return ThrowException(String::New("error dict_set_nocopy()"));
+    return ThrowException(String::New("error dict_set_tv_nocopy()"));
   }
   return value;
 }
@@ -856,21 +869,25 @@ VimDictEnumerate(const AccessorInfo& info)
 static Handle<Value>
 MakeVimFunc(const char *name, Handle<Object> obj)
 {
-  typval_T tv;
-  tv_set_func(&tv, (char_u*)name);
-  weak_ref((void*)tv.vval.v_string, &tv);
+  typval_T *tv = alloc_tv();
+  tv_set_func(tv, (char_u*)name);
+  weak_ref(tv);
 
   Persistent<Object> self = Persistent<Object>::New(obj);
-  self.MakeWeak((void*)tv.vval.v_string, VimFuncDestroy);
-  self->SetInternalField(0, External::New(tv.vval.v_string));
+  self.MakeWeak(tv, VimFuncDestroy);
+  self->SetInternalField(0, External::New(tv->vval.v_string));
   self->SetInternalField(1, Undefined());
+
   return self;
 }
 
 static void
 VimFuncDestroy(Persistent<Value> object, void* parameter)
 {
-  weak_unref(parameter);
+  typval_T *tv = (typval_T*)parameter;
+
+  weak_unref(tv);
+  free_tv(tv);
 }
 
 static Handle<Value>

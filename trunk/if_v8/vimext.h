@@ -224,6 +224,8 @@ struct condstack;
 
 /* functions {{{1 */
 static const char *init_vim();
+/* typval */
+static typval_T *alloc_tv();
 /* List */
 static listitem_T *listitem_alloc();
 static void listitem_free(listitem_T *item);
@@ -252,7 +254,7 @@ static void tv_set_string(typval_T *tv, char_u *string);
 static void tv_set_list(typval_T *tv, list_T *list);
 static void tv_set_dict(typval_T *tv, dict_T *dict);
 static void tv_set_func(typval_T *tv, char_u *name);
-static int dict_set_nocopy(dict_T *dict, char_u *key, typval_T *tv);
+static int dict_set_tv_nocopy(dict_T *dict, char_u *key, typval_T *tv);
 static int list_append_tv_nocopy(list_T *list, typval_T *tv);
 
 /* import {{{1 */
@@ -270,6 +272,7 @@ DLLIMPORT void free_tv(typval_T *varp);
 DLLIMPORT void clear_tv(typval_T *varp);
 DLLIMPORT int emsg(char_u *s);
 DLLIMPORT char_u *alloc(unsigned size);
+DLLIMPORT char_u *alloc_clear(unsigned size);
 DLLIMPORT void vim_free(void *x);
 DLLIMPORT char_u *vim_strsave(char_u *string);
 DLLIMPORT char_u *vim_strnsave(char_u *string, int len);
@@ -313,6 +316,18 @@ init_vim()
     free_tv(tv);
 
     return NULL;
+}
+
+/* typval {{{1 */
+
+/*
+ * Allocate memory for a variable type-value, and make it empty (0 or NULL
+ * value).
+ */
+    static typval_T *
+alloc_tv()
+{
+    return (typval_T *)alloc_clear((unsigned)sizeof(typval_T));
 }
 
 /* List {{{1 */
@@ -549,7 +564,7 @@ dictitem_free(
 
 /*
  * Remove item "item" from Dictionary "dict" and free it.
- * XXX: modified
+ * XXX: MODIFIED
  */
     static void
 dictitem_remove(
@@ -656,7 +671,7 @@ func_ref(
     tv.v_type = VAR_FUNC;
     tv.v_lock = 0;
     tv.vval.v_string = name;
-    dict_set_nocopy(&vimvardict, (char_u*)"%v8_func1%", &tv);
+    dict_set_tv_nocopy(&vimvardict, (char_u*)"%v8_func1%", &tv);
     do_cmdline_cmd((char_u*)exprbuf);
     hi = hash_find(&vimvardict.dv_hashtab, (char_u*)"%v8_func1%");
     di = HI2DI(hi);
@@ -727,7 +742,7 @@ tv_set_func(typval_T *tv, char_u *name)
  * let dict[key] = tv without copy
  */
 static int
-dict_set_nocopy(dict_T *dict, char_u *key, typval_T *tv)
+dict_set_tv_nocopy(dict_T *dict, char_u *key, typval_T *tv)
 {
     dictitem_T *di;
 
