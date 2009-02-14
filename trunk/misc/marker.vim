@@ -12,12 +12,12 @@ let loaded_marker = 1
 let s:save_cpo = &cpo
 set cpo&vim
 
-hi default Marker1 ctermbg=cyan guibg=cyan
-hi default Marker2 ctermbg=green guibg=green
-hi default Marker3 ctermbg=magenta guibg=magenta
-hi default Marker4 ctermbg=red guibg=red
-hi default Marker5 ctermbg=blue guibg=blue
-hi default Marker6 ctermbg=yellow guibg=yellow
+hi default Marker1 ctermfg=black ctermbg=cyan    guifg=black guibg=cyan
+hi default Marker2 ctermfg=black ctermbg=green   guifg=black guibg=green
+hi default Marker3 ctermfg=black ctermbg=magenta guifg=black guibg=magenta
+hi default Marker4 ctermfg=black ctermbg=red     guifg=black guibg=red
+hi default Marker5 ctermfg=black ctermbg=blue    guifg=black guibg=blue
+hi default Marker6 ctermfg=black ctermbg=yellow  guifg=black guibg=yellow
 
 nnoremap <silent> <Plug>MarkerToggle :<C-U>call <SID>MarkerToggleN()<CR>
 vnoremap <silent> <Plug>MarkerToggle :<C-U>call <SID>MarkerToggleV()<CR>
