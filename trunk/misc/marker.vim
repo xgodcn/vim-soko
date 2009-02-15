@@ -1,4 +1,4 @@
-" Last Change: 2009-02-14
+" Last Change: 2009-02-15
 "
 " :nmap mm <Plug>MarkerToggle
 " :vmap m  <Plug>MarkerToggle
@@ -52,9 +52,9 @@ endfunction
 function! s:ClearMarker(...)
   let cnt = get(a:000, 0, 0)
   if cnt
-    let group = '\<Marker' . cnt . '\>'
+    let group = '^Marker' . cnt . '$'
   else
-    let group = '\<Marker\d\>'
+    let group = '^Marker.*$'
   endif
   for m in getmatches()
     if m.group =~ group
