@@ -1962,7 +1962,7 @@ function s:fpdf._outfontwidths(font)
   endfor
   " /W [
   "   <start> <end> <width> ...
-  "   <start> [ <width of start> <width of start+2> ... ]
+  "   <start> [ <width of start> <width of start+1> ... ]
   " ]
   let cids = sort(keys(cw), 's:cmpnum')
   let ranges = [[cids[0], cids[0], cw[cids[0]]]] " [[start, end, width], ...]
@@ -1974,6 +1974,7 @@ function s:fpdf._outfontwidths(font)
     endif
   endfor
   " optimize
+  " [1, 1, w1] [2, 2, w2] [4, 5, w4] ==> 1 [w1, w2, 0, w4, w4]
   let threshold = 4
   let i = 0
   while i + 1 < len(ranges)
