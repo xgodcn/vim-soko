@@ -1,4 +1,14 @@
-augroup QuickCheck
+" Last Change: 2009-02-17
+
+if exists("b:did_ftplugin")
+  finish
+endif
+
+let s:save_cpo = &cpo
+set cpo&vim
+
+" TODO: buffer local?
+augroup PhpQuickCheck
   au!
   autocmd InsertLeave * if &ft == 'php' | call s:FindUnusedVar() | endif
   autocmd BufWritePost * if &ft == 'php' | call s:PhpLint() | endif
@@ -95,3 +105,5 @@ function! s:MatchExists(group)
   return 0
 endfunction
 
+let &cpo = s:save_cpo
+unlet s:save_cpo

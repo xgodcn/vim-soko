@@ -1,4 +1,4 @@
-" Last Change: 2009-02-15
+" Last Change: 2009-02-17
 "
 " :nmap mm <Plug>MarkerToggle
 " :vmap m  <Plug>MarkerToggle
@@ -76,3 +76,4 @@ function! s:EscapePattern(str)
 endfunction
 
 let &cpo = s:save_cpo
+unlet s:save_cpo
