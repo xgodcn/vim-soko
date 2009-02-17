@@ -48,7 +48,7 @@ function! s:FindUnusedVar()
   let head = join(getline(funcstart, start - 1), "\n")
   let body = join(getline(start, end), "\n")
   let args = s:MatchListAll(head, '\v\$(\w+)')
-  let vars = s:MatchListAll(body, '\v%((as\s+|\=\>\s*)@<=)?\$(\w+)(\s*\=)?')
+  let vars = s:MatchListAll(body, '\v%((<as\s+|\=\>\s*|<list\s*\([^)]*)@<=)?\$(\w+)(\s*\=)?')
   let keys = s:MatchListAll(body, '\v[''"](\w+)[''"]')
   let special = ['$this', '$_GET', '$_POST', '$_REQUEST']
   let assigned = map(copy(args), 'v:val[0]')
