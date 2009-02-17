@@ -48,9 +48,10 @@ function! s:FindUnusedVar()
   let head = join(getline(funcstart, start - 1), "\n")
   let body = join(getline(start, end), "\n")
   let args = s:MatchListAll(head, '\v\$(\w+)')
-  let vars = s:MatchListAll(body, '\v%((<as\s+|\=\>\s*|<list\s*\([^)]*)@<=)?\$(\w+)(\s*\=)?')
+  let vars = s:MatchListAll(body, '\v%((<as\s+|\=\>\s*|<list\s*\([^)]*|<global\s+[^;]*)@<=)?\$(\w+)(\s*\=)?')
   let keys = s:MatchListAll(body, '\v[''"](\w+)[''"]')
-  let special = ['$GLOBALS', '$_SERVER', '$_GET', '$_POST', '$_REQUEST', '$_FILES', '$_COOKIE', '$_SESSION', '$_ENV', '$php_errormsg', '$HTTP_RAW_POST_DATA', '$http_response_header', '$argc', '$argv', '$this']
+  let superglobals = ['$GLOBALS', '$_SERVER', '$_GET', '$_POST', '$_REQUEST', '$_FILES', '$_COOKIE', '$_SESSION', '$_ENV']
+  let special = superglobals + ['$this']
   let assigned = map(copy(args), 'v:val[0]')
   let words = map(args + keys, 'v:val[0]')
   let words += map(copy(vars), '"$".v:val[2]')
