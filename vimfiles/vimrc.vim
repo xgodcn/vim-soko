@@ -104,6 +104,9 @@ augroup vimrcEx
   autocmd WinEnter * call s:MinWindow(3)
 augroup END
 
+augroup filetypedetect
+augroup END
+
 colorscheme delek
 syntax on
 filetype plugin indent on
