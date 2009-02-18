@@ -37,11 +37,11 @@ function! s:QuickCheck()
         \ || get(b:, 'php_quickcheck_funcstart', 0) > line('.')
         \ || get(b:, 'php_quickcheck_end', 0) < line('.')
     let b:php_quickcheck_changedtick = b:changedtick
-    call s:FindUnusedVar()
+    call s:FindUndefinedVariable()
   endif
 endfunction
 
-function! s:FindUnusedVar()
+function! s:FindUndefinedVariable()
   let view = winsaveview()
   let funcstart = search('^\s*\<function\>', 'bW')
   let start = search('{', 'W')
