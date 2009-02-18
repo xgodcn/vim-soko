@@ -10,7 +10,7 @@ set cpo&vim
 " TODO: buffer local?
 augroup PhpQuickCheck
   au!
-  autocmd InsertLeave * if &ft == 'php' | call s:FindUnusedVar() | endif
+  autocmd CursorMoved * if &ft == 'php' | call s:QuickCheck() | endif
   autocmd BufWritePost * if &ft == 'php' | call s:PhpLint() | endif
 augroup END
 
@@ -32,15 +32,26 @@ function! s:PhpLint()
   endif
 endfunction
 
+function! s:QuickCheck()
+  if get(b:, 'php_quickcheck_changedtick', 0) != b:changedtick
+        \ || get(b:, 'php_quickcheck_funcstart', 0) > line('.')
+        \ || get(b:, 'php_quickcheck_end', 0) < line('.')
+    let b:php_quickcheck_changedtick = b:changedtick
+    call s:FindUnusedVar()
+  endif
+endfunction
+
 function! s:FindUnusedVar()
   let view = winsaveview()
-  let funcstart = search('\<function\>', 'bW')
+  let funcstart = search('^\s*\<function\>', 'bW')
   let start = search('{', 'W')
   let end = searchpair('{', '', '}')
   call winrestview(view)
   if funcstart == 0 || start == 0 || end == 0
     return
   endif
+  let b:php_quickcheck_funcstart = funcstart
+  let b:php_quickcheck_end = end
   if funcstart == start
     let start += 1
   endif
@@ -48,31 +59,32 @@ function! s:FindUnusedVar()
   let head = join(getline(funcstart, start - 1), "\n")
   let body = join(getline(start, end), "\n")
   let args = s:MatchListAll(head, '\v\$(\w+)')
-  let vars = s:MatchListAll(body, '\v%((<as[ \t&]+|\=\>[ \t&]*|<list\s*\([^)]*|<global\s+[^;]*)@<=)?\$(\w+)(\s*\=)?')
-  let keys = s:MatchListAll(body, '\v[''"](\w+)[''"]')
-  let superglobals = ['$GLOBALS', '$_SERVER', '$_GET', '$_POST', '$_REQUEST', '$_FILES', '$_COOKIE', '$_SESSION', '$_ENV']
-  let special = superglobals + ['$this']
-  let assigned = map(copy(args), 'v:val[0]')
-  let words = map(args + keys, 'v:val[0]')
-  let words += map(copy(vars), '"$".v:val[2]')
+  let vars = s:MatchListAll(body, '\c\v%((<as[ \t&]+|as[ \t&]\$\w+\s*\=\>[ \t&]*|<list\s*\([^)]*|<global\s+[^;]*)@<=)?(\$\w+)(\s*\=[^=])?')
+  let special = s:CountWord(['$GLOBALS', '$_SERVER', '$_GET', '$_POST', '$_REQUEST', '$_FILES', '$_COOKIE', '$_SESSION', '$_ENV', "$this"])
+  let assigned = s:CountWord(map(copy(args), 'v:val[0]'))
+  let used = {}
   for m in vars
-    let word = '$' . m[2]
-    if index(special, word) != -1
+    let word = m[2]
+    if has_key(special, word)
       continue
     endif
     if m[1] != '' || m[3] != ''
-      call add(assigned, word)
-    endif
-    if index(assigned, word) == -1 || count(words, word) == 1
-      call matchadd('MarkerError', '\V' . escape(word, '\') . '\>')
+      let assigned[word] = 1
+    else
+      let used[word] = 1
+      if !has_key(assigned, word)
+        call matchadd('MarkerError', '\V' . escape(word, '\') . '\>')
+      endif
     endif
   endfor
+  for word in keys(filter(assigned, '!has_key(used, v:key)'))
+    call matchadd('MarkerError', '\V' . escape(word, '\') . '\>')
+  endfor
   if 0
-  for m in keys
-    let word = m[0]
-    if count(words, word) == 1
-      call matchadd('MarkerError', '\V' . escape(word, '\'))
-    endif
+  let keys = s:MatchListAll(body, '\v[''"](\w+)[''"]')
+  let wordcounts = s:CountWord(map(copy(keys), 'v:val[0]'))
+  for word in keys(filter(wordcounts, 'v:val == 1'))
+    call matchadd('MarkerError', '\V' . escape(word, '\'))
   endfor
   endif
 endfunction
