@@ -64,15 +64,17 @@ function! s:FindUnusedVar()
       call add(assigned, word)
     endif
     if index(assigned, word) == -1 || count(words, word) == 1
-      call matchadd('MarkerError', '\V' . escape(word, '\'))
+      call matchadd('MarkerError', '\V' . escape(word, '\') . '\>')
     endif
   endfor
+  if 0
   for m in keys
-    let word = '$' . m[2]
+    let word = m[0]
     if count(words, word) == 1
       call matchadd('MarkerError', '\V' . escape(word, '\'))
     endif
   endfor
+  endif
 endfunction
 
 function! s:CountWord(words)
