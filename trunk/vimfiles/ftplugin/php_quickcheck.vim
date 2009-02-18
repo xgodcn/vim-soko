@@ -1,4 +1,4 @@
-" Last Change: 2009-02-17
+" Last Change: 2009-02-18
 
 if exists("b:did_ftplugin")
   finish
@@ -48,7 +48,7 @@ function! s:FindUnusedVar()
   let head = join(getline(funcstart, start - 1), "\n")
   let body = join(getline(start, end), "\n")
   let args = s:MatchListAll(head, '\v\$(\w+)')
-  let vars = s:MatchListAll(body, '\v%((<as\s+|\=\>\s*|<list\s*\([^)]*|<global\s+[^;]*)@<=)?\$(\w+)(\s*\=)?')
+  let vars = s:MatchListAll(body, '\v%((<as[ \t&]+|\=\>\s*|<list\s*\([^)]*|<global\s+[^;]*)@<=)?\$(\w+)(\s*\=)?')
   let keys = s:MatchListAll(body, '\v[''"](\w+)[''"]')
   let superglobals = ['$GLOBALS', '$_SERVER', '$_GET', '$_POST', '$_REQUEST', '$_FILES', '$_COOKIE', '$_SESSION', '$_ENV']
   let special = superglobals + ['$this']
