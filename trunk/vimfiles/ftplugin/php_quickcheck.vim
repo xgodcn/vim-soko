@@ -1,4 +1,4 @@
-" Last Change: 2009-02-18
+" Last Change: 2009-02-19
 
 if exists("b:did_ftplugin")
   finish
@@ -43,7 +43,7 @@ endfunction
 
 function! s:FindUndefinedVariable()
   let view = winsaveview()
-  let funcstart = search('^\s*\<function\>', 'bW')
+  let funcstart = search('\<function\>', 'bW')
   let start = search('{', 'W')
   let end = searchpair('{', '', '}')
   call winrestview(view)
@@ -59,7 +59,7 @@ function! s:FindUndefinedVariable()
   let head = join(getline(funcstart, start - 1), "\n")
   let body = join(getline(start, end), "\n")
   let args = s:MatchListAll(head, '\v\$(\w+)')
-  let vars = s:MatchListAll(body, '\c\v%((<as[ \t&]+|as[ \t&]\$\w+\s*\=\>[ \t&]*|<list\s*\([^)]*|<global\s+[^;]*)@<=)?(\$\w+)(\s*\=[^=])?')
+  let vars = s:MatchListAll(body, '\c\v%((<as[ \t&]+|as[ \t&]\$\w+\s*\=\>[ \t&]*|<list\s*\([^)]*|<global\s+[^;]*)@<=)?(\$\w+)%((\s*\=[^=>])@=)?')
   let special = s:CountWord(['$GLOBALS', '$_SERVER', '$_GET', '$_POST', '$_REQUEST', '$_FILES', '$_COOKIE', '$_SESSION', '$_ENV', "$this"])
   let assigned = s:CountWord(map(copy(args), 'v:val[0]'))
   let used = {}
