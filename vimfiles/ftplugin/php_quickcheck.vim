@@ -24,11 +24,7 @@ function! s:PhpLint()
   let msg = system(cmd)
   if v:shell_error
     echoerr cmd
-    echohl Error
-    for line in split(msg, '\n')
-      echomsg line
-    endfor
-    echohl None
+    call s:EchoHlMsg('Error', msg)
   endif
 endfunction
 
@@ -38,31 +34,37 @@ function! s:QuickCheck()
         \ && get(b:, 'php_quickcheck_end', 0) >= line('.')
     return
   endif
-  let b:php_quickcheck_changedtick = b:changedtick
-  call s:MatchDeleteGroup('MarkerError')
   let view = winsaveview()
-  let funcstart = search('\<function\>', 'bW')
+  let funcstart = search('\<function\>', 'bcW')
   let start = search('{', 'W')
   let end = searchpair('{', '', '}')
   call winrestview(view)
-  let b:php_quickcheck_funcstart = funcstart
-  let b:php_quickcheck_end = end
-  if funcstart == 0 || start == 0 || end == 0 || end <= line('.')
+  if funcstart == 0 || start == 0 || end == 0 || end < line('.')
+    call s:MatchDeleteGroup('MarkerError')
+    let b:php_quickcheck_changedtick = b:changedtick
     let b:php_quickcheck_funcstart = 0
     let b:php_quickcheck_end = 0
-    return
+  else
+    let head = getline(funcstart, start)
+    let body = getline(start + 1, end)
+    let patterns = s:FindUndefinedVariable(head, body)
+    call s:MatchDeleteGroup('MarkerError')
+    for pat in patterns
+      call matchadd('MarkerError', pat)
+    endfor
+    let b:php_quickcheck_changedtick = b:changedtick
+    let b:php_quickcheck_funcstart = funcstart
+    let b:php_quickcheck_end = end
   endif
-  let head = getline(funcstart, start)
-  let body = getline(start + 1, end)
-  call s:CheckUndefinedVariable(head, body)
 endfunction
 
-function! s:CheckUndefinedVariable(head, body)
-  let args = s:MatchListAll(join(a:head, "\n"), '\v\$(\w+)')
+function! s:FindUndefinedVariable(head, body)
+  let args = s:MatchStrAll(join(a:head, "\n"), '\v\$\w+')
   let vars = s:MatchListAll(join(a:body, "\n"), '\c\v%((<as[ \t&]+|as[ \t&]\$\w+\s*\=\>[ \t&]*|<list\s*\([^)]*|<global\s+[^;]*)@<=)?(\$\w+)%((\s*\=[^=>])@=)?')
   let special = s:CountWord(['$GLOBALS', '$_SERVER', '$_GET', '$_POST', '$_REQUEST', '$_FILES', '$_COOKIE', '$_SESSION', '$_ENV', "$this"])
-  let assigned = s:CountWord(map(copy(args), 'v:val[0]'))
+  let assigned = s:CountWord(args)
   let used = {}
+  let patterns = []
   for m in vars
     let word = m[2]
     if has_key(special, word)
@@ -73,20 +75,21 @@ function! s:CheckUndefinedVariable(head, body)
     else
       let used[word] = 1
       if !has_key(assigned, word)
-        call matchadd('MarkerError', '\V' . escape(word, '\') . '\>')
+        call add(patterns, '\V' . escape(word, '\') . '\>')
       endif
     endif
   endfor
   for word in keys(filter(assigned, '!has_key(used, v:key)'))
-    call matchadd('MarkerError', '\V' . escape(word, '\') . '\>')
+    call add(patterns, '\V' . escape(word, '\') . '\>')
   endfor
   if 0
   let keys = s:MatchListAll(body, '\v[''"](\w+)[''"]')
   let wordcounts = s:CountWord(map(copy(keys), 'v:val[0]'))
   for word in keys(filter(wordcounts, 'v:val == 1'))
-    call matchadd('MarkerError', '\V' . escape(word, '\'))
+    call add(patterns, '\V' . escape(word, '\'))
   endfor
   endif
+  return patterns
 endfunction
 
 function! s:CountWord(words)
@@ -95,6 +98,12 @@ function! s:CountWord(words)
     let wordcounts[word] = get(wordcounts, word, 0) + 1
   endfor
   return wordcounts
+endfunction
+
+function! s:MatchStrAll(text, pat)
+  let matches = []
+  call substitute(a:text, a:pat, '\=empty(add(matches, submatch(0)))', 'g')
+  return matches
 endfunction
 
 function! s:MatchListAll(text, pat)
@@ -118,6 +127,14 @@ function! s:MatchExists(group)
     endif
   endfor
   return 0
+endfunction
+
+function! s:EchoHlMsg(hlgroup, msg)
+  execute 'echohl ' . a:hlgroup
+  for line in split(a:msg, '\n')
+    echomsg line
+  endfor
+  echohl None
 endfunction
 
 let &cpo = s:save_cpo
