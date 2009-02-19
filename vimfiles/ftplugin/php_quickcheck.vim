@@ -60,7 +60,15 @@ endfunction
 
 function! s:FindUndefinedVariable(head, body)
   let args = s:MatchStrAll(join(a:head, "\n"), '\v\$\w+')
-  let vars = s:MatchListAll(join(a:body, "\n"), '\c\v%((<as[ \t&]+|as[ \t&]\$\w+\s*\=\>[ \t&]*|<list\s*\([^)]*|<global\s+[^;]*)@<=)?(\$\w+)%((\s*\=[^=>])@=)?')
+  let var_pat = '\c\v%((<as[ \t&]*|as[ \t&]*\$\w+\s*\=\>[ \t&]*|<list\s*\([^)]*|<global\s+[^;]*)@<=)?(\$\w+)%((\s*\=[^=>])@=)?'
+  " profile: 400 lines function
+  " 1. 1.653904
+  "let vars = s:MatchListAll(join(a:body, "\n"), var_pat)
+  " 2. 0.054811
+  let vars = []
+  for line in a:body
+    call extend(vars, s:MatchListAll(line, var_pat))
+  endfor
   let special = s:CountWord(['$GLOBALS', '$_SERVER', '$_GET', '$_POST', '$_REQUEST', '$_FILES', '$_COOKIE', '$_SESSION', '$_ENV', "$this"])
   let assigned = s:CountWord(args)
   let used = {}
