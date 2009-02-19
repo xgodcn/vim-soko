@@ -33,33 +33,33 @@ function! s:PhpLint()
 endfunction
 
 function! s:QuickCheck()
-  if get(b:, 'php_quickcheck_changedtick', 0) != b:changedtick
-        \ || get(b:, 'php_quickcheck_funcstart', 0) > line('.')
-        \ || get(b:, 'php_quickcheck_end', 0) < line('.')
-    let b:php_quickcheck_changedtick = b:changedtick
-    call s:FindUndefinedVariable()
+  if get(b:, 'php_quickcheck_changedtick', 0) == b:changedtick
+        \ && get(b:, 'php_quickcheck_funcstart', 0) <= line('.')
+        \ && get(b:, 'php_quickcheck_end', 0) >= line('.')
+    return
   endif
-endfunction
-
-function! s:FindUndefinedVariable()
+  let b:php_quickcheck_changedtick = b:changedtick
+  call s:MatchDeleteGroup('MarkerError')
   let view = winsaveview()
   let funcstart = search('\<function\>', 'bW')
   let start = search('{', 'W')
   let end = searchpair('{', '', '}')
   call winrestview(view)
-  if funcstart == 0 || start == 0 || end == 0
-    return
-  endif
   let b:php_quickcheck_funcstart = funcstart
   let b:php_quickcheck_end = end
-  if funcstart == start
-    let start += 1
+  if funcstart == 0 || start == 0 || end == 0 || end <= line('.')
+    let b:php_quickcheck_funcstart = 0
+    let b:php_quickcheck_end = 0
+    return
   endif
-  call s:MatchDeleteGroup('MarkerError')
-  let head = join(getline(funcstart, start - 1), "\n")
-  let body = join(getline(start, end), "\n")
-  let args = s:MatchListAll(head, '\v\$(\w+)')
-  let vars = s:MatchListAll(body, '\c\v%((<as[ \t&]+|as[ \t&]\$\w+\s*\=\>[ \t&]*|<list\s*\([^)]*|<global\s+[^;]*)@<=)?(\$\w+)%((\s*\=[^=>])@=)?')
+  let head = getline(funcstart, start)
+  let body = getline(start + 1, end)
+  call s:CheckUndefinedVariable(head, body)
+endfunction
+
+function! s:CheckUndefinedVariable(head, body)
+  let args = s:MatchListAll(join(a:head, "\n"), '\v\$(\w+)')
+  let vars = s:MatchListAll(join(a:body, "\n"), '\c\v%((<as[ \t&]+|as[ \t&]\$\w+\s*\=\>[ \t&]*|<list\s*\([^)]*|<global\s+[^;]*)@<=)?(\$\w+)%((\s*\=[^=>])@=)?')
   let special = s:CountWord(['$GLOBALS', '$_SERVER', '$_GET', '$_POST', '$_REQUEST', '$_FILES', '$_COOKIE', '$_SESSION', '$_ENV', "$this"])
   let assigned = s:CountWord(map(copy(args), 'v:val[0]'))
   let used = {}
