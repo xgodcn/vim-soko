@@ -75,10 +75,7 @@ endfunction
 
 function s:MinWindow(threshold)
   " don't close completion preview window
-  if mode() != 'n'
-    return
-  endif
-  if winheight(winnr('#')) <= a:threshold
+  if mode() == 'n' && winheight(winnr('#')) <= a:threshold
     execute winnr('#') . 'resize 0'
   endif
 endfunction
@@ -98,14 +95,16 @@ augroup vimrcEx
 
   " shut up beep.  t_vb should be set after GUI init
   autocmd VimEnter * set visualbell t_vb=
-
   " highlight for Input Method mode
   autocmd ColorScheme * hi CursorIM guibg=purple
   " weaken special chars
   autocmd ColorScheme * hi SpecialKey guifg=gray
-
+  " shortcut to file's directory
   autocmd BufEnter * let $w = expand("%:p:h")
+  " minimize window
   autocmd WinEnter * call s:MinWindow(3)
+  " close completion preview window
+  autocmd InsertLeave,CursorMovedI * if pumvisible() == 0 | pclose | endif
 augroup END
 
 augroup filetypedetect
@@ -115,9 +114,9 @@ colorscheme delek
 syntax on
 filetype plugin indent on
 
-augroup filetypeindent
-augroup END
 augroup filetypeplugin
+augroup END
+augroup filetypeindent
 augroup END
 augroup syntax
 augroup END
