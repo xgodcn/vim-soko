@@ -74,6 +74,10 @@ function s:Number(first, last, reg, bang)
 endfunction
 
 function s:MinWindow(threshold)
+  " don't close completion preview window
+  if mode() != 'n'
+    return
+  endif
   if winheight(winnr('#')) <= a:threshold
     execute winnr('#') . 'resize 0'
   endif
