@@ -1,4 +1,4 @@
-" Last Change: 2009-02-19
+" Last Change: 2009-02-25
 
 if exists("b:did_ftplugin")
   finish
@@ -29,9 +29,9 @@ function! s:PhpLint()
 endfunction
 
 function! s:QuickCheck()
-  if get(b:, 'php_quickcheck_changedtick', 0) == b:changedtick
-        \ && get(b:, 'php_quickcheck_funcstart', 0) <= line('.')
-        \ && get(b:, 'php_quickcheck_end', 0) >= line('.')
+  if get(w:, 'php_quickcheck_changedtick', 0) == b:changedtick
+        \ && get(w:, 'php_quickcheck_funcstart', 0) <= line('.')
+        \ && get(w:, 'php_quickcheck_end', 0) >= line('.')
     return
   endif
   let view = winsaveview()
@@ -41,9 +41,9 @@ function! s:QuickCheck()
   call winrestview(view)
   if funcstart == 0 || start == 0 || end == 0 || end < line('.')
     call s:MatchDeleteGroup('MarkerError')
-    let b:php_quickcheck_changedtick = b:changedtick
-    let b:php_quickcheck_funcstart = 0
-    let b:php_quickcheck_end = 0
+    let w:php_quickcheck_changedtick = b:changedtick
+    let w:php_quickcheck_funcstart = 0
+    let w:php_quickcheck_end = 0
   else
     let head = getline(funcstart, start)
     let body = getline(start + 1, end)
@@ -52,9 +52,9 @@ function! s:QuickCheck()
     for pat in patterns
       call matchadd('MarkerError', pat)
     endfor
-    let b:php_quickcheck_changedtick = b:changedtick
-    let b:php_quickcheck_funcstart = funcstart
-    let b:php_quickcheck_end = end
+    let w:php_quickcheck_changedtick = b:changedtick
+    let w:php_quickcheck_funcstart = funcstart
+    let w:php_quickcheck_end = end
   endif
 endfunction
 
