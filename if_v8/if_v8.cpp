@@ -456,8 +456,10 @@ weak_unref(typval_T *tv)
     emsg((char_u*)"if_v8: weak_unref(): internal error");
     return;
   }
+  // XXX: save di because result of HI2DI() differ after hash_remove().
+  di = HI2DI(hi);
   hash_remove(&v_weak->dv_hashtab, hi);
-  vim_free(HI2DI(hi));
+  vim_free(di);
 }
 
 // Reads a file into a v8 string.
