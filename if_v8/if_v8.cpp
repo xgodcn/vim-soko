@@ -450,6 +450,7 @@ weak_unref(typval_T *tv)
 {
   char buf[64];
   hashitem_T *hi;
+  dictitem_T *di;
   vim_snprintf(buf, sizeof(buf), (char*)"%p", tv);
   hi = hash_find(&v_weak->dv_hashtab, (char_u*)buf);
   if (HASHITEM_EMPTY(hi)) {
