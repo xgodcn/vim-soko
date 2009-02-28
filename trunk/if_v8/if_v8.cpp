@@ -59,7 +59,7 @@ static Handle<Value> vim_execute(const Arguments& args);
 static Handle<Value> Load(const Arguments& args);
 
 // VimList
-static Handle<Value> MakeVimList(list_T *list, Handle<Object> obj);
+static Handle<Value> MakeVimList(list_T *list);
 static Handle<Value> VimListCreate(const Arguments& args);
 static void VimListDestroy(Persistent<Value> object, void* parameter);
 static Handle<Value> VimListGet(uint32_t index, const AccessorInfo& info);
@@ -70,7 +70,7 @@ static Handle<Array> VimListEnumerate(const AccessorInfo& info);
 static Handle<Value> VimListLength(Local<String> property, const AccessorInfo& info);
 
 // VimDict
-static Handle<Value> MakeVimDict(dict_T *dict, Handle<Object> obj);
+static Handle<Value> MakeVimDict(dict_T *dict);
 static void VimDictDestroy(Persistent<Value> object, void* parameter);
 static Handle<Value> VimDictCreate(const Arguments& args);
 static Handle<Value> VimDictIdxGet(uint32_t index, const AccessorInfo& info);
@@ -183,8 +183,8 @@ init_v8()
   {
     Context::Scope context_scope(context);
     Handle<Object> obj = Handle<Object>::Cast(context->Global()->Get(String::New("vim")));
-    obj->Set(String::New("g"), MakeVimDict(&globvardict, VimDict->InstanceTemplate()->NewInstance()));
-    obj->Set(String::New("v"), MakeVimDict(&vimvardict, VimDict->InstanceTemplate()->NewInstance()));
+    obj->Set(String::New("g"), MakeVimDict(&globvardict));
+    obj->Set(String::New("v"), MakeVimDict(&vimvardict));
   }
 
   return NULL;
@@ -231,7 +231,7 @@ vim_to_v8(typval_T *vimobj, Handle<Value> *v8obj, int depth, LookupMap *lookup, 
       return true;
     }
     if (wrap) {
-      *v8obj = MakeVimList(list, VimList->InstanceTemplate()->NewInstance());
+      *v8obj = MakeVimList(list);
       return true;
     }
     // copy by value
@@ -260,7 +260,7 @@ vim_to_v8(typval_T *vimobj, Handle<Value> *v8obj, int depth, LookupMap *lookup, 
       return true;
     }
     if (wrap) {
-      *v8obj = MakeVimDict(dict, VimDict->InstanceTemplate()->NewInstance());
+      *v8obj = MakeVimDict(dict);
       return true;
     }
     // copy by value
@@ -614,19 +614,16 @@ Load(const Arguments& args)
   return Undefined();
 }
 
+static list_T *makelistptr = NULL;
+
 static Handle<Value>
-MakeVimList(list_T *list, Handle<Object> obj)
+MakeVimList(list_T *list)
 {
   TRACE("MakeVimList");
-  typval_T *tv = alloc_tv();
-  tv_set_list(tv, list);
-  weak_ref(tv);
 
-  Persistent<Object> self = Persistent<Object>::New(obj);
-  self.MakeWeak(tv, VimListDestroy);
-  self->SetInternalField(0, External::New(list));
-
-  objcache.insert(LookupMap::value_type(list, self));
+  makelistptr = list;
+  Handle<Object> self = VimList->InstanceTemplate()->NewInstance();
+  makelistptr = NULL;
 
   return self;
 }
@@ -650,10 +647,30 @@ VimListCreate(const Arguments& args)
   if (!args.IsConstructCall())
     return ThrowException(String::New("Cannot call constructor as function"));
 
-  list_T *list = list_alloc();
-  if (list == NULL)
-    return ThrowException(String::New("VimListCreate(): list_alloc(): out of memory"));
-  return MakeVimList(list, args.Holder());
+  Handle<Object> self = args.Holder();
+
+  list_T *list;
+  if (makelistptr != NULL) {
+    list = makelistptr;
+  } else {
+    list = list_alloc();
+    if (list == NULL)
+      return ThrowException(String::New("VimListCreate(): list_alloc(): out of memory"));
+  }
+
+  self->SetInternalField(0, External::New(list));
+
+  // increment Vim's reference count
+  typval_T *tv = alloc_tv();
+  tv_set_list(tv, list);
+  weak_ref(tv);
+
+  // make weak reference
+  Persistent<Object> p = Persistent<Object>::New(self);
+  p.MakeWeak(tv, VimListDestroy);
+  objcache.insert(LookupMap::value_type(list, p));
+
+  return self;
 }
 
 static Handle<Value>
@@ -747,19 +764,16 @@ VimListLength(Local<String> property, const AccessorInfo& info)
   return Integer::New(len);
 }
 
+static dict_T *makedictptr = NULL;
+
 static Handle<Value>
-MakeVimDict(dict_T *dict, Handle<Object> obj)
+MakeVimDict(dict_T *dict)
 {
   TRACE("MakeVimDict");
-  typval_T *tv = alloc_tv();
-  tv_set_dict(tv, dict);
-  weak_ref(tv);
 
-  Persistent<Object> self = Persistent<Object>::New(obj);
-  self.MakeWeak(tv, VimDictDestroy);
-  self->SetInternalField(0, External::New(dict));
-
-  objcache.insert(LookupMap::value_type(dict, self));
+  makedictptr = dict;
+  Handle<Object> self = VimDict->InstanceTemplate()->NewInstance();
+  makedictptr = NULL;
 
   return self;
 }
@@ -783,10 +797,30 @@ VimDictCreate(const Arguments& args)
   if (!args.IsConstructCall())
     return ThrowException(String::New("Cannot call constructor as function"));
 
-  dict_T *dict = dict_alloc();
-  if (dict == NULL)
-    return ThrowException(String::New("VimDictCreate(): dict_alloc(): out of memory"));
-  return MakeVimDict(dict, args.Holder());
+  Handle<Object> self = args.Holder();
+
+  dict_T *dict;
+  if (makedictptr != NULL) {
+    dict = makedictptr;
+  } else {
+    dict = dict_alloc();
+    if (dict == NULL)
+      return ThrowException(String::New("VimDictCreate(): dict_alloc(): out of memory"));
+  }
+
+  self->SetInternalField(0, External::New(dict));
+
+  // increment Vim's reference count
+  typval_T *tv = alloc_tv();
+  tv_set_dict(tv, dict);
+  weak_ref(tv);
+
+  // make weak reference
+  Persistent<Object> p = Persistent<Object>::New(self);
+  p.MakeWeak(tv, VimDictDestroy);
+  objcache.insert(LookupMap::value_type(dict, p));
+
+  return self;
 }
 
 static Handle<Value>
