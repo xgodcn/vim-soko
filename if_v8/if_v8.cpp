@@ -88,9 +88,28 @@ static Handle<Value> MakeVimFunc(const char *name, Handle<Object> obj);
 static void VimFuncDestroy(Persistent<Value> object, void* parameter);
 static Handle<Value> VimFuncCall(const Arguments& args);
 
+struct Trace {
+  std::string name_;
+  Trace(std::string name) {
+    name_ = name;
+    printf("%s: enter\n", name_.c_str());
+  }
+  ~Trace() {
+    printf("%s: leave\n", name_.c_str());
+  }
+};
+
+//#define DEBUG
+#if defined(DEBUG)
+# define TRACE(name) Trace trace__(name)
+#else
+# define TRACE(name)
+#endif
+
 const char *
 init(const char *dll_path)
 {
+  TRACE("init");
   const char *err;
   if (dll_handle != NULL)
     return NULL;
@@ -106,6 +125,7 @@ init(const char *dll_path)
 const char *
 execute(const char *expr)
 {
+  TRACE("execute");
   HandleScope handle_scope;
   Context::Scope context_scope(context);
   std::string err;
@@ -117,6 +137,7 @@ execute(const char *expr)
 static const char *
 init_v8()
 {
+  TRACE("init_v8");
   HandleScope handle_scope;
 
   v_weak = dict_alloc();
@@ -172,6 +193,7 @@ init_v8()
 static bool
 vim_to_v8(typval_T *vimobj, Handle<Value> *v8obj, int depth, LookupMap *lookup, bool wrap, std::string *err)
 {
+  TRACE("vim_to_v8");
   if (depth > 100) {
     *err = "vim_to_v8(): too deep";
     return false;
@@ -277,6 +299,7 @@ vim_to_v8(typval_T *vimobj, Handle<Value> *v8obj, int depth, LookupMap *lookup, 
 static bool
 v8_to_vim(Handle<Value> v8obj, typval_T *vimobj, int depth, LookupMap *lookup, std::string *err)
 {
+  TRACE("v8_to_vim");
   if (depth > 100) {
     *err = "v8_to_vim(): too deep";
     return false;
@@ -429,6 +452,7 @@ v8_to_vim(Handle<Value> v8obj, typval_T *vimobj, int depth, LookupMap *lookup, s
 static LookupMap::iterator
 LookupFindValue(LookupMap* lookup, Handle<Value> v)
 {
+  TRACE("LookupFindValue");
   LookupMap::iterator it;
   for (it = lookup->begin(); it != lookup->end(); ++it) {
     if (it->second == v)
@@ -440,6 +464,7 @@ LookupFindValue(LookupMap* lookup, Handle<Value> v)
 static void
 weak_ref(typval_T *tv)
 {
+  TRACE("weak_ref");
   char buf[64];
   vim_snprintf(buf, sizeof(buf), (char*)"%p", tv);
   dict_set_tv_nocopy(v_weak, (char_u*)buf, tv);
@@ -448,6 +473,7 @@ weak_ref(typval_T *tv)
 static void
 weak_unref(typval_T *tv)
 {
+  TRACE("weak_unref");
   char buf[64];
   hashitem_T *hi;
   dictitem_T *di;
@@ -467,6 +493,7 @@ weak_unref(typval_T *tv)
 static Handle<String>
 ReadFile(const char* name)
 {
+  TRACE("ReadFile");
   FILE* file = fopen(name, "rb");
   if (file == NULL) return Handle<String>();
 
@@ -489,6 +516,7 @@ ReadFile(const char* name)
 static bool
 ExecuteString(Handle<String> source, Handle<Value> name, bool print_result, bool report_exceptions, std::string& err)
 {
+  TRACE("ExecuteString");
   HandleScope handle_scope;
   TryCatch try_catch;
   Handle<Script> script = Script::Compile(source, name);
@@ -516,6 +544,7 @@ ExecuteString(Handle<String> source, Handle<Value> name, bool print_result, bool
 static void
 ReportException(TryCatch* try_catch)
 {
+  TRACE("ReportException");
   HandleScope handle_scope;
   String::Utf8Value exception(try_catch->Exception());
   Handle<Message> message = try_catch->Message();
@@ -551,6 +580,7 @@ ReportException(TryCatch* try_catch)
 static Handle<Value>
 vim_execute(const Arguments& args)
 {
+  TRACE("vim_execute");
   HandleScope handle_scope;
 
   if (args.Length() != 1 || !args[0]->IsString())
@@ -568,6 +598,7 @@ vim_execute(const Arguments& args)
 static Handle<Value>
 Load(const Arguments& args)
 {
+  TRACE("Load");
   for (int i = 0; i < args.Length(); i++) {
     HandleScope handle_scope;
     String::Utf8Value file(args[i]);
@@ -586,6 +617,7 @@ Load(const Arguments& args)
 static Handle<Value>
 MakeVimList(list_T *list, Handle<Object> obj)
 {
+  TRACE("MakeVimList");
   typval_T *tv = alloc_tv();
   tv_set_list(tv, list);
   weak_ref(tv);
@@ -602,6 +634,7 @@ MakeVimList(list_T *list, Handle<Object> obj)
 static void
 VimListDestroy(Persistent<Value> object, void* parameter)
 {
+  TRACE("VimListDestroy");
   typval_T *tv = (typval_T*)parameter;
 
   objcache.erase(tv->vval.v_list);
@@ -613,6 +646,7 @@ VimListDestroy(Persistent<Value> object, void* parameter)
 static Handle<Value>
 VimListCreate(const Arguments& args)
 {
+  TRACE("VimListCreate");
   if (!args.IsConstructCall())
     return ThrowException(String::New("Cannot call constructor as function"));
 
@@ -625,6 +659,7 @@ VimListCreate(const Arguments& args)
 static Handle<Value>
 VimListGet(uint32_t index, const AccessorInfo& info)
 {
+  TRACE("VimListGet");
   Handle<Object> self = info.Holder();
   Handle<External> external = Handle<External>::Cast(self->GetInternalField(0));
   list_T *list = static_cast<list_T*>(external->Value());
@@ -641,6 +676,7 @@ VimListGet(uint32_t index, const AccessorInfo& info)
 static Handle<Value>
 VimListSet(uint32_t index, Local<Value> value, const AccessorInfo& info)
 {
+  TRACE("VimListSet");
   Handle<Object> self = info.Holder();
   Handle<External> external = Handle<External>::Cast(self->GetInternalField(0));
   list_T *list = static_cast<list_T*>(external->Value());
@@ -660,6 +696,7 @@ VimListSet(uint32_t index, Local<Value> value, const AccessorInfo& info)
 static Handle<Boolean>
 VimListQuery(uint32_t index, const AccessorInfo& info)
 {
+  TRACE("VimListQuery");
   Handle<Object> self = info.Holder();
   Handle<External> external = Handle<External>::Cast(self->GetInternalField(0));
   list_T *list = static_cast<list_T*>(external->Value());
@@ -672,6 +709,7 @@ VimListQuery(uint32_t index, const AccessorInfo& info)
 static Handle<Boolean>
 VimListDelete(uint32_t index, const AccessorInfo& info)
 {
+  TRACE("VimListDelete");
   Handle<Object> self = info.Holder();
   Handle<External> external = Handle<External>::Cast(self->GetInternalField(0));
   list_T *list = static_cast<list_T*>(external->Value());
@@ -686,6 +724,7 @@ VimListDelete(uint32_t index, const AccessorInfo& info)
 static Handle<Array>
 VimListEnumerate(const AccessorInfo& info)
 {
+  TRACE("VimListEnumerate");
   Handle<Object> self = info.Holder();
   Handle<External> external = Handle<External>::Cast(self->GetInternalField(0));
   list_T *list = static_cast<list_T*>(external->Value());
@@ -700,6 +739,7 @@ VimListEnumerate(const AccessorInfo& info)
 static Handle<Value>
 VimListLength(Local<String> property, const AccessorInfo& info)
 {
+  TRACE("VimListLength");
   Handle<Object> self = info.Holder();
   Handle<External> external = Handle<External>::Cast(self->GetInternalField(0));
   list_T *list = static_cast<list_T*>(external->Value());
@@ -710,6 +750,7 @@ VimListLength(Local<String> property, const AccessorInfo& info)
 static Handle<Value>
 MakeVimDict(dict_T *dict, Handle<Object> obj)
 {
+  TRACE("MakeVimDict");
   typval_T *tv = alloc_tv();
   tv_set_dict(tv, dict);
   weak_ref(tv);
@@ -726,6 +767,7 @@ MakeVimDict(dict_T *dict, Handle<Object> obj)
 static void
 VimDictDestroy(Persistent<Value> object, void* parameter)
 {
+  TRACE("VimDictDestroy");
   typval_T *tv = (typval_T*)parameter;
 
   objcache.erase(tv->vval.v_dict);
@@ -737,6 +779,7 @@ VimDictDestroy(Persistent<Value> object, void* parameter)
 static Handle<Value>
 VimDictCreate(const Arguments& args)
 {
+  TRACE("VimDictCreate");
   if (!args.IsConstructCall())
     return ThrowException(String::New("Cannot call constructor as function"));
 
@@ -749,30 +792,35 @@ VimDictCreate(const Arguments& args)
 static Handle<Value>
 VimDictIdxGet(uint32_t index, const AccessorInfo& info)
 {
+  TRACE("VimDictIdxGet");
   return VimDictGet(Integer::New(index)->ToString(), info);
 }
 
 static Handle<Value>
 VimDictIdxSet(uint32_t index, Local<Value> value, const AccessorInfo& info)
 {
+  TRACE("VimDictIdxSet");
   return VimDictSet(Integer::New(index)->ToString(), value, info);
 }
 
 static Handle<Boolean>
 VimDictIdxQuery(uint32_t index, const AccessorInfo& info)
 {
+  TRACE("VimDictIdxQuery");
   return VimDictQuery(Integer::New(index)->ToString(), info);
 }
 
 static Handle<Boolean>
 VimDictIdxDelete(uint32_t index, const AccessorInfo& info)
 {
+  TRACE("VimDictIdxDelete");
   return VimDictDelete(Integer::New(index)->ToString(), info);
 }
 
 static Handle<Value>
 VimDictGet(Local<String> property, const AccessorInfo& info)
 {
+  TRACE("VimDictIdxGet");
   if (property->Length() == 0)
     return ThrowException(String::New("Cannot use empty key for Dictionary"));
   Handle<Object> self = info.Holder();
@@ -802,6 +850,7 @@ VimDictGet(Local<String> property, const AccessorInfo& info)
 static Handle<Value>
 VimDictSet(Local<String> property, Local<Value> value, const AccessorInfo& info)
 {
+  TRACE("VimDictSet");
   if (property->Length() == 0)
     return ThrowException(String::New("Cannot use empty key for Dictionary"));
   Handle<Object> self = info.Holder();
@@ -823,6 +872,7 @@ VimDictSet(Local<String> property, Local<Value> value, const AccessorInfo& info)
 static Handle<Boolean>
 VimDictQuery(Local<String> property, const AccessorInfo& info)
 {
+  TRACE("VimDictQuery");
   Handle<Object> self = info.Holder();
   Handle<External> external = Handle<External>::Cast(self->GetInternalField(0));
   dict_T *dict = static_cast<dict_T*>(external->Value());
@@ -836,6 +886,7 @@ VimDictQuery(Local<String> property, const AccessorInfo& info)
 static Handle<Boolean>
 VimDictDelete(Local<String> property, const AccessorInfo& info)
 {
+  TRACE("VimDictDelete");
   if (property->Length() == 0)
     return False();
   Handle<Object> self = info.Holder();
@@ -852,6 +903,7 @@ VimDictDelete(Local<String> property, const AccessorInfo& info)
 static Handle<Array>
 VimDictEnumerate(const AccessorInfo& info)
 {
+  TRACE("VimDictEnumerate");
   Handle<Object> self = info.Holder();
   Handle<External> external = Handle<External>::Cast(self->GetInternalField(0));
   dict_T *dict = static_cast<dict_T*>(external->Value());
@@ -872,6 +924,7 @@ VimDictEnumerate(const AccessorInfo& info)
 static Handle<Value>
 MakeVimFunc(const char *name, Handle<Object> obj)
 {
+  TRACE("MakeVimFunc");
   typval_T *tv = alloc_tv();
   tv_set_func(tv, (char_u*)name);
   weak_ref(tv);
@@ -887,6 +940,7 @@ MakeVimFunc(const char *name, Handle<Object> obj)
 static void
 VimFuncDestroy(Persistent<Value> object, void* parameter)
 {
+  TRACE("VimFuncDestroy");
   typval_T *tv = (typval_T*)parameter;
 
   weak_unref(tv);
@@ -896,6 +950,7 @@ VimFuncDestroy(Persistent<Value> object, void* parameter)
 static Handle<Value>
 VimFuncCall(const Arguments& args)
 {
+  TRACE("VimFuncCall");
   if (args.IsConstructCall())
     return ThrowException(String::New("Cannot create VimFunc"));
 
