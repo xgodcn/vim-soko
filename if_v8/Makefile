@@ -2,7 +2,7 @@
 V8DIR=./v8
 
 CFLAGS=-I$(V8DIR)/include -W -Wall -Werror -Wno-unused-parameter -fPIC
-LDFLAGS=-L$(V8DIR) -lv8 -lpthread
+LDFLAGS=-L$(V8DIR) -lv8 -lpthread -lrt
 
 all: if_v8.so
 
