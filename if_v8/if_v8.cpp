@@ -42,6 +42,7 @@ static LookupMap objcache;
 static dict_T *v_weak;
 
 static const char *init_v8();
+static void gc_();
 
 static bool vim_to_v8(typval_T *vimobj, Handle<Value> *v8obj, int depth, LookupMap *lookup, bool wrap, std::string *err);
 static bool v8_to_vim(Handle<Value> v8obj, typval_T *vimobj, int depth, LookupMap *lookup, std::string *err);
@@ -131,6 +132,9 @@ execute(const char *expr)
   std::string err;
   if (!ExecuteString(String::New(expr), String::New("(command-line)"), true, true, err))
     emsg((char_u*)err.c_str());
+  // XXX: It is too expensive to run GC for each execution.
+  if (0)
+    gc_();
   return NULL;
 }
 
@@ -188,6 +192,16 @@ init_v8()
   }
 
   return NULL;
+}
+
+// v8/ChangeLog
+// 2009-02-27: Version 1.0.3
+// Force garbage collections when disposing contexts.
+static void
+gc_()
+{
+  HandleScope handle_scope;
+  Context::New().Dispose();
 }
 
 static bool
