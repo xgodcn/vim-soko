@@ -2,7 +2,7 @@
  *
  * v8 interface to Vim
  *
- * Last Change: 2009-02-28
+ * Last Change: 2009-04-01
  * Maintainer: Yukihiro Nakadaira <yukihiro.nakadaira@gmail.com>
  */
 #include <cstdio>
@@ -1001,16 +1001,6 @@ VimFuncCall(const Arguments& args)
   // return vim.call(name, args, obj)
   Handle<Object> vim = Handle<Object>::Cast(context->Global()->Get(String::New("vim")));
   Handle<Function> call = Handle<Function>::Cast(vim->Get(String::New("call")));
-
-  Handle<Value> res;
-  Handle<Value> exception;
-  {
-    TryCatch try_catch;
-    res = call->Call(vim, 3, callargs);
-    exception = Local<Value>::New(try_catch.Exception());
-  }
-  if (!exception.IsEmpty())
-    return ThrowException(exception);
-  return res;
+  return call->Call(vim, 3, callargs);
 }
 
