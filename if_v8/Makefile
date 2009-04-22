@@ -18,5 +18,5 @@ v8:
 	svn co http://v8.googlecode.com/svn/trunk v8
 
 v8lib: v8
-	cd v8 && scons
+	cd v8 && scons mode=release
 

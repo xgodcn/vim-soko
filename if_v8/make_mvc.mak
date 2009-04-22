@@ -8,7 +8,7 @@
 V8DIR=.\v8
 
 CFLAGS=/I$(V8DIR)\include /DWIN32
-LDFLAGS=/MD $(V8DIR)\v8.lib winmm.lib wsock32.lib
+LDFLAGS=/MD $(V8DIR)\v8.lib winmm.lib ws2_32.lib
 VIMNAME=gvim.exe
 
 all: if_v8.dll
@@ -29,7 +29,7 @@ v8:
 	svn co http://v8.googlecode.com/svn/trunk v8
 
 v8lib: v8
-	cd v8 && scons msvcrt=shared env="PATH:C:\Program Files\Microsoft Visual Studio 9.0\VC\bin;C:\Program Files\Microsoft Visual Studio 9.0\Common7\IDE;C:\Program Files\Microsoft Visual Studio 9.0\Common7\Tools,INCLUDE:C:\Program Files\Microsoft Visual Studio 9.0\VC\include;C:\Program Files\Microsoft SDKs\Windows\v6.0A\Include,LIB:C:\Program Files\Microsoft Visual Studio 9.0\VC\lib;C:\Program Files\Microsoft SDKs\Windows\v6.0A\Lib"
+	cd v8 && scons mode=release msvcrt=shared env="PATH:C:\Program Files\Microsoft Visual Studio 9.0\VC\bin;C:\Program Files\Microsoft Visual Studio 9.0\Common7\IDE;C:\Program Files\Microsoft Visual Studio 9.0\Common7\Tools,INCLUDE:C:\Program Files\Microsoft Visual Studio 9.0\VC\include;C:\Program Files\Microsoft SDKs\Windows\v6.0A\Include,LIB:C:\Program Files\Microsoft Visual Studio 9.0\VC\lib;C:\Program Files\Microsoft SDKs\Windows\v6.0A\Lib"
 
 
 vim7:
