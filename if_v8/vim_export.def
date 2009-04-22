@@ -1,7 +1,7 @@
 EXPORTS
   ; variables
   hash_removed
-  int got_int
+  got_int
   ; functions
   eval_expr
   do_cmdline_cmd
