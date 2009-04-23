@@ -7,7 +7,7 @@
 
 V8DIR=.\v8
 
-CFLAGS=/I$(V8DIR)\include /DWIN32
+CFLAGS=/I$(V8DIR)\include /DWIN32 /GL /EHsc
 LDFLAGS=/MD $(V8DIR)\v8.lib winmm.lib ws2_32.lib
 VIMNAME=gvim.exe
 
