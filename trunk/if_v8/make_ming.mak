@@ -15,7 +15,7 @@ libgvim.a: vim_export.def
 	dlltool --input-def vim_export.def --dllname $(VIMNAME) --output-lib libgvim.a
 
 clean:
-	rm -f *.a *.dll
+	del *.a *.dll
 
 
 
