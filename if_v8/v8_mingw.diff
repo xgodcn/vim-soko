@@ -1,6 +1,6 @@
 Index: src/SConscript
 ===================================================================
---- src/SConscript	(revision 1782)
+--- src/SConscript	(revision 1788)
 +++ src/SConscript	(working copy)
 @@ -130,7 +130,7 @@
  
@@ -13,7 +13,7 @@ Index: src/SConscript
    env['BUILDERS']['JS2C'] = Builder(action=js2c.JS2C)
 Index: SConstruct
 ===================================================================
---- SConstruct	(revision 1782)
+--- SConstruct	(revision 1788)
 +++ SConstruct	(working copy)
 @@ -120,7 +120,7 @@
      },
@@ -24,7 +24,20 @@ Index: SConstruct
      },
      'os:android': {
        'CPPDEFINES':   ['ANDROID', '__ARM_ARCH_5__', '__ARM_ARCH_5T__',
-@@ -434,7 +434,7 @@
+@@ -203,7 +203,11 @@
+     },
+     'disassembler:on': {
+       'CPPDEFINES':   ['ENABLE_DISASSEMBLER']
+-    }
++    },
++    'library:shared': {
++      'CPPDEFINES': ['BUILDING_V8_SHARED'],
++      'LIBS': ['winmm', 'ws2_32']
++    },
+   },
+   'msvc': {
+     'all': {
+@@ -434,7 +438,7 @@
  
  
  def GuessToolchain(os):
@@ -33,7 +46,7 @@ Index: SConstruct
    if 'gcc' in tools:
      return 'gcc'
    elif 'msvc' in tools:
-@@ -710,13 +710,13 @@
+@@ -710,13 +714,13 @@
      library = env.SharedLibrary(library_name, object_files, PDB=pdb_name)
    context.library_targets.append(library)
  
@@ -49,7 +62,7 @@ Index: SConstruct
      sample_env.Replace(**context.flags['sample'])
      context.ApplyEnvOverrides(sample_env)
      sample_object = sample_env.SConscript(
-@@ -743,7 +743,7 @@
+@@ -743,7 +747,7 @@
  
  def Build():
    opts = GetOptions()
