@@ -1,18 +1,19 @@
 # for MinGW and MSYS
 
 V8DIR=./v8
-
-CFLAGS=-I$(V8DIR)/include -DWIN32
-LDFLAGS=-L$(V8DIR) -lv8 -lwinmm -lws2_32
+V8CFLAGS=-I$(V8DIR)/include -DUSING_V8_SHARED
+V8LDFLAGS=-L$(V8DIR) -lv8
+CFLAGS=$(V8CFLAGS) -DWIN32 -O
+LDFLAGS=$(V8LDFLAGS) -s -shared -L. -lgvim
 VIMNAME=gvim.exe
 
 all: if_v8.dll
 
 if_v8.dll: if_v8.cpp vimext.h libgvim.a
-	g++ $(CFLAGS) -shared -o $@ -O -s if_v8.cpp $(LDFLAGS) -L. -lgvim
+	g++ $(CFLAGS) -o $@ if_v8.cpp $(LDFLAGS)
 
 libgvim.a: vim_export.def
-	dlltool --input-def vim_export.def --dllname $(VIMNAME) --output-lib libgvim.a
+	dlltool --input-def $< --dllname $(VIMNAME) --output-lib $@
 
 clean:
 	del *.a *.dll
@@ -25,7 +26,7 @@ v8:
 	cd v8 && patch -p0 < ../v8_mingw.diff
 
 v8lib: v8
-	cd v8 && scons mode=release
+	cd v8 && scons mode=release library=shared
 
 vim7:
 	svn co https://vim.svn.sourceforge.net/svnroot/vim/vim7
