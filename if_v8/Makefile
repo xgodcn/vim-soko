@@ -1,13 +1,14 @@
 
 V8DIR=./v8
-
-CFLAGS=-I$(V8DIR)/include -W -Wall -Werror -Wno-unused-parameter -fPIC
-LDFLAGS=-L$(V8DIR) -lv8 -lpthread -lrt
+V8CFLAGS=-I$(V8DIR)/include
+V8LDFLAGS=-L$(V8DIR) -lv8 -lpthread
+CFLAGS=$(V8CFLAGS) -W -Wall -Werror -Wno-unused-parameter -fPIC
+LDFLAGS=$(V8LDFLAGS) -shared
 
 all: if_v8.so
 
 if_v8.so: if_v8.cpp vimext.h
-	g++ $(CFLAGS) -shared -o if_v8.so if_v8.cpp $(LDFLAGS)
+	g++ $(CFLAGS) -o $@ if_v8.cpp $(LDFLAGS)
 
 clean:
 	rm if_v8.so
