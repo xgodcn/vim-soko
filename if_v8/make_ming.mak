@@ -1,3 +1,4 @@
+# not work on msys
 
 V8DIR=./v8
 V8CFLAGS=-I$(V8DIR)/include -DUSING_V8_SHARED
@@ -21,7 +22,6 @@ clean:
 
 v8:
 	svn co http://v8.googlecode.com/svn/trunk v8
-	# workaround for build
 	cd v8 && patch -p0 < ..\v8_mingw.diff
 	cd v8 && scons mode=release library=shared
 
