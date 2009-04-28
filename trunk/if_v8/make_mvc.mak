@@ -1,7 +1,7 @@
-# to make v8.lib
-#   > nmake -f make_mvc.mak v8lib
+# to make v8
+#   > nmake -f make_mvc.mak v8
 # to make gvim.exe with dll extension support
-#   > nmake -f make_mvc.mak gvim
+#   > nmake -f make_mvc.mak vim7
 # then, make if_v8.dll
 #   > nmake -f make_mvc.mak if_v8.dll
 
@@ -28,15 +28,11 @@ clean:
 
 v8:
 	svn co http://v8.googlecode.com/svn/trunk v8
-
-v8lib: v8
 	cd v8 && scons mode=release msvcrt=shared library=shared env="PATH:C:\Program Files\Microsoft Visual Studio 9.0\VC\bin;C:\Program Files\Microsoft Visual Studio 9.0\Common7\IDE;C:\Program Files\Microsoft Visual Studio 9.0\Common7\Tools,INCLUDE:C:\Program Files\Microsoft Visual Studio 9.0\VC\include;C:\Program Files\Microsoft SDKs\Windows\v6.0A\Include,LIB:C:\Program Files\Microsoft Visual Studio 9.0\VC\lib;C:\Program Files\Microsoft SDKs\Windows\v6.0A\Lib"
 
 
 vim7:
 	svn co https://vim.svn.sourceforge.net/svnroot/vim/vim7
-
-gvim: vim7
-	copy /y vim_export.def vim7\src
-	cd vim7\src && nmake -f Make_mvc.mak linkdebug=/DEF:vim_export.def GUI=yes IME=yes MBYTE=yes
+	copy vim_export.def vim7\src
+	cd vim7/src && $(MAKE) -f Make_mvc.mak linkdebug=/DEF:vim_export.def GUI=yes IME=yes MBYTE=yes
 

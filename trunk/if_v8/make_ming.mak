@@ -1,4 +1,3 @@
-# for MinGW and MSYS
 
 V8DIR=./v8
 V8CFLAGS=-I$(V8DIR)/include -DUSING_V8_SHARED
@@ -23,15 +22,11 @@ clean:
 v8:
 	svn co http://v8.googlecode.com/svn/trunk v8
 	# workaround for build
-	cd v8 && patch -p0 < ../v8_mingw.diff
-
-v8lib: v8
+	cd v8 && patch -p0 < ..\v8_mingw.diff
 	cd v8 && scons mode=release library=shared
 
 vim7:
 	svn co https://vim.svn.sourceforge.net/svnroot/vim/vim7
-
-gvim: vim7
-	cp vim_export.def vim/src
-	cd vim7/src && make -f Make_mvc.mak LFLAGS=vim_export.def GUI=yes IME=yes MBYTE=yes
+	copy vim_export.def vim7\src
+	cd vim7/src && $(MAKE) -f Make_ming.mak LFLAGS=vim_export.def GUI=yes IME=yes MBYTE=yes
 

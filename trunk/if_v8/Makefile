@@ -17,7 +17,8 @@ clean:
 
 v8:
 	svn co http://v8.googlecode.com/svn/trunk v8
-
-v8lib: v8
 	cd v8 && scons mode=release
 
+vim7:
+	svn co https://vim.svn.sourceforge.net/svnroot/vim/vim7
+	cd vim7/src && LDFLAGS=-rdynamic ./configure && make
