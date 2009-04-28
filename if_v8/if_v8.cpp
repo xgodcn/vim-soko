@@ -2,7 +2,7 @@
  *
  * v8 interface to Vim
  *
- * Last Change: 2009-04-01
+ * Last Change: 2009-04-29
  * Maintainer: Yukihiro Nakadaira <yukihiro.nakadaira@gmail.com>
  */
 #include <cstdio>
@@ -17,6 +17,7 @@
 extern "C" {
 DLLEXPORT const char *init(const char *dll_path);
 DLLEXPORT const char *execute(const char *expr);
+DLLEXPORT const char *gc();
 }
 
 using namespace v8;
@@ -42,7 +43,6 @@ static LookupMap objcache;
 static dict_T *v_weak;
 
 static const char *init_v8();
-static void gc_();
 
 static bool vim_to_v8(typval_T *vimobj, Handle<Value> *v8obj, int depth, LookupMap *lookup, bool wrap, std::string *err);
 static bool v8_to_vim(Handle<Value> v8obj, typval_T *vimobj, int depth, LookupMap *lookup, std::string *err);
@@ -132,9 +132,18 @@ execute(const char *expr)
   std::string err;
   if (!ExecuteString(String::New(expr), String::New("(command-line)"), true, true, err))
     emsg((char_u*)err.c_str());
-  // XXX: It is too expensive to run GC for each execution.
-  if (0)
-    gc_();
+  return NULL;
+}
+
+// v8/ChangeLog
+// 2009-02-27: Version 1.0.3
+// Force garbage collections when disposing contexts.
+const char *
+gc()
+{
+  TRACE("gc");
+  HandleScope handle_scope;
+  Context::New().Dispose();
   return NULL;
 }
 
@@ -192,16 +201,6 @@ init_v8()
   }
 
   return NULL;
-}
-
-// v8/ChangeLog
-// 2009-02-27: Version 1.0.3
-// Force garbage collections when disposing contexts.
-static void
-gc_()
-{
-  HandleScope handle_scope;
-  Context::New().Dispose();
 }
 
 static bool
@@ -497,7 +496,7 @@ weak_unref(typval_T *tv)
     emsg((char_u*)"if_v8: weak_unref(): internal error");
     return;
   }
-  // XXX: save di because result of HI2DI() differ after hash_remove().
+  // XXX: save di because hash_remove() clear it.
   di = HI2DI(hi);
   hash_remove(&v_weak->dv_hashtab, hi);
   vim_free(di);
