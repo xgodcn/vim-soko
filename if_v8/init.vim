@@ -40,7 +40,15 @@ function s:lib.init() abort
     return
   endif
   let s:init = 1
+  if has('win32')
+    " If if_v8.dll links to separated v8.dll, we need to set $PATH.
+    let path_save = $PATH
+    let $PATH .= ';' . self.dir
+  endif
   let err = libcall(self.dll, 'init', self.dll)
+  if has('win32')
+    let $PATH = path_save
+  endif
   if err != ''
     echoerr err
   endif
