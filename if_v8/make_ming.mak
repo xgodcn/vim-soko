@@ -28,5 +28,5 @@ v8:
 vim7:
 	svn co https://vim.svn.sourceforge.net/svnroot/vim/vim7
 	copy vim_export.def vim7\src
-	cd vim7/src && $(MAKE) -f Make_ming.mak LFLAGS=vim_export.def GUI=yes IME=yes MBYTE=yes
+	cd vim7/src && $(MAKE) -f Make_ming.mak LFLAGS="vim_export.def -mwindows" GUI=yes IME=yes MBYTE=yes
 
