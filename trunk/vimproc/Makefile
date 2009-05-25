@@ -1,5 +1,5 @@
 
-CFLAGS+=-W -Wall -Wno-unused -ansi -pedantic -shared
+CFLAGS+=-W -Wall -Wno-unused -pedantic -shared
 
 # for FreeBSD's make
 #.if defined(OS) && ${OS} == "Windows_NT"
