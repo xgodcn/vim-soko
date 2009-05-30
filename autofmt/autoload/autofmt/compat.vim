@@ -1,6 +1,6 @@
 " Maintainer:   Yukihiro Nakadaira <yukihiro.nakadaira@gmail.com>
 " License:      This file is placed in the public domain.
-" Last Change:  2008-12-30
+" Last Change:  2009-05-30
 "
 " Options:
 "
@@ -196,28 +196,28 @@ function s:lib.find_boundary(line)
   while lst[i].col < start_col
     let i += 1
   endwhile
+  let is_prev_one_letter = 0
   let start_idx = i
   let i = self.skip_word(lst, i)
   let i = self.skip_space(lst, i)
   while i < len(lst)
     let brk = self.check_boundary(lst, i)
     let next = self.skip_word(lst, i)
-    if brk == "allow_break" && &fo =~ '1'
+    if is_prev_one_letter && brk == "allow_break" && &fo =~ '1'
       " don't break a line after a one-letter word.
-      let j = (break_idx == -1) ? start_idx : break_idx
-      if (j == 0 || lst[j - 1].c =~ '\s') && lst[j + 1].c =~ '\s'
-        let brk = "allow_break_before"
-      endif
+      let brk = "allow_break_before"
     endif
     if brk == "allow_break"
       let break_idx = i
       if &textwidth < lst[next - 1].virtcol
         return lst[break_idx].col
       endif
+      let is_prev_one_letter = (lst[i + 1].c =~ '\s')
     elseif brk == "allow_break_before"
       if &textwidth < lst[next - 1].virtcol && break_idx != -1
         return lst[break_idx].col
       endif
+      let is_prev_one_letter = (lst[i + 1].c =~ '\s')
     endif
     let i = self.skip_space(lst, next)
   endwhile
