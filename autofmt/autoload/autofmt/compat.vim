@@ -212,12 +212,12 @@ function s:lib.find_boundary(line)
       if &textwidth < lst[next - 1].virtcol
         return lst[break_idx].col
       endif
-      let is_prev_one_letter = (lst[i + 1].c =~ '\s')
+      let is_prev_one_letter = (i == 0 || lst[i - 1].c =~ '\s') && lst[i + 1].c =~ '\s'
     elseif brk == "allow_break_before"
       if &textwidth < lst[next - 1].virtcol && break_idx != -1
         return lst[break_idx].col
       endif
-      let is_prev_one_letter = (lst[i + 1].c =~ '\s')
+      let is_prev_one_letter = (i == 0 || lst[i - 1].c =~ '\s') && lst[i + 1].c =~ '\s'
     endif
     let i = self.skip_space(lst, next)
   endwhile
