@@ -1,4 +1,4 @@
-" Last Change: 2009-04-14
+" Last Change: 2009-06-07
 
 if exists("b:did_ftplugin")
   finish
@@ -20,7 +20,14 @@ function! s:PhpLint()
   if !executable('php')
     return
   endif
-  let cmd = 'php -l ' . shellescape(expand('%'))
+  let opt = ''
+  if get(g:, 'php_noShortTags', 0)
+    let opt .= ' -d short_open_tag=0 '
+  endif
+  if get(g:, 'php_asp_tags', 0)
+    let opt .= ' -d asp_tags=0 '
+  endif
+  let cmd = 'php -l ' . opt . shellescape(expand('%'))
   let msg = system(cmd)
   if v:shell_error
     echoerr cmd
