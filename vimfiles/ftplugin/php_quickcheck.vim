@@ -25,7 +25,7 @@ function! s:PhpLint()
     let opt .= ' -d short_open_tag=0 '
   endif
   if get(g:, 'php_asp_tags', 0)
-    let opt .= ' -d asp_tags=0 '
+    let opt .= ' -d asp_tags=1 '
   endif
   let cmd = 'php -l ' . opt . shellescape(expand('%'))
   let msg = system(cmd)
