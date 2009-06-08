@@ -1,8 +1,11 @@
-nnoremap <buffer> <silent> d  :<C-U>set operatorfunc=<SID>qf_dd<CR>g@
-nnoremap <buffer> <silent> dd :<C-U>set operatorfunc=<SID>qf_dd<CR>g@g@
-vnoremap <buffer> <silent> d  :<C-U>set operatorfunc=<SID>qf_dd<CR>gvg@
+nnoremap <buffer> <silent> <script> d  :<C-U>set operatorfunc=<SID>qf_dd<CR><SID>[count]g@
+nnoremap <buffer> <silent> <script> dd :<C-U>set operatorfunc=<SID>qf_dd<CR><SID>[count]g@g@
+vnoremap <buffer> <silent> <script> d  :<C-U>set operatorfunc=<SID>qf_dd<CR>gv<SID>[count]g@
 nmap     <buffer> <silent> D  dd
 vmap     <buffer> <silent> D  d
+
+nnoremap <buffer> <expr> <SID>[count] v:count == 0 ? "" : v:count
+vnoremap <buffer> <expr> <SID>[count] v:prevcount == 0 ? "" : v:prevcount
 
 if exists('s:loaded')
   finish
