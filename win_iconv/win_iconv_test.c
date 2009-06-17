@@ -148,6 +148,7 @@ main(int argc, char **argv)
     if (setdll(""))
     {
         success("ascii", "ABC", "ascii", "ABC");
+        success("ascii", "ABC", "utf-16be", "\x00\x41\x00\x42\x00\x43");
     }
     else
     {

@@ -3,6 +3,7 @@
  *
  * This file is placed in the public domain.
  *
+ * Last Change: 2009-06-18
  * Maintainer: Yukihiro Nakadaira <yukihiro.nakadaira@gmail.com>
  *
  * If $WINICONV_LIBICONV_DLL environment variable was defined, win_iconv
@@ -1104,7 +1105,7 @@ strrstr(const char *str, const char *token)
 
 #if defined(USE_LIBICONV_DLL)
 static int
-libiconv_iconv_open(rec_iconv_t *cd, const char *fromcode, const char *tocode)
+libiconv_iconv_open(rec_iconv_t *cd, const char *tocode, const char *fromcode)
 {
     HMODULE hlibiconv = NULL;
     HMODULE hmsvcrt = NULL;
