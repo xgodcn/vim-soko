@@ -1909,7 +1909,7 @@ main(int argc, char **argv)
         outbytesleft = sizeof(outbuf);
         r = iconv(cd, &pin, &inbytesleft, &pout, &outbytesleft);
         fwrite(outbuf, 1, sizeof(outbuf) - outbytesleft, stdout);
-        if (r == (size_t)(-1) && errno != EINVAL && errno != E2BIG)
+        if (r == (size_t)(-1) && errno != E2BIG && (errno != EINVAL || feof(in)))
         {
             perror("conversion error");
             return 1;
