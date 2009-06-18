@@ -3,7 +3,7 @@
  *
  * This file is placed in the public domain.
  *
- * Last Change: 2009-06-18
+ * Last Change: 2009-06-19
  * Maintainer: Yukihiro Nakadaira <yukihiro.nakadaira@gmail.com>
  *
  * If $WINICONV_LIBICONV_DLL environment variable was defined, win_iconv
@@ -45,7 +45,7 @@
 #define UNICODE_MODE_BOM_DONE   1
 #define UNICODE_MODE_SWAPPED    2
 
-#define FLAG_USE_BOM_ENDIAN     1
+#define FLAG_USE_BOM            1
 #define FLAG_TRANSLIT           2 /* //TRANSLIT */
 #define FLAG_IGNORE             4 /* //IGNORE (not implemented) */
 
@@ -144,10 +144,8 @@ static csconv_t make_csconv(const char *name);
 static int name_to_codepage(const char *name);
 static uint utf16_to_ucs4(const ushort *wbuf);
 static void ucs4_to_utf16(uint wc, ushort *wbuf, int *wbufsize);
-static int is_unicode(int codepage);
 static int mbtowc_flags(int codepage);
 static int must_use_null_useddefaultchar(int codepage);
-static void check_utf_bom(rec_iconv_t *cd, ushort *wbuf, int *wbufsize);
 static char *strrstr(const char *str, const char *token);
 
 #if defined(USE_LIBICONV_DLL)
@@ -787,22 +785,27 @@ win_iconv(iconv_t _cd, const char **inbuf, size_t *inbytesleft, char **outbuf, s
     int insize;
     int outsize;
     int wsize;
-    DWORD mode;
+    DWORD frommode;
+    DWORD tomode;
     uint wc;
     compat_t *cp;
     int i;
 
     if (inbuf == NULL || *inbuf == NULL)
     {
+        tomode = cd->to.mode;
         if (outbuf != NULL && *outbuf != NULL && cd->to.flush != NULL)
         {
             outsize = cd->to.flush(&cd->to, (uchar *)*outbuf, *outbytesleft);
             if (outsize == -1)
+            {
+                cd->to.mode = tomode;
                 return (size_t)(-1);
+            }
             *outbuf += outsize;
             *outbytesleft -= outsize;
         }
-        if (is_unicode(cd->from.codepage) && (cd->from.mode & UNICODE_MODE_SWAPPED))
+        if ((cd->from.flags & FLAG_USE_BOM) && (cd->from.mode & UNICODE_MODE_SWAPPED))
             cd->from.codepage ^= 1;
         cd->from.mode = 0;
         cd->to.mode = 0;
@@ -811,17 +814,15 @@ win_iconv(iconv_t _cd, const char **inbuf, size_t *inbytesleft, char **outbuf, s
 
     while (*inbytesleft != 0)
     {
-        mode = cd->from.mode;
+        frommode = cd->from.mode;
+        tomode = cd->to.mode;
         wsize = MB_CHAR_MAX;
 
         insize = cd->from.mbtowc(&cd->from, (const uchar *)*inbuf, *inbytesleft, wbuf, &wsize);
         if (insize == -1)
-            return (size_t)(-1);
-
-        if (is_unicode(cd->from.codepage) && !(cd->from.mode & UNICODE_MODE_BOM_DONE))
         {
-            check_utf_bom(cd, wbuf, &wsize);
-            cd->from.mode |= UNICODE_MODE_BOM_DONE;
+            cd->from.mode = frommode;
+            return (size_t)(-1);
         }
 
         if (wsize == 0)
@@ -862,7 +863,8 @@ win_iconv(iconv_t _cd, const char **inbuf, size_t *inbytesleft, char **outbuf, s
         outsize = cd->to.wctomb(&cd->to, wbuf, wsize, (uchar *)*outbuf, *outbytesleft);
         if (outsize == -1)
         {
-            cd->from.mode = mode;
+            cd->from.mode = frommode;
+            cd->to.mode = tomode;
             return (size_t)(-1);
         }
 
@@ -909,17 +911,15 @@ make_csconv(const char *_name)
     {
         cv.mbtowc = utf16_mbtowc;
         cv.wctomb = utf16_wctomb;
-        if (_stricmp(name, "UTF-16") == 0 ||
-	    _stricmp(name, "UTF16") == 0 ||
-	    _stricmp(name, "UCS-2") == 0)
-            cv.flags |= FLAG_USE_BOM_ENDIAN;
+        if (_stricmp(name, "UTF-16") == 0 || _stricmp(name, "UTF16") == 0)
+            cv.flags |= FLAG_USE_BOM;
     }
     else if (cv.codepage == 12000 || cv.codepage == 12001)
     {
         cv.mbtowc = utf32_mbtowc;
         cv.wctomb = utf32_wctomb;
         if (_stricmp(name, "UTF-32") == 0 || _stricmp(name, "UTF32") == 0)
-            cv.flags |= FLAG_USE_BOM_ENDIAN;
+            cv.flags |= FLAG_USE_BOM;
     }
     else if (cv.codepage == 65001)
     {
@@ -1021,14 +1021,6 @@ ucs4_to_utf16(uint wc, ushort *wbuf, int *wbufsize)
     }
 }
 
-static int
-is_unicode(int codepage)
-{
-    return (codepage == 1200 || codepage == 1201 ||
-            codepage == 12000 || codepage == 12001 ||
-            codepage == 65000 || codepage == 65001);
-}
-
 /*
  * Check if codepage is one of those for which the dwFlags parameter
  * to MultiByteToWideChar() must be zero. Return zero or
@@ -1068,27 +1060,6 @@ must_use_null_useddefaultchar(int codepage)
             codepage == 52936 || codepage == 54936 ||
             (codepage >= 57002 && codepage <= 57011) ||
             codepage == 42);
-}
-
-static void
-check_utf_bom(rec_iconv_t *cd, ushort *wbuf, int *wbufsize)
-{
-    /* If we have a BOM, trust it, despite what the caller said */
-    if (wbuf[0] == 0xFFFE && (cd->from.flags & FLAG_USE_BOM_ENDIAN))
-    {
-        /* swap endian: 1200 <-> 1201 or 12000 <-> 12001 */
-        cd->from.codepage ^= 1;
-        cd->from.mode |= UNICODE_MODE_SWAPPED;
-        wbuf[0] = 0xFEFF;
-    }
-
-    /*
-     * Remove BOM.
-     * Don't do this if "to" is Unicode,
-     * except if "to" is UTF-8.
-     */
-    if (wbuf[0] == 0xFEFF && (!is_unicode(cd->to.codepage) || cd->to.codepage == 65001))
-        *wbufsize = 0;
 }
 
 static char *
@@ -1442,6 +1413,25 @@ utf16_mbtowc(csconv_t *cv, const uchar *buf, int bufsize, ushort *wbuf, int *wbu
         wbuf[0] = (buf[1] << 8) | buf[0];
     else if (cv->codepage == 1201) /* big endian */
         wbuf[0] = (buf[0] << 8) | buf[1];
+
+    if ((cv->flags & FLAG_USE_BOM) && !(cv->mode & UNICODE_MODE_BOM_DONE))
+    {
+        cv->mode |= UNICODE_MODE_BOM_DONE;
+        if (wbuf[0] == 0xFFFE)
+        {
+            /* swap endian: 1200 <-> 1201 */
+            cv->codepage ^= 1;
+            cv->mode |= UNICODE_MODE_SWAPPED;
+            *wbufsize = 0;
+            return 2;
+        }
+        else if (wbuf[0] == 0xFEFF)
+        {
+            *wbufsize = 0;
+            return 2;
+        }
+    }
+
     if (0xDC00 <= wbuf[0] && wbuf[0] <= 0xDFFF)
         return_error(EILSEQ);
     if (0xD800 <= wbuf[0] && wbuf[0] <= 0xDBFF)
@@ -1464,6 +1454,24 @@ utf16_mbtowc(csconv_t *cv, const uchar *buf, int bufsize, ushort *wbuf, int *wbu
 static int
 utf16_wctomb(csconv_t *cv, ushort *wbuf, int wbufsize, uchar *buf, int bufsize)
 {
+    if ((cv->flags & FLAG_USE_BOM) && !(cv->mode & UNICODE_MODE_BOM_DONE))
+    {
+        int r;
+
+        cv->mode |= UNICODE_MODE_BOM_DONE;
+        if (bufsize < 2)
+            return_error(E2BIG);
+        if (cv->codepage == 1200) /* little endian */
+            memcpy(buf, "\xFF\xFE", 2);
+        else if (cv->codepage == 1201) /* big endian */
+            memcpy(buf, "\xFE\xFF", 2);
+
+        r = utf16_wctomb(cv, wbuf, wbufsize, buf + 2, bufsize - 2);
+        if (r == -1)
+            return -1;
+        return r + 2;
+    }
+
     if (bufsize < 2)
         return_error(E2BIG);
     if (cv->codepage == 1200) /* little endian */
@@ -1506,6 +1514,25 @@ utf32_mbtowc(csconv_t *cv, const uchar *buf, int bufsize, ushort *wbuf, int *wbu
         wc = (buf[3] << 24) | (buf[2] << 16) | (buf[1] << 8) | buf[0];
     else if (cv->codepage == 12001) /* big endian */
         wc = (buf[0] << 24) | (buf[1] << 16) | (buf[2] << 8) | buf[3];
+
+    if ((cv->flags & FLAG_USE_BOM) && !(cv->mode & UNICODE_MODE_BOM_DONE))
+    {
+        cv->mode |= UNICODE_MODE_BOM_DONE;
+        if (wc == 0xFFFE0000)
+        {
+            /* swap endian: 12000 <-> 12001 */
+            cv->codepage ^= 1;
+            cv->mode |= UNICODE_MODE_SWAPPED;
+            *wbufsize = 0;
+            return 4;
+        }
+        else if (wc == 0x0000FEFF)
+        {
+            *wbufsize = 0;
+            return 4;
+        }
+    }
+
     if ((0xD800 <= wc && wc <= 0xDFFF) || 0x10FFFF < wc)
         return_error(EILSEQ);
     ucs4_to_utf16(wc, wbuf, wbufsize);
@@ -1516,6 +1543,24 @@ static int
 utf32_wctomb(csconv_t *cv, ushort *wbuf, int wbufsize, uchar *buf, int bufsize)
 {
     uint wc;
+
+    if ((cv->flags & FLAG_USE_BOM) && !(cv->mode & UNICODE_MODE_BOM_DONE))
+    {
+        int r;
+
+        cv->mode |= UNICODE_MODE_BOM_DONE;
+        if (bufsize < 4)
+            return_error(E2BIG);
+        if (cv->codepage == 12000) /* little endian */
+            memcpy(buf, "\xFF\xFE\x00\x00", 4);
+        else if (cv->codepage == 12001) /* big endian */
+            memcpy(buf, "\x00\x00\xFE\xFF", 4);
+
+        r = utf32_wctomb(cv, wbuf, wbufsize, buf + 4, bufsize - 4);
+        if (r == -1)
+            return -1;
+        return r + 4;
+    }
 
     if (bufsize < 4)
         return_error(E2BIG);
