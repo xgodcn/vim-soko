@@ -29,6 +29,7 @@ errstr(int errcode)
     return buf;
 }
 
+#ifdef USE_LIBICONV_DLL
 int use_dll;
 
 int
@@ -48,6 +49,7 @@ setdll(const char *dllpath)
     use_dll = FALSE;
     return FALSE;
 }
+#endif
 
 /*
  * We can test the codepage that is installed in the system.
@@ -94,6 +96,7 @@ test(const char *from, const char *fromstr, int fromsize, const char *to, const 
         exit(1);
     }
 
+#ifdef USE_LIBICONV_DLL
     if (((rec_iconv_t *)cd)->hlibiconv != NULL)
         GetModuleFileName(((rec_iconv_t *)cd)->hlibiconv, dllpath, sizeof(dllpath));
 
@@ -107,6 +110,7 @@ test(const char *from, const char *fromstr, int fromsize, const char *to, const 
         printf("%s: %s -> %s: NG: DLL IS LOADED UNEXPECTEDLY: line=%d\n", dllpath, from, to, line);
         exit(1);
     }
+#endif
 
     errno = 0;
 
@@ -119,8 +123,10 @@ test(const char *from, const char *fromstr, int fromsize, const char *to, const 
         r = iconv(cd, NULL, NULL, &pout, &outbytesleft);
     *pout = 0;
 
+#ifdef USE_LIBICONV_DLL
     if (use_dll)
         printf("%s: ", dllpath);
+#endif
     printf("%s(%s) -> ", from, tohex(fromstr, fromsize));
     printf("%s(%s%s%s): ", to, tohex(tostr, tosize),
             errcode == 0 ? "" : ":",
@@ -144,6 +150,7 @@ test(const char *from, const char *fromstr, int fromsize, const char *to, const 
 int
 main(int argc, char **argv)
 {
+#ifdef USE_LIBICONV_DLL
     /* test use of dll if $DEFAULT_LIBICONV_DLL was defined. */
     if (setdll(""))
     {
@@ -156,6 +163,7 @@ main(int argc, char **argv)
     }
 
     setdll("none");
+#endif
 
     if (check_enc("ascii", 20127))
     {
@@ -166,12 +174,33 @@ main(int argc, char **argv)
 
     /* unicode (CP1200 CP1201 CP12000 CP12001 CP65001) */
     if (check_enc("utf-8", 65001)
-            && check_enc("utf-16", 1201) && check_enc("utf-16le", 1200)
-            && check_enc("utf-32", 12001) && check_enc("utf-32le", 12000))
+            && check_enc("utf-16be", 1201) && check_enc("utf-16le", 1200)
+            && check_enc("utf-32be", 12001) && check_enc("utf-32le", 12000)
+            )
     {
-        success("utf-16", "\xFE\xFF\x01\x02", "utf-16be", "\xFE\xFF\x01\x02");
-        success("utf-16", "\xFF\xFE\x02\x01", "utf-16be", "\xFE\xFF\x01\x02");
+        /* Test the BOM behavior
+         * 1. Remove the BOM when "fromcode" is utf-16 or utf-32.
+         * 2. Add the BOM when "tocode" is utf-16 or utf-32.  */
+        success("utf-16", "\xFE\xFF\x01\x02", "utf-16be", "\x01\x02");
+        success("utf-16", "\xFF\xFE\x02\x01", "utf-16be", "\x01\x02");
+        success("utf-32", "\x00\x00\xFE\xFF\x00\x00\x01\x02", "utf-32be", "\x00\x00\x01\x02");
+        success("utf-32", "\xFF\xFE\x00\x00\x02\x01\x00\x00", "utf-32be", "\x00\x00\x01\x02");
         success("utf-16", "\xFE\xFF\x00\x01", "utf-8", "\x01");
+#ifndef GLIB_COMPILATION
+        success("utf-8", "\x01", "utf-16", "\xFE\xFF\x00\x01");
+        success("utf-8", "\x01", "utf-32", "\x00\x00\xFE\xFF\x00\x00\x00\x01");
+#else
+        success("utf-8", "\x01", "utf-16", "\xFF\xFE\x01\x00");
+        success("utf-8", "\x01", "utf-32", "\xFF\xFE\x00\x00\x01\x00\x00\x00");
+#endif
+
+        success("utf-16be", "\xFE\xFF\x01\x02", "utf-16be", "\xFE\xFF\x01\x02");
+        success("utf-16le", "\xFF\xFE\x02\x01", "utf-16be", "\xFE\xFF\x01\x02");
+        success("utf-32be", "\x00\x00\xFE\xFF\x00\x00\x01\x02", "utf-32be", "\x00\x00\xFE\xFF\x00\x00\x01\x02");
+        success("utf-32le", "\xFF\xFE\x00\x00\x02\x01\x00\x00", "utf-32be", "\x00\x00\xFE\xFF\x00\x00\x01\x02");
+        success("utf-16be", "\xFE\xFF\x00\x01", "utf-8", "\xEF\xBB\xBF\x01");
+        success("utf-8", "\xEF\xBB\xBF\x01", "utf-8", "\xEF\xBB\xBF\x01");
+
         success("utf-16be", "\x01\x02", "utf-16le", "\x02\x01");
         success("utf-16le", "\x02\x01", "utf-16be", "\x01\x02");
         success("utf-16be", "\xFE\xFF", "utf-16le", "\xFF\xFE");
