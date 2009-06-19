@@ -142,6 +142,8 @@ test(const char *from, const char *fromstr, int fromsize, const char *to, const 
     }
 }
 
+#define STATIC_STRLEN(arr) (sizeof(arr) - 1)
+
 #define success(from, fromstr, to, tostr) test(from, fromstr, STATIC_STRLEN(fromstr), to, tostr, STATIC_STRLEN(tostr), 0, BUFSIZ, __LINE__)
 #define einval(from, fromstr, to, tostr) test(from, fromstr, STATIC_STRLEN(fromstr), to, tostr, STATIC_STRLEN(tostr), EINVAL, BUFSIZ, __LINE__)
 #define eilseq(from, fromstr, to, tostr) test(from, fromstr, STATIC_STRLEN(fromstr), to, tostr, STATIC_STRLEN(tostr), EILSEQ, BUFSIZ, __LINE__)
