@@ -1,18 +1,19 @@
 /*
- * iconv library implemented with Win32 API.
+ * iconv library using Win32 API to conversion.
  *
  * This file is placed in the public domain.
  *
- * Last Change: 2009-06-19
- * Maintainer: Yukihiro Nakadaira <yukihiro.nakadaira@gmail.com>
+ * Last Change: 2009-07-06
  *
- * If $WINICONV_LIBICONV_DLL environment variable was defined, win_iconv
- * loads the specified DLL dynamically and uses it.  If loading the DLL
- * or iconv_open() failed, falls back to internal conversion.
- * $WINICONV_LIBICONV_DLL is a comma separated list.  The first loadable
- * DLL is used.  The specified DLL should have iconv_open(),
- * iconv_close() and iconv() functions.  Or these functions can be
- * libiconv_open(), libiconv_close() and libiconv().
+ * ENVIRONMENT VARIABLE:
+ *     WINICONV_LIBICONV_DLL
+ *         If $WINICONV_LIBICONV_DLL is set, win_iconv uses the DLL.  If
+ *         loading the DLL or iconv_open() failed, falls back to internal
+ *         conversion.  If a few DLL are specified as comma separated list,
+ *         the first loadable DLL is used.  The DLL should have iconv_open(),
+ *         iconv_close() and iconv().  Or libiconv_open(), libiconv_close()
+ *         and libiconv().
+ *         (only available when USE_LIBICONV_DLL is defined at compile time)
  *
  * Win32 API does not support strict encoding conversion for some
  * codepage.  And MLang function drop or replace invalid bytes and does

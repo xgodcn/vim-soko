@@ -8,9 +8,11 @@ CFLAGS += -DDEFAULT_LIBICONV_DLL=$(DEFAULT_LIBICONV_DLL)
 
 all: iconv.dll libiconv.a win_iconv.exe
 
+dist: test win_iconv.zip
+
 iconv.dll: win_iconv.c
 	gcc $(CFLAGS) -c win_iconv.c -DMAKE_DLL
-	dllwrap --dllname iconv.dll --def iconv.def win_iconv.o
+	dllwrap --dllname iconv.dll --def iconv.def win_iconv.o $(SPECS_FLAGS)
 	strip iconv.dll
 
 libiconv.a: win_iconv.c
@@ -28,6 +30,33 @@ test:
 	gcc $(CFLAGS) -s -o win_iconv_test.exe win_iconv_test.c
 	./win_iconv_test.exe
 
+win_iconv.zip: msvcrt msvcr70 msvcr71
+	rm -rf win_iconv
+	svn export . win_iconv
+	cp msvcrt/iconv.dll msvcrt/win_iconv.exe win_iconv/
+	mkdir win_iconv/msvcr70
+	cp msvcr70/iconv.dll win_iconv/msvcr70/
+	mkdir win_iconv/msvcr71
+	cp msvcr71/iconv.dll win_iconv/msvcr71/
+	zip -r win_iconv.zip win_iconv
+
+msvcrt:
+	svn export . msvcrt; \
+	cd msvcrt; \
+	$(MAKE);
+
+msvcr70:
+	svn export . msvcr70; \
+	cd msvcr70; \
+	gcc -dumpspecs | sed s/-lmsvcrt/-lmsvcr70/ > specs; \
+	$(MAKE) "SPECS_FLAGS=-specs=$$PWD/specs";
+
+msvcr71:
+	svn export . msvcr71; \
+	cd msvcr71; \
+	gcc -dumpspecs | sed s/-lmsvcrt/-lmsvcr71/ > specs; \
+	$(MAKE) "SPECS_FLAGS=-specs=$$PWD/specs";
+
 clean:
 	rm -f win_iconv.exe
 	rm -f win_iconv.o
@@ -35,4 +64,9 @@ clean:
 	rm -f libiconv.a
 	rm -f win_iconv_test.exe
 	rm -f libmlang.a
+	rm -rf win_iconv
+	rm -rf win_iconv.zip
+	rm -rf msvcrt
+	rm -rf msvcr70
+	rm -rf msvcr71
 
