@@ -1,0 +1,8 @@
+libintl.dll is under the LGPL, see COPYING.LIB-2.0.
+
+The libintl is part of the GNU gettext.
+  http://www.gnu.org/software/gettext/
+
+This libintl.dll is linked with win_iconv statically.
+
+Yukihiro Nakadaira <yukihiro.nakadaira@gmail.com>
