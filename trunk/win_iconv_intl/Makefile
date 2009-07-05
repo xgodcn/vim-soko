@@ -26,7 +26,7 @@ $(GETTEXT).tar.gz:
 libiconv.dll: $(LIBICONV).tar.gz
 	tar xzvf $(LIBICONV).tar.gz; \
 	cd $(LIBICONV); \
-	./configure; \
+	./configure --enable-extra-encodings; \
 	cp lib/Makefile lib/Makefile.orig; \
 	sed "s/-version-info/-avoid-version &/" lib/Makefile.orig > lib/Makefile; \
 	$(MAKE); \
