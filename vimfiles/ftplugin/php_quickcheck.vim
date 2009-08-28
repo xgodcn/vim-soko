@@ -29,6 +29,10 @@ function! s:PhpLint()
   endif
   let cmd = 'php -l ' . opt . shellescape(expand('%'))
   let msg = system(cmd)
+  " XXX: sometimes php returns error code "139" with no syntax error
+  if msg =~ 'No syntax errors detected in'
+    return
+  endif
   if v:shell_error
     echoerr cmd
     call s:EchoHlMsg('Error', msg)
