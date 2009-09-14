@@ -1,4 +1,4 @@
-" Last Change: 2009-06-07
+" Last Change: 2009-09-14
 
 if exists("b:did_ftplugin")
   finish
@@ -72,18 +72,15 @@ endfunction
 function! s:FindUndefinedVariable(head, body)
   let args = s:MatchStrAll(join(a:head, "\n"), '\v\$\w+')
   let var_pat = '\c\v%((<as[ \t&]*|as[ \t&]*\$\w+\s*\=\>[ \t&]*|<list\s*\([^)]*|<global\s+[^;]*|<static\s+[^;]*)@<=)?(\$\w+)%((\s*\=[^=>])@=)?'
-  " ---
-  " profile for 400 lines function
-  " 1. 1.653904
-  "let vars = s:MatchListAll(join(a:body, "\n"), var_pat)
-  " 2. 0.054811
+  " XXX: s:MatchListAll(join(a:body, "\n"), var_pat) is slow for long
+  " a:body because of @<= pattern.  Parse it by line.
   let vars = []
   for line in a:body
     call extend(vars, s:MatchListAll(line, var_pat))
   endfor
-  " ---
   let special = s:CountWord(['$GLOBALS', '$_SERVER', '$_GET', '$_POST', '$_REQUEST', '$_FILES', '$_COOKIE', '$_SESSION', '$_ENV', "$this"])
   let assigned = s:CountWord(args)
+  let global = {}
   let used = {}
   let patterns = []
   for m in vars
@@ -93,6 +90,12 @@ function! s:FindUndefinedVariable(head, body)
     endif
     if m[1] != '' || m[3] != ''
       let assigned[word] = 1
+      " global variable may be used somewhere else.
+      if m[1] =~ '^global'
+        let global[word] = 1
+      elseif has_key(global, word)
+        let used[word] = 1
+      endif
     else
       let used[word] = 1
       if !has_key(assigned, word)
