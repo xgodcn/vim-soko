@@ -1,6 +1,6 @@
 " Maintainer:   Yukihiro Nakadaira <yukihiro.nakadaira@gmail.com>
 " License:      This file is placed in the public domain.
-" Last Change:  2009-05-30
+" Last Change:  2009-09-21
 "
 " Options:
 "
@@ -212,12 +212,14 @@ function s:lib.find_boundary(line)
       if &textwidth < lst[next - 1].virtcol
         return lst[break_idx].col
       endif
-      let is_prev_one_letter = (i == 0 || lst[i - 1].c =~ '\s') && lst[i + 1].c =~ '\s'
+      let is_prev_one_letter = (i == 0 || lst[i - 1].c =~ '\s') &&
+            \ (i + 1 == len(lst) || lst[i + 1].c =~ '\s')
     elseif brk == "allow_break_before"
       if &textwidth < lst[next - 1].virtcol && break_idx != -1
         return lst[break_idx].col
       endif
-      let is_prev_one_letter = (i == 0 || lst[i - 1].c =~ '\s') && lst[i + 1].c =~ '\s'
+      let is_prev_one_letter = (i == 0 || lst[i - 1].c =~ '\s') &&
+            \ (i + 1 == len(lst) || lst[i + 1].c =~ '\s')
     endif
     let i = self.skip_space(lst, next)
   endwhile
