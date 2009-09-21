@@ -23,7 +23,7 @@ set backspace=indent,eol,start
 set textwidth=72
 set formatoptions+=nmB fo-=t fo-=c
 set autoindent
-set shiftwidth=2 softtabstop=2 expandtab
+set shiftwidth=4 softtabstop=4 expandtab
 set cinoptions=t0,:0,g0
 set tags+=./tags;
 set guioptions-=t             " disable tearoff menu
@@ -33,9 +33,8 @@ set mousemodel=popup
 
 vnoremap * "9y/<C-R>='\V'.substitute(escape(@9,'\/'),'\n','\\n','g')<CR><CR>
 inoremap <expr> <Leader>date strftime("%Y-%m-%d")
-inoremap <script> <S-Tab> <SID>ExpandTab<SID>ExpandTabRestore
-inoremap <expr> <SID>ExpandTab <SID>ExpandTab(0)
-inoremap <expr> <SID>ExpandTabRestore <SID>ExpandTab(1)
+inoremap <script> <S-Tab> <SID>ExpandTab<Tab><SID>ExpandTab
+inoremap <expr> <SID>ExpandTab <SID>ExpandTab()
 nmap mm <Plug>MarkerToggle
 vmap m  <Plug>MarkerToggle
 
@@ -53,9 +52,9 @@ function _ff()
   return '['.&ff.']'
 endfunction
 
-function s:ExpandTab(restore)
+function s:ExpandTab()
   setl expandtab!
-  return a:restore ? "" : "\<Tab>"
+  return ""
 endfunction
 
 function s:Number(first, last, reg, bang)
@@ -108,6 +107,14 @@ augroup vimrcEx
 augroup END
 
 augroup filetypedetect
+  " use "text" as default filetype
+  autocmd BufEnter,FileType * if &ft == '' | setl ft=text | endif
+  autocmd BufRead,BufNewFile *.as           setf javascript
+  autocmd BufRead,BufNewFile SConstruct     setf python
+augroup END
+
+augroup filetypeplugin
+  autocmd FileType * setl sw< sts< ts< et< tw< fo<
 augroup END
 
 colorscheme delek
@@ -115,6 +122,7 @@ syntax on
 filetype plugin indent on
 
 augroup filetypeplugin
+  autocmd FileType text,vim setl sw=2 sts=2 et
 augroup END
 augroup filetypeindent
 augroup END
