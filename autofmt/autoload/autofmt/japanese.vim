@@ -1,6 +1,6 @@
 " Maintainer:   Yukihiro Nakadaira <yukihiro.nakadaira@gmail.com>
 " License:      This file is placed in the public domain.
-" Last Change:  2007-07-03
+" Last Change:  2009-09-21
 "
 " Options:
 "
@@ -118,54 +118,72 @@ function! s:lib.test()
   let b:autofmt = self
   setl formatexpr=b:autofmt.formatexpr()
   set debug=msg
-  setl textwidth=10 formatoptions=tcnr formatlistpat& comments&
   setl tabstop& shiftwidth& softtabstop& expandtab&
   let b:autofmt_allow_over_tw = self.autofmt_allow_over_tw
   let b:autofmt_allow_over_tw_char = self.autofmt_allow_over_tw_char
 
   let start = reltime()
 
-  call self.do_test("test1",
+  let option = 'setl tw=10 fo=tcqnrm'
+
+  call self.do_test("test1", option,
         \ "あいう",
-        \ ["あいう"])
-  call self.do_test("test2",
+        \ ["あいう"],
+        \ [])
+  call self.do_test("test2", option,
         \ "あいうえお",
-        \ ["あいうえお"])
-  call self.do_test("test3",
+        \ ["あいうえお"],
+        \ [])
+  call self.do_test("test3", option,
         \ "あいうえおか",
-        \ ["あいうえお", "か"])
-  call self.do_test("test4",
+        \ ["あいうえお", "か"],
+        \ [])
+  call self.do_test("test4", option,
         \ "あいうえお。かきくけこ",
+        \ ["あいうえお", "。かきくけ", "こ"],
         \ ["あいうえ", "お。かきく", "けこ"])
-  call self.do_test("test5",
+  call self.do_test("test5", option,
         \ "あいうえ「お",
+        \ ["あいうえ「", "お"],
         \ ["あいうえ", "「お"])
-  call self.do_test("test6",
+  call self.do_test("test6", option,
         \ "  あいうえお",
-        \ ["  あいうえ", "  お"])
-  call self.do_test("test7",
+        \ ["  あいうえ", "  お"],
+        \ [])
+  call self.do_test("test7", option,
         \ "aaaaa bbbbあいうえお",
+        \ ["aaaaa", "bbbbあいう", "えお"],
         \ ["aaaaa bbbb", "あいうえお"])
-  call self.do_test("test8",
+  call self.do_test("test8", option,
         \ "あいうえおaaa",
-        \ ["あいうえお", "aaa"])
-  call self.do_test("test9",
+        \ ["あいうえお", "aaa"],
+        \ [])
+  call self.do_test("test9", option,
         \ "あああああいいいいいううううう\<Up>\<Del>\<Up>\<Del>\<Left>えええ",
-        \ ["ああああえ", "ええあいいいいいううううう"])
-  call self.do_test("test10",
-        \ "          ああ",
-        \ ["          あ", "          あ"])
-  call self.do_test("test11",
-        \ "          あ。",
-        \ ["          あ。"])
-  call self.do_test("test12",
+        \ ["ああああえ", "ええあいいいいいううううう"],
+        \ [])
+  " BUG: 以下の操作で無限ループ
+  "   vim -u NONE --cmd "set tw=2 fo=m autoindent"
+  "               --cmd "call setline(1, '  ああ')"
+  "               --cmd "normal! gqgq"
+  "call self.do_test("test10", option,
+  "      \ "          ああ",
+  "      \ ["          あ", "          あ"],
+  "      \ [])
+  "call self.do_test("test11", option,
+  "      \ "          あ。",
+  "      \ ["          あ。"],
+  "      \ [])
+  call self.do_test("test12", option,
         \ ["ああああ。。いいい"],
-        \ ["ああああ。", "。いいい"])
+        \ ["ああああ。", "。いいい"],
+        \ [])
 
   let b:autofmt_allow_over_tw = 2
 
-  call self.do_test("test13",
+  call self.do_test("test13", option,
         \ ["あああああ。いいい"],
+        \ ["あああああ", "。いいい"],
         \ ["あああああ。", "いいい"])
 
   echo reltimestr(reltime(start))
