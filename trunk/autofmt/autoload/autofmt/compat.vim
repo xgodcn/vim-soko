@@ -596,22 +596,29 @@ function s:lib.get_opt(name)
         \ get(self, a:name)))))
 endfunction
 
-function s:lib.do_test(testname, input, result)
+function s:lib.do_test(testname, option, input, vim_result, my_result)
   echo a:testname
-  if type(a:input) == type([]) || a:input == strtrans(a:input)
-    %delete
+  setl formatexpr=
+  call self.test_execute(a:option, a:input)
+  if getline(1, "$") != a:vim_result
+    throw a:testname . " : unexpedted vim_result"
+  endif
+  setl formatexpr=b:autofmt.formatexpr()
+  call self.test_execute(a:option, a:input)
+  if getline(1, "$") != (a:my_result == [] ? a:vim_result : a:my_result)
+      throw a:testname . " : unexpedted my_result"
+  endif
+endfunction
+
+function s:lib.test_execute(option, input)
+  setl textwidth& formatoptions& formatlistpat& comments&
+  execute a:option
+  %delete
+  if type(a:input) == type([])
     call setline(1, a:input)
     normal! ggVGgq
-    if getline(1, "$") != a:result
-      throw a:testname . " normal failed!"
-    endif
-  endif
-  if type(a:input) == type("")
-    %delete
+  elseif type(a:input) == type("")
     execute "normal! i" . a:input
-    if getline(1, "$") != a:result
-      throw a:testname . " insert failed!"
-    endif
   endif
 endfunction
 
@@ -621,67 +628,230 @@ function s:lib.test()
   let b:autofmt = self
   setl formatexpr=b:autofmt.formatexpr()
   set debug=msg
-  setl textwidth=10 formatoptions=tcnr formatlistpat& comments&
   setl tabstop& shiftwidth& softtabstop& expandtab&
 
   let start = reltime()
 
-  call self.do_test("test1",
+  let option = 'setl tw=10 fo=tcqnr'
+
+  call self.do_test("a1", option,
         \ "aaaaa",
-        \ ["aaaaa"])
-  call self.do_test("test2",
+        \ ["aaaaa"],
+        \ [])
+  call self.do_test("a2", option,
         \ "aaaaa bbbb",
-        \ ["aaaaa bbbb"])
-  call self.do_test("test3",
+        \ ["aaaaa bbbb"],
+        \ [])
+  call self.do_test("a3", option,
         \ "aaaaa bbbbb",
-        \ ["aaaaa", "bbbbb"])
-  call self.do_test("test4",
+        \ ["aaaaa", "bbbbb"],
+        \ [])
+  call self.do_test("a4", option,
         \ "aaaaa    bbbbb     ",
-        \ ["aaaaa", "bbbbb     "])
-  call self.do_test("test5",
+        \ ["aaaaa", "bbbbb     "],
+        \ [])
+  call self.do_test("a5", option,
         \ "aaaaa bbbbb ccccc",
-        \ ["aaaaa", "bbbbb", "ccccc"])
-  call self.do_test("test6",
+        \ ["aaaaa", "bbbbb", "ccccc"],
+        \ [])
+  call self.do_test("a6", option,
         \ "aaaaaaaaaabbbbbbbbbb",
-        \ ["aaaaaaaaaabbbbbbbbbb"])
-  call self.do_test("test7",
+        \ ["aaaaaaaaaabbbbbbbbbb"],
+        \ [])
+  call self.do_test("a7", option,
         \ "  aaaaaaaaaabbbbbbbbbb",
-        \ ["  aaaaaaaaaabbbbbbbbbb"])
-  call self.do_test("test8",
+        \ ["  aaaaaaaaaabbbbbbbbbb"],
+        \ [])
+  call self.do_test("a8", option,
         \ ["aaaa", "bbbb", "cccccccccccc", "dddd"],
-        \ ["aaaa bbbb", "cccccccccccc", "dddd"])
-  call self.do_test("test9",
+        \ [
+        \  "aaaa bbbb",
+        \  "cccccccccccc",
+        \  "dddd"
+        \ ],
+        \ [])
+  call self.do_test("a9", option,
         \ "/* aaaaa bbbbb ccccc",
-        \ ["/* aaaaa", " * bbbbb", " * ccccc"])
-  call self.do_test("test10",
+        \ [
+        \  "/* aaaaa",
+        \  " * bbbbb",
+        \  " * ccccc"
+        \ ],
+        \ [])
+  call self.do_test("a10", option,
         \ ["/* aaaaa bbbbb ccccc */"],
-        \ ["/* aaaaa", " * bbbbb", " * ccccc", " */"])
-  call self.do_test("test11",
-        \ ["/* aaa", " * bbb", " * ccc", " * ddd", " */"],
-        \ ["/* aaa bbb", " * ccc ddd", " */"])
-  call self.do_test("test12",
+        \ [
+        \  "/* aaaaa",
+        \  " * bbbbb",
+        \  " * ccccc",
+        \  " * */"
+        \ ],
+        \ [
+        \  "/* aaaaa",
+        \  " * bbbbb",
+        \  " * ccccc",
+        \  " */"
+        \ ])
+  call self.do_test("a11", option,
+        \ [
+        \  "/* aaa",
+        \  " * bbb",
+        \  " * ccc",
+        \  " * ddd",
+        \  " */"],
+        \ [
+        \  "/* aaa bbb",
+        \  " * ccc ddd",
+        \  " */"
+        \ ],
+        \ [])
+  call self.do_test("a12", option,
         \ "1. aaaaa bbbbb",
-        \ ["1. aaaaa", "   bbbbb"])
-  call self.do_test("test13",
+        \ [
+        \  "1. aaaaa",
+        \  "   bbbbb"
+        \ ],
+        \ [])
+  call self.do_test("a13", option,
         \ "/*\<CR>1. aaaaa bbbbb",
-        \ ["/*", " * 1. aaaaa", " *    bbbbb"])
-  call self.do_test("test14",
+        \ [
+        \  "/*",
+        \  " * 1.",
+        \  " * aaaaa",
+        \  " * bbbbb"
+        \ ],
+        \ [
+        \  "/*",
+        \  " * 1. aaaaa",
+        \  " *    bbbbb"
+        \ ])
+  call self.do_test("a14", option,
         \ "\t/*   aaa bbb",
-        \ ["\t/*   aaa", "\t *   bbb"])
-  call self.do_test("test15",
-        \ ["", "", "aaa", "aaa", "", "/*", " * bbb", " * bbb", " *", " * ccc", " */", ""],
-        \ ["", "", "aaa aaa", "", "/*", " * bbb bbb", " *", " * ccc", " */", ""])
+        \ [
+        \  "\t/*   aaa",
+        \  "\t *   bbb"
+        \ ],
+        \ [])
+  call self.do_test("a15", option,
+        \ [
+        \  "",
+        \  "",
+        \  "aaa",
+        \  "aaa",
+        \  "",
+        \  "/*",
+        \  " * bbb",
+        \  " * bbb",
+        \  " *",
+        \  " * ccc",
+        \  " */",
+        \  ""
+        \ ],
+        \ [
+        \  "",
+        \  "",
+        \  "aaa aaa",
+        \  "",
+        \  "/*",
+        \  " * bbb bbb",
+        \  " *",
+        \  " * ccc",
+        \  " */",
+        \  ""
+        \ ],
+        \ [])
 
-  setl fo+=2
-  let &l:comments = 'sO:* -,mO:*  ,exO:*/,s1:/*,mb:*,ex:*/,://'
-  " check for 'mO:*  '
+  let option = "setl tw=10 fo=tcqnr2"
 
-  call self.do_test("test16",
-        \ ["  aaaaa bbbbb", "ccccc ddddd"],
-        \ ["  aaaaa", "bbbbb", "ccccc", "ddddd"])
-  call self.do_test("test17",
-        \ ["/*  aaaaa bbbbb", " * ccccc ddddd", " *", " *  aaaaa bbbbb", " * ccccc ddddd", " */"],
-        \ ["/*  aaaaa", " * bbbbb", " * ccccc", " * ddddd", " *", " *  aaaaa", " * bbbbb", " * ccccc", " * ddddd", " */"])
+  call self.do_test("b1", option,
+        \ [
+        \  "  aaaaa bbbbb",
+        \  "ccccc ddddd"
+        \ ],
+        \ [
+        \  "  aaaaa",
+        \  "bbbbb",
+        \  "ccccc",
+        \  "ddddd"
+        \ ],
+        \ [])
+
+  " test for "m0:*  "
+  let option = "setl tw=10 fo=tcqnr2 | let &l:comments = 'sO:* -,mO:*  ,exO:*/,s1:/*,mb:*,ex:*/,://'"
+
+  call self.do_test("c1", option,
+        \ [
+        \  "/*  aaaaa bbbbb",
+        \  " * ccccc ddddd",
+        \  " *",
+        \  " *  aaaaa bbbbb",
+        \  " * ccccc ddddd",
+        \  " */"
+        \ ],
+        \ [
+        \  "/*  aaaaa",
+        \  " *  bbbbb",
+        \  " *  ccccc",
+        \  " *  ddddd",
+        \  " *",
+        \  " *  aaaaa",
+        \  " *  bbbbb",
+        \  " *  ccccc",
+        \  " *  ddddd",
+        \  " */"
+        \ ],
+        \ [
+        \  "/*  aaaaa",
+        \  " * bbbbb",
+        \  " * ccccc",
+        \  " * ddddd",
+        \  " *",
+        \  " *  aaaaa",
+        \  " * bbbbb",
+        \  " * ccccc",
+        \  " * ddddd",
+        \  " */"
+        \ ])
+
+  " without 'q' flag
+  let option = "setl tw=10 fo=tcnr"
+
+  call self.do_test("d1", option,
+        \ ["/* aaaa bbbb cccc dddd eeee */"],
+        \ [
+        \  "/* aaaa",
+        \  "bbbb cccc",
+        \  "dddd eeee",
+        \  "*/"
+        \ ],
+        \ [])
+
+  let option = "setl tw=10 fo="
+
+  call self.do_test("e1", option,
+        \ "aaaa bbbb cccc dddd eeee ffff",
+        \ ["aaaa bbbb cccc dddd eeee ffff"],
+        \ [])
+  call self.do_test("e2", option,
+        \ ["aaaa bbbb cccc dddd eeee ffff"],
+        \ [
+        \  "aaaa bbbb",
+        \  "cccc dddd",
+        \  "eeee ffff"
+        \ ],
+        \ [])
+  call self.do_test("e3", option,
+        \ "/* aaaa bbbb cccc dddd */",
+        \ ["/* aaaa bbbb cccc dddd */"],
+        \ [])
+  call self.do_test("e4", option,
+        \ ["/* aaaa bbbb cccc dddd */"],
+        \ [
+        \  "/* aaaa",
+        \  "bbbb cccc",
+        \  "dddd */"
+        \ ],
+        \ [])
 
   echo reltimestr(reltime(start))
 endfunction
