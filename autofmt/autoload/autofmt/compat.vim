@@ -1,6 +1,6 @@
 " Maintainer:   Yukihiro Nakadaira <yukihiro.nakadaira@gmail.com>
 " License:      This file is placed in the public domain.
-" Last Change:  2009-09-21
+" Last Change:  2009-09-24
 "
 " Options:
 "
@@ -580,8 +580,16 @@ function s:lib.char_width(c, ...)
     return 0
   elseif a:c == "\t"
     return self.tab_width(vcol)
+  elseif a:c =~ '^.\%2v'  " sinelg-width char
+    return 1
+  elseif a:c =~ '^.\%3v'  " double-width char or ctrl-code (^X)
+    return 2
+  elseif a:c =~ '^.\%5v'  " <XX>    (^X with :set display=uhex)
+    return 4
+  elseif a:c =~ '^.\%7v'  " <XXXX>  (e.g. U+FEFF)
+    return 6
   endif
-  return (a:c =~ '^.\%2v') ? 1 : 2
+  return 0
 endfunction
 
 function s:lib.tab_width(vcol)
