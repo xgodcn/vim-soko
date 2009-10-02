@@ -1,4 +1,4 @@
-" Last Change: 2009-09-14
+" Last Change: 2009-10-03
 
 if exists("b:did_ftplugin")
   finish
@@ -20,14 +20,9 @@ function! s:PhpLint()
   if !executable('php')
     return
   endif
-  let opt = ''
-  if get(g:, 'php_noShortTags', 0)
-    let opt .= ' -d short_open_tag=0 '
-  endif
-  if get(g:, 'php_asp_tags', 0)
-    let opt .= ' -d asp_tags=1 '
-  endif
-  let cmd = 'php -l ' . opt . shellescape(expand('%'))
+  let file = shellescape(expand('%'))
+  let cmd = get(g:, 'php_lint_cmd', 'php -l {file}')
+  let cmd = substitute(cmd, '{\(\w\+\)}', '\=eval(submatch(1))', 'g')
   let msg = system(cmd)
   " XXX: sometimes php returns error code "139" with no syntax error
   if msg =~ 'No syntax errors detected in'
