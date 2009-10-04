@@ -13,7 +13,7 @@ hi default link PhpLocalVarCheckError Error
 augroup PhpLocalVarCheck
   au! * <buffer>
   autocmd FileType <buffer> if &ft != 'php' | call s:Uninstall() | endif
-  autocmd CursorMoved * call s:LocalVarCheck()
+  autocmd CursorMoved <buffer> call s:LocalVarCheck()
 augroup END
 
 function! s:Uninstall()
