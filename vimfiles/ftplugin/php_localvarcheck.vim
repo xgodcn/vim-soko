@@ -1,5 +1,5 @@
 " highlight unused/unassigned function local variable.
-" Last Change: 2009-10-04
+" Last Change: 2009-10-06
 
 if exists("b:did_ftplugin")
   finish
@@ -41,9 +41,7 @@ function! s:LocalVarCheck()
     let w:php_localvarcheck_funcstart = 0
     let w:php_localvarcheck_end = 0
   else
-    let head = getline(funcstart, start)
-    let body = getline(start + 1, end)
-    let patterns = s:FindErrorVariable(head, body)
+    let patterns = s:FindErrorVariable(funcstart, start, end)
     call s:MatchDeleteGroup('PhpLocalVarCheckError')
     for pat in patterns
       call matchadd('PhpLocalVarCheckError', pat)
@@ -54,8 +52,10 @@ function! s:LocalVarCheck()
   endif
 endfunction
 
-function! s:FindErrorVariable(head, body)
-  let args = s:MatchStrAll(join(a:head, "\n"), '\v\$\w+')
+function! s:FindErrorVariable(funcstart, start, end)
+  let head = getline(a:funcstart, a:start)
+  let body = getline(a:start + 1, a:end)
+  let args = s:MatchStrAll(join(head, "\n"), '\v\$\w+')
   let var_pat = '\c\v%(('
         \ .         '<as[ \t&]*'
         \ .   '|' . '<as[ \t&]*\$\w+\s*\=\>[ \t&]*'
@@ -63,10 +63,15 @@ function! s:FindErrorVariable(head, body)
         \ .   '|' . '<global\s+[^;]*'
         \ .   '|' . '<static\s+[^;]*'
         \ . ')@<=)?(\$\w+)%((\s*\=[^=>])@=)?'
-  " XXX: s:MatchListAll(join(a:body, "\n"), var_pat) is slow for long
-  " a:body because of @<= pattern.  Parse it by line.
+  " Parse body line by line because @<= pattern is slow for long text.
+  " TODO: comment and string.
+  let b = join(body, "\n")
+  " remove comment
+  let b = substitute(b, '\v%(#|//).{-}\n|/\*.{-}\*/', '', 'g')
+  " remove single string
+  let b = substitute(b, '\v''.{-}''', "''", 'g')
   let vars = []
-  for line in a:body
+  for line in split(b, '[;{]')
     call extend(vars, s:MatchListAll(line, var_pat))
   endfor
   let special = s:CountWord(['$GLOBALS', '$_SERVER', '$_GET', '$_POST', '$_REQUEST', '$_FILES', '$_COOKIE', '$_SESSION', '$_ENV', "$this"])
