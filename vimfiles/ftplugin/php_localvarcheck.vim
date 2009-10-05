@@ -71,7 +71,7 @@ function! s:FindErrorVariable(funcstart, start, end)
   " remove single string
   let b = substitute(b, '\v''.{-}''', "''", 'g')
   let vars = []
-  for line in split(b, '[;{]')
+  for line in split(b, '[;{}]')
     call extend(vars, s:MatchListAll(line, var_pat))
   endfor
   let special = s:CountWord(['$GLOBALS', '$_SERVER', '$_GET', '$_POST', '$_REQUEST', '$_FILES', '$_COOKIE', '$_SESSION', '$_ENV', "$this"])
