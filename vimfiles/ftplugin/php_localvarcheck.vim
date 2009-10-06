@@ -1,5 +1,5 @@
 " highlight unused/unassigned local variable.
-" Last Change: 2009-10-06
+" Last Change: 2009-10-07
 
 if exists("b:did_ftplugin")
   finish
@@ -36,12 +36,16 @@ function! s:LocalVarCheck()
   while start != 0 && synIDattr(synID(line('.'), col('.'), 0), 'name') =~? 'string\|comment'
     let [start, startcol] = searchpos('\c\v<function>', 'bW')
   endwhile
-  let open = search('{', 'W')
-  while open != 0 && synIDattr(synID(line('.'), col('.'), 0), 'name') =~? 'string\|comment'
+  if start != 0
     let open = search('{', 'W')
-  endwhile
-  let [end, endcol] = searchpairpos('{', '', '}', 'W',
-        \ 'synIDattr(synID(line("."), col("."), 0), "name") =~? "string\\|comment"')
+    while open != 0 && synIDattr(synID(line('.'), col('.'), 0), 'name') =~? 'string\|comment'
+      let open = search('{', 'W')
+    endwhile
+  endif
+  if start != 0 && open != 0
+    let [end, endcol] = searchpairpos('{', '', '}', 'W',
+          \ 'synIDattr(synID(line("."), col("."), 0), "name") =~? "string\\|comment"')
+  endif
   call winrestview(view)
   if start == 0 || open == 0 || end == 0 || end < line('.')
     call s:MatchDeleteGroup('PhpLocalVarCheckError')
@@ -67,7 +71,7 @@ function! s:FindErrorVariable(src)
   let global = {}
   let assigned = {}
   let used = {}
-  let patterns = []
+  let patterns = {}
   for [var, is_assign, is_global] in s:Parse(a:src)
     if has_key(special, var)
       continue
@@ -83,16 +87,16 @@ function! s:FindErrorVariable(src)
     else
       let used[var] = 1
       if !has_key(assigned, var)
-        call add(patterns, '\V' . escape(var, '\') . '\>')
+        let patterns['\V' . escape(var, '\') . '\>'] = 1
       endif
     endif
   endfor
   for var in keys(assigned)
     if !has_key(used, var)
-      call add(patterns, '\V' . escape(var, '\') . '\>')
+      let patterns['\V' . escape(var, '\') . '\>'] = 1
     endif
   endfor
-  return patterns
+  return keys(patterns)
 endfunction
 
 " @return [['$varname', is_assign, is_global], ...]
