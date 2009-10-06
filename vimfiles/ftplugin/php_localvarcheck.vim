@@ -21,50 +21,54 @@ function! s:Uninstall()
   " TODO: How to remove from other window?
   call s:MatchDeleteGroup('PhpLocalVarCheckError')
   unlet! w:php_localvarcheck_changedtick
-  unlet! w:php_localvarcheck_funcstart
+  unlet! w:php_localvarcheck_start
   unlet! w:php_localvarcheck_end
 endfunction
 
 function! s:LocalVarCheck()
   if get(w:, 'php_localvarcheck_changedtick', 0) == b:changedtick
-        \ && get(w:, 'php_localvarcheck_funcstart', 0) <= line('.')
+        \ && get(w:, 'php_localvarcheck_start', 0) <= line('.')
         \ && get(w:, 'php_localvarcheck_end', 0) >= line('.')
     return
   endif
   let view = winsaveview()
-  let funcstart = search('\c\v<function>', 'bWc')
-  while funcstart != 0
-        \ && exists('g:syntax_on') && synIDattr(synID(line('.'), col('.'), 0), 'name') != 'phpDefine'
-    let funcstart = search('\c\v<function>', 'bW')
+  let [start, startcol] = searchpos('\c\v<function>', 'bWc')
+  while start != 0 && synIDattr(synID(line('.'), col('.'), 0), 'name') =~? 'string\|comment'
+    let [start, startcol] = searchpos('\c\v<function>', 'bW')
   endwhile
-  let start = search('{', 'W')
-  let end = searchpair('{', '', '}')
+  let open = search('{', 'W')
+  while open != 0 && synIDattr(synID(line('.'), col('.'), 0), 'name') =~? 'string\|comment'
+    let open = search('{', 'W')
+  endwhile
+  let [end, endcol] = searchpairpos('{', '', '}', 'W',
+        \ 'synIDattr(synID(line("."), col("."), 0), "name") =~? "string\\|comment"')
   call winrestview(view)
-  if funcstart == 0 || start == 0 || end == 0 || end < line('.')
+  if start == 0 || open == 0 || end == 0 || end < line('.')
     call s:MatchDeleteGroup('PhpLocalVarCheckError')
     let w:php_localvarcheck_changedtick = b:changedtick
-    let w:php_localvarcheck_funcstart = 0
+    let w:php_localvarcheck_start = 0
     let w:php_localvarcheck_end = 0
   else
-    let patterns = s:FindErrorVariable(funcstart, start, end)
+    let lines = getline(start, end)
+    let lines[-1] = lines[-1][0 : endcol - 1]
+    let lines[0] = lines[0][startcol - 1 : ]
     call s:MatchDeleteGroup('PhpLocalVarCheckError')
-    for pat in patterns
+    for pat in s:FindErrorVariable(join(lines, "\n"))
       call matchadd('PhpLocalVarCheckError', pat)
     endfor
     let w:php_localvarcheck_changedtick = b:changedtick
-    let w:php_localvarcheck_funcstart = funcstart
+    let w:php_localvarcheck_start = start
     let w:php_localvarcheck_end = end
   endif
 endfunction
 
-function! s:FindErrorVariable(funcstart, start, end)
+function! s:FindErrorVariable(src)
   let special = {'$GLOBALS':1,'$_SERVER':1,'$_GET':1,'$_POST':1,'$_REQUEST':1,'$_FILES':1,'$_COOKIE':1,'$_SESSION':1,'$_ENV':1,'$this':1}
   let global = {}
   let assigned = {}
   let used = {}
   let patterns = []
-  let items = s:Parse(join(getline(a:funcstart, a:end), "\n"))
-  for [var, is_assign, is_global] in items
+  for [var, is_assign, is_global] in s:Parse(a:src)
     if has_key(special, var)
       continue
     endif
@@ -154,14 +158,14 @@ function! s:Parse(src)
       endif
       let e = j + len("\n" . mark . ';')
     elseif s[0] == '$'
-      if match(a:src, '^\s*=[^=>]', i + len(s)) != -1
+      if match(a:src, '^\_s*=[^=>]', i + len(s)) != -1
         call add(items, [s, 1, 0])
       else
         call add(items, [s, 0, 0])
       endif
       let e = i + len(s)
     elseif s ==? 'as'
-      let _ = matchlist(a:src, '\c\vas[ \t&]*(\$\w+)%(\s*\=\>[ \t&]*(\$\w+))?', i)
+      let _ = matchlist(a:src, '\c\vas%(\_s|&)*(\$\w+)%(\_s*\=\>%(\_s|&)*(\$\w+))?', i)
       if empty(_)
         " error
         break
