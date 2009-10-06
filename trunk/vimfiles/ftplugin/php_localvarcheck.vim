@@ -32,7 +32,11 @@ function! s:LocalVarCheck()
     return
   endif
   let view = winsaveview()
-  let funcstart = search('\<function\>', 'bcW')
+  let funcstart = search('\c\v<function>', 'bWc')
+  while funcstart != 0
+        \ && exists('g:syntax_on') && synIDattr(synID(line('.'), col('.'), 0), 'name') != 'phpDefine'
+    let funcstart = search('\c\v<function>', 'bW')
+  endwhile
   let start = search('{', 'W')
   let end = searchpair('{', '', '}')
   call winrestview(view)
