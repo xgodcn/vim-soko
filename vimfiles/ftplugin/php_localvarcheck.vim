@@ -116,7 +116,6 @@ function! s:Parse(src)
         \ . '|<global>'
         \ . '|[;(){}]'
         \ . ')'
-  let head = 1
   let items = []
   " parse args
   let i = match(a:src, pat_syntax)
