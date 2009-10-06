@@ -18,7 +18,8 @@ augroup END
 
 function! s:Uninstall()
   au! PhpLocalVarCheck * <buffer>
-  " TODO: How to remove variable from other window?
+  " TODO: How to remove from other window?
+  call s:MatchDeleteGroup('PhpLocalVarCheckError')
   unlet! w:php_localvarcheck_changedtick
   unlet! w:php_localvarcheck_funcstart
   unlet! w:php_localvarcheck_end
