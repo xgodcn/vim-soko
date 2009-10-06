@@ -1,4 +1,4 @@
-" highlight unused/unassigned function local variable.
+" highlight unused/unassigned local variable.
 " Last Change: 2009-10-06
 
 if exists("b:did_ftplugin")
@@ -54,66 +54,173 @@ function! s:LocalVarCheck()
 endfunction
 
 function! s:FindErrorVariable(funcstart, start, end)
-  let head = getline(a:funcstart, a:start)
-  let body = getline(a:start + 1, a:end)
-  let args = s:MatchStrAll(join(head, "\n"), '\v\$\w+')
-  let var_pat = '\c\v%(('
-        \ .         '<as[ \t&]*'
-        \ .   '|' . '<as[ \t&]*\$\w+\s*\=\>[ \t&]*'
-        \ .   '|' . '<list\s*\([^)]*'
-        \ .   '|' . '<global\s+[^;]*'
-        \ .   '|' . '<static\s+[^;]*'
-        \ . ')@<=)?(\$\w+)%((\s*\=[^=>])@=)?'
-  " Parse body line by line because @<= pattern is slow for long text.
-  " TODO: comment and string.
-  let b = join(body, "\n")
-  " remove comment
-  let b = substitute(b, '\v%(#|//).{-}\n|/\*.{-}\*/', '', 'g')
-  " remove single string
-  let b = substitute(b, '\v''.{-}''', "''", 'g')
-  let vars = []
-  for line in split(b, '[;{}]')
-    call extend(vars, s:MatchListAll(line, var_pat))
-  endfor
-  let special = s:CountWord(['$GLOBALS', '$_SERVER', '$_GET', '$_POST', '$_REQUEST', '$_FILES', '$_COOKIE', '$_SESSION', '$_ENV', "$this"])
-  let assigned = s:CountWord(args)
+  let special = {'$GLOBALS':1,'$_SERVER':1,'$_GET':1,'$_POST':1,'$_REQUEST':1,'$_FILES':1,'$_COOKIE':1,'$_SESSION':1,'$_ENV':1,'$this':1}
   let global = {}
+  let assigned = {}
   let used = {}
   let patterns = []
-  for m in vars
-    let word = m[2]
-    if has_key(special, word)
+  let items = s:Parse(join(getline(a:funcstart, a:end), "\n"))
+  for [var, is_assign, is_global] in items
+    if has_key(special, var)
       continue
     endif
-    if m[1] != '' || m[3] != ''
-      let assigned[word] = 1
-      " global variable may be used where somewhere else.
-      if m[1] =~? '^global'
-        let global[word] = 1
-      elseif has_key(global, word)
-        let used[word] = 1
+    if is_assign
+      let assigned[var] = 1
+      " global variable may be used in somewhere else.
+      if is_global
+        let global[var] = 1
+      elseif has_key(global, var)
+        let used[var] = 1
       endif
     else
-      let used[word] = 1
-      if !has_key(assigned, word)
-        call add(patterns, '\V' . escape(word, '\') . '\>')
+      let used[var] = 1
+      if !has_key(assigned, var)
+        call add(patterns, '\V' . escape(var, '\') . '\>')
       endif
     endif
   endfor
-  for word in keys(assigned)
-    if !has_key(used, word)
-      call add(patterns, '\V' . escape(word, '\') . '\>')
+  for var in keys(assigned)
+    if !has_key(used, var)
+      call add(patterns, '\V' . escape(var, '\') . '\>')
     endif
   endfor
   return patterns
 endfunction
 
-function! s:CountWord(words)
-  let wordcounts = {}
-  for word in a:words
-    let wordcounts[word] = get(wordcounts, word, 0) + 1
-  endfor
-  return wordcounts
+" @return [['$varname', is_assign, is_global], ...]
+function! s:Parse(src)
+  let pat_syntax  = '\c\v('
+        \ . '#.{-}\n'
+        \ . '|//.{-}\n'
+        \ . '|/\*.{-}\*/'
+        \ . "|'[^']*'"
+        \ . '|"%(\\.|[^"])*"'
+        \ . '|\<\<\<\s*''\w+'''
+        \ . '|\<\<\<\s*\w+'
+        \ . '|\$\w+'
+        \ . '|<as>'
+        \ . '|<list>'
+        \ . '|<static>'
+        \ . '|<global>'
+        \ . '|[;(){}]'
+        \ . ')'
+  let head = 1
+  let items = []
+  " parse args
+  let i = match(a:src, pat_syntax)
+  while i != -1
+    let s = matchstr(a:src, pat_syntax, i)
+    if s[0] == ')'
+      break
+    elseif s[0] == '$'
+      call add(items, [s, 1, 0])
+      let e = i + len(s)
+    else
+      let e = i + len(s)
+    endif
+    let i = match(a:src, pat_syntax, e)
+  endwhile
+  if i == -1
+    " error
+    return items
+  endif
+  " parse body
+  while i != -1
+    let s = matchstr(a:src, pat_syntax, i)
+    if s[0] == '"'
+      for var in s:MatchStrAll(s, '\v\\.|\$\w+')
+        if var[0] == '$'
+          call add(items, [var, 0, 0])
+        endif
+      endfor
+      let e = i + len(s)
+    elseif s[0] == '<'
+      let mark = matchstr(a:src, '\w\+', i)
+      let j = match(a:src, '\n' . mark . ';', i + len(s))
+      if j == -1
+        " error
+        break
+      endif
+      if s != "'$"
+        for var in s:MatchStrAll(a:src[i + len(s) : j], '\v\\.|\$\w+')
+          if var[0] == '$'
+            call add(items, [var, 0, 0])
+          endif
+        endfor
+      endif
+      let e = j + len("\n" . mark . ';')
+    elseif s[0] == '$'
+      if match(a:src, '^\s*=[^=>]', i + len(s)) != -1
+        call add(items, [s, 1, 0])
+      else
+        call add(items, [s, 0, 0])
+      endif
+      let e = i + len(s)
+    elseif s ==? 'as'
+      let _ = matchlist(a:src, '\c\vas[ \t&]*(\$\w+)%(\s*\=\>[ \t&]*(\$\w+))?', i)
+      if empty(_)
+        " error
+        break
+      endif
+      call add(items, [_[1], 1, 0])
+      if _[2] != ''
+        call add(items, [_[2], 1, 0])
+      endif
+      let e = i + len(_[0])
+    elseif s ==? 'list'
+      let j = match(a:src, pat_syntax, i + len(s))
+      while j != -1
+        let t = matchstr(a:src, pat_syntax, j)
+        if t == ')'
+          break
+        elseif t[0] == '$'
+          call add(items, [t, 1, 0])
+        endif
+        let j = match(a:src, pat_syntax, j + len(t))
+      endwhile
+      if j == -1
+        " error
+        break
+      endif
+      let e = j
+    elseif s ==? 'static'
+      let j = match(a:src, pat_syntax, i + len(s))
+      while j != -1
+        let t = matchstr(a:src, pat_syntax, j)
+        if t == ';'
+          break
+        elseif t[0] == '$'
+          call add(items, [t, 1, 0])
+        endif
+        let j = match(a:src, pat_syntax, j + len(t))
+      endwhile
+      if j == -1
+        " error
+        break
+      endif
+      let e = j
+    elseif s ==? 'global'
+      let j = match(a:src, pat_syntax, i + len(s))
+      while j != -1
+        let t = matchstr(a:src, pat_syntax, j)
+        if t == ';'
+          break
+        elseif t[0] == '$'
+          call add(items, [t, 1, 1])
+        endif
+        let j = match(a:src, pat_syntax, j + len(t))
+      endwhile
+      if j == -1
+        " error
+        break
+      endif
+      let e = j
+    else
+      let e = i + len(s)
+    endif
+    let i = match(a:src, pat_syntax, e)
+  endwhile
+  return items
 endfunction
 
 function! s:MatchStrAll(text, pat)
