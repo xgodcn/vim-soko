@@ -23,13 +23,20 @@ augroup PhpLocalVarCheck
   autocmd FileType <buffer> if &ft != 'php' | call s:Uninstall() | endif
   autocmd CursorMoved <buffer> call s:LocalVarCheck()
 augroup END
+augroup PhpLocalVarCheckW
+  au! * <buffer>
+  autocmd WinEnter <buffer> if &ft != 'php' | call s:UninstallW() | endif
+augroup END
 
 function! s:Uninstall()
   au! PhpLocalVarCheck * <buffer>
-  unlet! b:php_localvarcheck_cache_pos = {}
-  unlet! b:php_localvarcheck_cache_pat = {}
+  unlet! b:php_localvarcheck_cache_pos
+  unlet! b:php_localvarcheck_cache_pat
   unlet! b:php_localvarcheck_changedtick
-  " TODO: How to remove from other window?
+  call s:UninstallW()
+endfunction
+
+function! s:UninstallW()
   if exists('w:php_localvarcheck_matches')
     for id in w:php_localvarcheck_matches
       call matchdelete(id)
