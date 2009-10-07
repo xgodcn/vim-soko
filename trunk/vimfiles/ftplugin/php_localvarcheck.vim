@@ -13,7 +13,7 @@ set cpo&vim
 hi default link PhpLocalVarCheckError Error
 
 let b:php_localvarcheck_cache_pos = {}
-let b:php_localvarcheck_cache_pat = {}
+let b:php_localvarcheck_cache_vars = {}
 let b:php_localvarcheck_changedtick = 0
 
 "let w:php_localvarcheck_matches = []
@@ -34,7 +34,7 @@ augroup END
 function! s:Uninstall()
   au! PhpLocalVarCheck * <buffer>
   unlet! b:php_localvarcheck_cache_pos
-  unlet! b:php_localvarcheck_cache_pat
+  unlet! b:php_localvarcheck_cache_vars
   unlet! b:php_localvarcheck_changedtick
   call s:UninstallW()
 endfunction
@@ -71,7 +71,7 @@ function! s:LocalVarCheck()
   if b:php_localvarcheck_changedtick != b:changedtick
     let b:php_localvarcheck_cache_pos = {}
     " TODO: memory usage?
-    "let b:php_localvarcheck_cache_pat = {}
+    "let b:php_localvarcheck_cache_vars = {}
   endif
 
   " clear highlight
@@ -99,13 +99,13 @@ function! s:LocalVarCheck()
     let src = join(lines, "\n")
 
     let cache_key = src
-    if !has_key(b:php_localvarcheck_cache_pat, cache_key)
-      let b:php_localvarcheck_cache_pat[cache_key] = s:FindErrorVariable(src)
+    if !has_key(b:php_localvarcheck_cache_vars, cache_key)
+      let b:php_localvarcheck_cache_vars[cache_key] = s:FindBadVariables(src)
     endif
-    let patterns = b:php_localvarcheck_cache_pat[cache_key]
+    let vars = b:php_localvarcheck_cache_vars[cache_key]
 
-    for pat in patterns
-      let id = matchadd('PhpLocalVarCheckError', pat)
+    for var in vars
+      let id = matchadd('PhpLocalVarCheckError', '\V' . escape(var, '\') . '\>')
       call add(w:php_localvarcheck_matches, id)
     endfor
 
@@ -147,12 +147,12 @@ function! s:FindFunction()
   return [start, startcol, open, end, endcol]
 endfunction
 
-function! s:FindErrorVariable(src)
+function! s:FindBadVariables(src)
   let special = {'$GLOBALS':1,'$_SERVER':1,'$_GET':1,'$_POST':1,'$_REQUEST':1,'$_FILES':1,'$_COOKIE':1,'$_SESSION':1,'$_ENV':1,'$this':1}
   let global = {}
   let assigned = {}
   let used = {}
-  let patterns = {}
+  let bad = {}
   for [var, is_assign, is_global] in s:Parse(a:src)
     if has_key(special, var)
       continue
@@ -168,16 +168,16 @@ function! s:FindErrorVariable(src)
     else
       let used[var] = 1
       if !has_key(assigned, var)
-        let patterns['\V' . escape(var, '\') . '\>'] = 1
+        let bad[var] = 1
       endif
     endif
   endfor
   for var in keys(assigned)
     if !has_key(used, var)
-      let patterns['\V' . escape(var, '\') . '\>'] = 1
+      let bad[var] = 1
     endif
   endfor
-  return keys(patterns)
+  return keys(bad)
 endfunction
 
 " @return [['$varname', is_assign, is_global], ...]
