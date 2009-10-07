@@ -113,7 +113,7 @@ function! s:LocalVarCheck()
     let w:php_localvarcheck_end = 0
   else
     let lines = getline(start, end)
-    let lines[-1] = lines[-1][0 : endcol - 1]
+    let lines[-1] = lines[-1][ : endcol - 1]
     let lines[0] = lines[0][startcol - 1 : ]
     let src = join(lines, "\n")
 
