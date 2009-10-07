@@ -83,28 +83,7 @@ function! s:LocalVarCheck()
   " find function
   let cache_key = line('.')
   if !has_key(b:php_localvarcheck_cache_pos, cache_key)
-    let [start, startcol, open, end, endcol] = [0, 0, 0, 0, 0]
-    if exists('g:syntax_on')
-      let skip = 'synIDattr(synID(line("."), col("."), 0), "name") !~? "phpDefine\\|phpParent"'
-    else
-      let skip = '0'
-    endif
-    let view = winsaveview()
-    let [start, startcol] = searchpos('\c\v<function>', 'bWc')
-    while start != 0 && eval(skip)
-      let [start, startcol] = searchpos('\c\v<function>', 'bW')
-    endwhile
-    if start != 0
-      let open = search('{', 'W')
-      while open != 0 && eval(skip)
-        let open = search('{', 'W')
-      endwhile
-    endif
-    if start != 0 && open != 0
-      let [end, endcol] = searchpairpos('{', '', '}', 'W', skip)
-    endif
-    call winrestview(view)
-    let b:php_localvarcheck_cache_pos[cache_key] = [start, startcol, open, end, endcol]
+    let b:php_localvarcheck_cache_pos[cache_key] = s:FindFunction()
   endif
   let [start, startcol, open, end, endcol] = b:php_localvarcheck_cache_pos[cache_key]
 
@@ -134,6 +113,38 @@ function! s:LocalVarCheck()
     let w:php_localvarcheck_start = start
     let w:php_localvarcheck_end = end
   endif
+endfunction
+
+function! s:FindFunction()
+  let [start, startcol, open, end, endcol] = [0, 0, 0, 0, 0]
+
+  if exists('g:syntax_on')
+    let skip = 'synIDattr(synID(line("."), col("."), 0), "name") !~? "phpDefine\\|phpParent"'
+  else
+    let skip = '0'
+  endif
+
+  let view = winsaveview()
+
+  let [start, startcol] = searchpos('\c\v<function>', 'bWc')
+  while start != 0 && eval(skip)
+    let [start, startcol] = searchpos('\c\v<function>', 'bW')
+  endwhile
+
+  if start != 0
+    let open = search('{', 'W')
+    while open != 0 && eval(skip)
+      let open = search('{', 'W')
+    endwhile
+  endif
+
+  if start != 0 && open != 0
+    let [end, endcol] = searchpairpos('{', '', '}', 'W', skip)
+  endif
+
+  call winrestview(view)
+
+  return [start, startcol, open, end, endcol]
 endfunction
 
 function! s:FindErrorVariable(src)
