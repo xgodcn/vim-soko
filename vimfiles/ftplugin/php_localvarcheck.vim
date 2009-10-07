@@ -70,7 +70,7 @@ function! s:LocalVarCheck()
   " clear cache
   if b:php_localvarcheck_changedtick != b:changedtick
     let b:php_localvarcheck_cache_pos = {}
-    " TODO: memory usage?
+    " TODO: memory vs speed
     "let b:php_localvarcheck_cache_vars = {}
   endif
 
