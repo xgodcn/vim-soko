@@ -1,5 +1,7 @@
-" highlight unused/unassigned local variable.
-" Last Change: 2009-10-07
+" highlight unused/unassigned local variable
+" Last Change:  2009-10-07
+" Maintainer:   Yukihiro Nakadaira <yukihiro.nakadaira@gmail.com>
+" License:      This file is placed in the public domain.
 
 if exists("b:did_ftplugin")
   finish
