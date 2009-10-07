@@ -101,7 +101,7 @@ endfunction
 
 " @return [['$varname', is_assign, is_global], ...]
 function! s:Parse(src)
-  let pat_syntax  = '\c\v('
+  let pat_syntax  = '\c\v%('
         \ . '#.{-}\n'
         \ . '|//.{-}\n'
         \ . '|/\*.{-}\*/'
