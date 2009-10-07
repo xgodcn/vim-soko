@@ -14,15 +14,16 @@ let b:php_localvarcheck_cache_pos = {}
 let b:php_localvarcheck_cache_pat = {}
 let b:php_localvarcheck_changedtick = 0
 
-let w:php_localvarcheck_matches = []
-let w:php_localvarcheck_start = 0
-let w:php_localvarcheck_end = 0
+"let w:php_localvarcheck_matches = []
+"let w:php_localvarcheck_start = 0
+"let w:php_localvarcheck_end = 0
 
 augroup PhpLocalVarCheck
   au! * <buffer>
   autocmd FileType <buffer> if &ft != 'php' | call s:Uninstall() | endif
   autocmd CursorMoved <buffer> call s:LocalVarCheck()
 augroup END
+
 augroup PhpLocalVarCheckW
   au! * <buffer>
   autocmd WinEnter <buffer> if &ft != 'php' | call s:UninstallW() | endif
@@ -81,20 +82,24 @@ function! s:LocalVarCheck()
   let cache_key = line('.')
   if !has_key(b:php_localvarcheck_cache_pos, cache_key)
     let [start, startcol, open, end, endcol] = [0, 0, 0, 0, 0]
+    if exists('g:syntax_on')
+      let skip = 'synIDattr(synID(line("."), col("."), 0), "name") !~? "phpDefine\\|phpParent"'
+    else
+      let skip = '0'
+    endif
     let view = winsaveview()
     let [start, startcol] = searchpos('\c\v<function>', 'bWc')
-    while start != 0 && synIDattr(synID(line('.'), col('.'), 0), 'name') =~? 'string\|comment'
+    while start != 0 && eval(skip)
       let [start, startcol] = searchpos('\c\v<function>', 'bW')
     endwhile
     if start != 0
       let open = search('{', 'W')
-      while open != 0 && synIDattr(synID(line('.'), col('.'), 0), 'name') =~? 'string\|comment'
+      while open != 0 && eval(skip)
         let open = search('{', 'W')
       endwhile
     endif
     if start != 0 && open != 0
-      let [end, endcol] = searchpairpos('{', '', '}', 'W',
-            \ 'synIDattr(synID(line("."), col("."), 0), "name") =~? "string\\|comment"')
+      let [end, endcol] = searchpairpos('{', '', '}', 'W', skip)
     endif
     call winrestview(view)
     let b:php_localvarcheck_cache_pos[cache_key] = [start, startcol, open, end, endcol]
@@ -165,13 +170,14 @@ endfunction
 " @return [['$varname', is_assign, is_global], ...]
 function! s:Parse(src)
   let pat_syntax  = '\c\v%('
-        \ . '#.{-}\n'
+        \ . '\?\>'
+        \ . '|\%\>'
+        \ . '|#.{-}\n'
         \ . '|//.{-}\n'
         \ . '|/\*.{-}\*/'
         \ . "|'[^']*'"
         \ . '|"%(\\.|[^"])*"'
-        \ . '|\<\<\<\s*''\w+'''
-        \ . '|\<\<\<\s*\w+'
+        \ . '|\<\<\<'
         \ . '|\$\w+'
         \ . '|<as>'
         \ . '|<list>'
@@ -201,21 +207,40 @@ function! s:Parse(src)
   " parse body
   while i != -1
     let s = matchstr(a:src, pat_syntax, i)
-    if s[0] == '"'
+    if s == '?>' || s == '%>'
+      if exists('g:php_noShortTags')
+        let mx = '\c<?php'
+      else
+        let mx = '\c<?\%(php\)\?'
+      endif
+      if exists('g:php_asp_tags')
+        let mx .= '\|<%'
+      endif
+      let e = matchend(a:src, mx, i + len(s))
+      if e == -1
+        " error
+        break
+      endif
+    elseif s[0] == '"'
       for var in s:MatchStrAll(s, '\v\\.|\$\w+')
         if var[0] == '$'
           call add(items, [var, 0, 0])
         endif
       endfor
       let e = i + len(s)
-    elseif s[0] == '<'
-      let mark = matchstr(a:src, '\w\+', i)
-      let j = match(a:src, '\n' . mark . ';', i + len(s))
+    elseif s == '<<<'
+      let _ = matchlist(a:src, '\v^\s*('')?(\w+)''?', i + len(s))
+      if empty(_)
+        " error
+        break
+      endif
+      let [quote, mark] = [_[1], _[2]]
+      let j = match(a:src, '\n' . mark . ';', i)
       if j == -1
         " error
         break
       endif
-      if s != "'$"
+      if quote == ''
         for var in s:MatchStrAll(a:src[i + len(s) : j], '\v\\.|\$\w+')
           if var[0] == '$'
             call add(items, [var, 0, 0])
