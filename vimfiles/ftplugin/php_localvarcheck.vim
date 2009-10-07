@@ -213,10 +213,6 @@ function! s:Parse(src)
     endif
     let i = match(a:src, pat_syntax, e)
   endwhile
-  if i == -1
-    " error
-    return items
-  endif
   " parse body
   while i != -1
     let s = matchstr(a:src, pat_syntax, i)
