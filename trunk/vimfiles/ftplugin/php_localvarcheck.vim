@@ -10,6 +10,14 @@ set cpo&vim
 
 hi default link PhpLocalVarCheckError Error
 
+let b:php_localvarcheck_cache_pos = {}
+let b:php_localvarcheck_cache_pat = {}
+let b:php_localvarcheck_changedtick = 0
+
+let w:php_localvarcheck_matches = []
+let w:php_localvarcheck_start = 0
+let w:php_localvarcheck_end = 0
+
 augroup PhpLocalVarCheck
   au! * <buffer>
   autocmd FileType <buffer> if &ft != 'php' | call s:Uninstall() | endif
@@ -18,49 +26,97 @@ augroup END
 
 function! s:Uninstall()
   au! PhpLocalVarCheck * <buffer>
+  unlet! b:php_localvarcheck_cache_pos = {}
+  unlet! b:php_localvarcheck_cache_pat = {}
+  unlet! b:php_localvarcheck_changedtick
   " TODO: How to remove from other window?
-  call s:MatchDeleteGroup('PhpLocalVarCheckError')
-  unlet! w:php_localvarcheck_changedtick
+  if exists('w:php_localvarcheck_matches')
+    for id in w:php_localvarcheck_matches
+      call matchdelete(id)
+    endfor
+  endif
+  unlet! w:php_localvarcheck_matches
   unlet! w:php_localvarcheck_start
   unlet! w:php_localvarcheck_end
 endfunction
 
 function! s:LocalVarCheck()
-  if get(w:, 'php_localvarcheck_changedtick', 0) == b:changedtick
-        \ && get(w:, 'php_localvarcheck_start', 0) <= line('.')
-        \ && get(w:, 'php_localvarcheck_end', 0) >= line('.')
+  if !exists('w:php_localvarcheck_matches')
+    let w:php_localvarcheck_matches = []
+  endif
+  if !exists('w:php_localvarcheck_start')
+    let w:php_localvarcheck_start = 0
+  endif
+  if !exists('w:php_localvarcheck_end')
+    let w:php_localvarcheck_end = 0
+  endif
+
+  if b:php_localvarcheck_changedtick == b:changedtick
+        \ && w:php_localvarcheck_start <= line('.')
+        \ && w:php_localvarcheck_end >= line('.')
     return
   endif
-  let view = winsaveview()
-  let [start, startcol] = searchpos('\c\v<function>', 'bWc')
-  while start != 0 && synIDattr(synID(line('.'), col('.'), 0), 'name') =~? 'string\|comment'
-    let [start, startcol] = searchpos('\c\v<function>', 'bW')
-  endwhile
-  if start != 0
-    let open = search('{', 'W')
-    while open != 0 && synIDattr(synID(line('.'), col('.'), 0), 'name') =~? 'string\|comment'
-      let open = search('{', 'W')
+
+  " clear cache
+  if b:php_localvarcheck_changedtick != b:changedtick
+    let b:php_localvarcheck_cache_pos = {}
+    " TODO: memory usage?
+    "let b:php_localvarcheck_cache_pat = {}
+  endif
+
+  " clear highlight
+  for id in w:php_localvarcheck_matches
+    call matchdelete(id)
+  endfor
+  let w:php_localvarcheck_matches = []
+
+  " find function
+  let cache_key = line('.')
+  if !has_key(b:php_localvarcheck_cache_pos, cache_key)
+    let [start, startcol, open, end, endcol] = [0, 0, 0, 0, 0]
+    let view = winsaveview()
+    let [start, startcol] = searchpos('\c\v<function>', 'bWc')
+    while start != 0 && synIDattr(synID(line('.'), col('.'), 0), 'name') =~? 'string\|comment'
+      let [start, startcol] = searchpos('\c\v<function>', 'bW')
     endwhile
+    if start != 0
+      let open = search('{', 'W')
+      while open != 0 && synIDattr(synID(line('.'), col('.'), 0), 'name') =~? 'string\|comment'
+        let open = search('{', 'W')
+      endwhile
+    endif
+    if start != 0 && open != 0
+      let [end, endcol] = searchpairpos('{', '', '}', 'W',
+            \ 'synIDattr(synID(line("."), col("."), 0), "name") =~? "string\\|comment"')
+    endif
+    call winrestview(view)
+    let b:php_localvarcheck_cache_pos[cache_key] = [start, startcol, open, end, endcol]
   endif
-  if start != 0 && open != 0
-    let [end, endcol] = searchpairpos('{', '', '}', 'W',
-          \ 'synIDattr(synID(line("."), col("."), 0), "name") =~? "string\\|comment"')
-  endif
-  call winrestview(view)
-  if start == 0 || open == 0 || end == 0 || end < line('.')
-    call s:MatchDeleteGroup('PhpLocalVarCheckError')
-    let w:php_localvarcheck_changedtick = b:changedtick
+  let [start, startcol, open, end, endcol] = b:php_localvarcheck_cache_pos[cache_key]
+
+  " set highlight
+  if start == 0 || end == 0 || end < line('.')
+    let b:php_localvarcheck_changedtick = b:changedtick
     let w:php_localvarcheck_start = 0
     let w:php_localvarcheck_end = 0
   else
     let lines = getline(start, end)
     let lines[-1] = lines[-1][0 : endcol - 1]
     let lines[0] = lines[0][startcol - 1 : ]
-    call s:MatchDeleteGroup('PhpLocalVarCheckError')
-    for pat in s:FindErrorVariable(join(lines, "\n"))
-      call matchadd('PhpLocalVarCheckError', pat)
+    let src = join(lines, "\n")
+
+    let cache_key = src
+    if !has_key(b:php_localvarcheck_cache_pat, cache_key)
+      let b:php_localvarcheck_cache_pat[cache_key] = s:FindErrorVariable(src)
+    endif
+    let patterns = b:php_localvarcheck_cache_pat[cache_key]
+
+    for pat in patterns
+      let id = matchadd('PhpLocalVarCheckError', pat)
+      call add(w:php_localvarcheck_matches, id)
     endfor
-    let w:php_localvarcheck_changedtick = b:changedtick
+
+    let b:php_localvarcheck_changedtick = b:changedtick
     let w:php_localvarcheck_start = start
     let w:php_localvarcheck_end = end
   endif
@@ -238,20 +294,6 @@ function! s:MatchStrAll(text, pat)
   let matches = []
   call substitute(a:text, a:pat, '\=empty(add(matches, submatch(0)))', 'g')
   return matches
-endfunction
-
-function! s:MatchListAll(text, pat)
-  let matches = []
-  call substitute(a:text, a:pat, '\=empty(add(matches, map(range(10), "submatch(v:val)")))', 'g')
-  return matches
-endfunction
-
-function! s:MatchDeleteGroup(group)
-  for m in getmatches()
-    if m.group ==# a:group
-      call matchdelete(m.id)
-    endif
-  endfor
 endfunction
 
 let &cpo = s:save_cpo
