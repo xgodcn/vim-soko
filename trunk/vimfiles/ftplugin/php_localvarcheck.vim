@@ -2,6 +2,13 @@
 " Last Change:  2009-10-07
 " Maintainer:   Yukihiro Nakadaira <yukihiro.nakadaira@gmail.com>
 " License:      This file is placed in the public domain.
+"
+" Options:
+"   g:php_localvarcheck_enable (default: 1)
+"     If 0, do nothing.
+"
+"   g:php_localvarcheck_global (default: 0)
+"     If 1, global scope code are also highlighted.
 
 if exists("b:did_ftplugin")
   finish
@@ -12,9 +19,17 @@ set cpo&vim
 
 hi default link PhpLocalVarCheckError Error
 
+if !exists('g:php_localvarcheck_enable')
+  let g:php_localvarcheck_enable = 1
+endif
+if !exists('g:php_localvarcheck_global')
+  let g:php_localvarcheck_global = 0
+endif
+
 let b:php_localvarcheck_cache_pos = {}
 let b:php_localvarcheck_cache_vars = {}
 let b:php_localvarcheck_changedtick = 0
+let b:php_localvarcheck_global_prev = 0
 
 "let w:php_localvarcheck_matches = []
 "let w:php_localvarcheck_start = 0
@@ -36,6 +51,7 @@ function! s:Uninstall()
   unlet! b:php_localvarcheck_cache_pos
   unlet! b:php_localvarcheck_cache_vars
   unlet! b:php_localvarcheck_changedtick
+  unlet! b:php_localvarcheck_global_prev
   call s:UninstallW()
 endfunction
 
@@ -51,6 +67,10 @@ function! s:UninstallW()
 endfunction
 
 function! s:LocalVarCheck()
+  if !g:php_localvarcheck_enable
+    return
+  endif
+
   if !exists('w:php_localvarcheck_matches')
     let w:php_localvarcheck_matches = []
   endif
@@ -61,10 +81,18 @@ function! s:LocalVarCheck()
     let w:php_localvarcheck_end = 0
   endif
 
-  if b:php_localvarcheck_changedtick == b:changedtick
-        \ && w:php_localvarcheck_start <= line('.')
-        \ && w:php_localvarcheck_end >= line('.')
-    return
+  " force refresh
+  if g:php_localvarcheck_global != b:php_localvarcheck_global_prev
+    let b:php_localvarcheck_changedtick = 0
+  endif
+  let b:php_localvarcheck_global_prev = g:php_localvarcheck_global
+
+  if !g:php_localvarcheck_global
+    if b:php_localvarcheck_changedtick == b:changedtick
+          \ && w:php_localvarcheck_start <= line('.')
+          \ && w:php_localvarcheck_end >= line('.')
+      return
+    endif
   endif
 
   " clear cache
@@ -74,18 +102,29 @@ function! s:LocalVarCheck()
     "let b:php_localvarcheck_cache_vars = {}
   endif
 
+  " find function
+  let cache_key = line('.')
+  if !has_key(b:php_localvarcheck_cache_pos, cache_key)
+    let pos = s:FindFunction()
+    if g:php_localvarcheck_global && (pos[0] == 0 || pos[3] == 0 || pos[3] < line('.'))
+      let pos = s:FindPhp()
+    endif
+    let b:php_localvarcheck_cache_pos[cache_key] = pos
+  endif
+  let [start, startcol, open, end, endcol] = b:php_localvarcheck_cache_pos[cache_key]
+
+  if b:php_localvarcheck_changedtick == b:changedtick
+        \ && w:php_localvarcheck_start == start
+        \ && w:php_localvarcheck_end == end
+        \ && end >= line('.')
+    return
+  endif
+
   " clear highlight
   for id in w:php_localvarcheck_matches
     call matchdelete(id)
   endfor
   let w:php_localvarcheck_matches = []
-
-  " find function
-  let cache_key = line('.')
-  if !has_key(b:php_localvarcheck_cache_pos, cache_key)
-    let b:php_localvarcheck_cache_pos[cache_key] = s:FindFunction()
-  endif
-  let [start, startcol, open, end, endcol] = b:php_localvarcheck_cache_pos[cache_key]
 
   " set highlight
   if start == 0 || end == 0 || end < line('.')
@@ -147,6 +186,30 @@ function! s:FindFunction()
   return [start, startcol, open, end, endcol]
 endfunction
 
+function! s:FindPhp()
+  let [start, startcol, open, end, endcol] = [0, 0, 0, 0, 0]
+
+  let view = winsaveview()
+
+  call cursor(1, 1)
+
+  if exists('g:php_noShortTags')
+    let phpopen = '\c\v\<\?php'
+  else
+    let phpopen = '\c\v\<\?%(php)?'
+  endif
+  if exists('g:php_asp_tags')
+    let phpopen .= '|\<\%'
+  endif
+
+  let [start, startcol] = searchpos(phpopen, 'Wc')
+  let [end, endcol] = [line('$'), len(getline('$'))]
+
+  call winrestview(view)
+
+  return [start, startcol, open, end, endcol]
+endfunction
+
 function! s:FindBadVariables(src)
   let special = {'$GLOBALS':1,'$_SERVER':1,'$_GET':1,'$_POST':1,'$_REQUEST':1,'$_FILES':1,'$_COOKIE':1,'$_SESSION':1,'$_ENV':1,'$this':1}
   let global = {}
@@ -182,81 +245,71 @@ endfunction
 
 " @return [['$varname', is_assign, is_global], ...]
 function! s:Parse(src)
+  if exists('g:php_noShortTags')
+    let phpopen = '\<\?php'
+  else
+    let phpopen = '\<\?%(php)?'
+  endif
+  if exists('g:php_asp_tags')
+    let phpopen .= '|\<\%'
+    let asptag = '|\%\>.{-}%(' . phpopen . '|$)'
+  else
+    let asptag = ''
+  endif
   let pat_syntax  = '\c\v%('
-        \ . '\?\>'
-        \ . '|\%\>'
-        \ . '|#.{-}\n'
-        \ . '|//.{-}\n'
+        \ . '\?\>.{-}%(' . phpopen . '|$)'
+        \ . asptag
+        \ . '|#.{-}%(\n|\?\>)@='
+        \ . '|//.{-}%(\n|\?\>)@='
         \ . '|/\*.{-}\*/'
         \ . "|'[^']*'"
         \ . '|"%(\\.|[^"])*"'
-        \ . '|\<\<\<'
+        \ . '|\<\<\<\s*''?(\w+)''?.{-}\n\1;'
         \ . '|\$\w+'
         \ . '|<as>'
         \ . '|<list>'
         \ . '|<static>'
         \ . '|<global>'
+        \ . '|<function>'
+        \ . '|<class>'
         \ . '|[;(){}]'
         \ . ')'
   let items = []
-  " parse args
   let i = match(a:src, pat_syntax)
-  while i != -1
-    let s = matchstr(a:src, pat_syntax, i)
-    if s[0] == ')'
-      break
-    elseif s[0] == '$'
-      call add(items, [s, 1, 0])
-      let e = i + len(s)
-    else
-      let e = i + len(s)
-    endif
-    let i = match(a:src, pat_syntax, e)
-  endwhile
+  " parse args
+  if a:src =~? '^function'
+    while i != -1
+      let s = matchstr(a:src, pat_syntax, i)
+      if s[0] == ')'
+        break
+      elseif s[0] == '$'
+        call add(items, [s, 1, 0])
+        let e = i + len(s)
+      else
+        let e = i + len(s)
+      endif
+      let i = match(a:src, pat_syntax, e)
+    endwhile
+  endif
   " parse body
   while i != -1
     let s = matchstr(a:src, pat_syntax, i)
-    if s == '?>' || s == '%>'
-      if exists('g:php_noShortTags')
-        let mx = '\c<?php'
-      else
-        let mx = '\c<?\%(php\)\?'
-      endif
-      if exists('g:php_asp_tags')
-        let mx .= '\|<%'
-      endif
-      let e = matchend(a:src, mx, i + len(s))
-      if e == -1
-        " error
-        break
-      endif
-    elseif s[0] == '"'
+    if s[0] == '"'
       for var in s:MatchStrAll(s, '\v\\.|\$\w+')
         if var[0] == '$'
           call add(items, [var, 0, 0])
         endif
       endfor
       let e = i + len(s)
-    elseif s == '<<<'
-      let _ = matchlist(a:src, '\v^\s*('')?(\w+)''?', i + len(s))
-      if empty(_)
-        " error
-        break
-      endif
-      let [quote, mark] = [_[1], _[2]]
-      let j = match(a:src, '\n' . mark . ';', i)
-      if j == -1
-        " error
-        break
-      endif
-      if quote == ''
-        for var in s:MatchStrAll(a:src[i + len(s) : j], '\v\\.|\$\w+')
+    elseif s =~ '^<<<'
+      if match(s, '^<<<\s*''') == -1
+        for var in s:MatchStrAll(s, '\v\\.|\$\w+')
           if var[0] == '$'
             call add(items, [var, 0, 0])
           endif
         endfor
       endif
-      let e = j + len("\n" . mark . ';')
+      let e = i + len(s)
     elseif s[0] == '$'
       if match(a:src, '^\_s*=[^=>]', i + len(s)) != -1
         call add(items, [s, 1, 0])
@@ -315,6 +368,34 @@ function! s:Parse(src)
           break
         elseif t[0] == '$'
           call add(items, [t, 1, 1])
+        endif
+        let j = match(a:src, pat_syntax, j + len(t))
+      endwhile
+      if j == -1
+        " error
+        break
+      endif
+      let e = j
+    elseif s ==? 'function' || s ==? 'class'
+      " skip function or class
+      let j = match(a:src, pat_syntax, i + len(s))
+      while j != -1
+        let t = matchstr(a:src, pat_syntax, j)
+        if t == '{'
+          break
+        endif
+        let j = match(a:src, pat_syntax, j + len(t))
+      endwhile
+      let level = 0
+      while j != -1
+        let t = matchstr(a:src, pat_syntax, j)
+        if t == '{'
+          let level += 1
+        elseif t == '}'
+          let level -= 1
+          if level == 0
+            break
+          endif
         endif
         let j = match(a:src, pat_syntax, j + len(t))
       endwhile
