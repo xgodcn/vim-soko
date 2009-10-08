@@ -1,5 +1,5 @@
 " highlight unused/unassigned local variable
-" Last Change:  2009-10-07
+" Last Change:  2009-10-08
 " Maintainer:   Yukihiro Nakadaira <yukihiro.nakadaira@gmail.com>
 " License:      This file is placed in the public domain.
 "
@@ -105,7 +105,7 @@ function! s:LocalVarCheck()
   " find function
   let cache_key = line('.')
   if !has_key(b:php_localvarcheck_cache_pos, cache_key)
-    let pos = s:FindFunction()
+    let pos = s:FindFunction(line('.'))
     if g:php_localvarcheck_global && (pos[0] == 0 || pos[3] == 0 || pos[3] < line('.'))
       let pos = s:FindPhp()
     endif
@@ -154,7 +154,7 @@ function! s:LocalVarCheck()
   endif
 endfunction
 
-function! s:FindFunction()
+function! s:FindFunction(lnum)
   let [start, startcol, open, end, endcol] = [0, 0, 0, 0, 0]
 
   if exists('g:syntax_on')
@@ -164,6 +164,8 @@ function! s:FindFunction()
   endif
 
   let view = winsaveview()
+
+  call cursor(a:lnum, col([a:lnum, '$']))
 
   let [start, startcol] = searchpos('\c\v<function>', 'bWc')
   while start != 0 && eval(skip)
@@ -203,7 +205,7 @@ function! s:FindPhp()
   endif
 
   let [start, startcol] = searchpos(phpopen, 'Wc')
-  let [end, endcol] = [line('$'), len(getline('$'))]
+  let [end, endcol] = [line('$'), col([line('$'), '$'])]
 
   call winrestview(view)
 
