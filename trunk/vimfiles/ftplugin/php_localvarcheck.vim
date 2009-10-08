@@ -105,7 +105,7 @@ function! s:LocalVarCheck()
   " find function
   let cache_key = line('.')
   if !has_key(b:php_localvarcheck_cache_pos, cache_key)
-    let pos = s:FindFunction(line('.'))
+    let pos = s:FindFunction()
     if g:php_localvarcheck_global && (pos[0] == 0 || pos[3] == 0 || pos[3] < line('.'))
       let pos = s:FindPhp()
     endif
@@ -154,7 +154,7 @@ function! s:LocalVarCheck()
   endif
 endfunction
 
-function! s:FindFunction(lnum)
+function! s:FindFunction()
   let [start, startcol, open, end, endcol] = [0, 0, 0, 0, 0]
 
   if exists('g:syntax_on')
@@ -165,7 +165,7 @@ function! s:FindFunction(lnum)
 
   let view = winsaveview()
 
-  call cursor(a:lnum, col([a:lnum, '$']))
+  call cursor(line('.'), col('$'))
 
   let [start, startcol] = searchpos('\c\v<function>', 'bWc')
   while start != 0 && eval(skip)
@@ -249,20 +249,19 @@ endfunction
 function! s:Parse(src)
   if exists('g:php_noShortTags')
     let phpopen = '\<\?php'
+    let phpclose = '\?\>'
   else
     let phpopen = '\<\?%(php)?'
+    let phpclose = '\?\>'
   endif
   if exists('g:php_asp_tags')
     let phpopen .= '|\<\%'
-    let asptag = '|\%\>.{-}%(' . phpopen . '|$)'
-  else
-    let asptag = ''
+    let phpclose .= '|\%\>'
   endif
-  let pat_syntax  = '\c\v%('
-        \ . '\?\>.{-}%(' . phpopen . '|$)'
-        \ . asptag
-        \ . '|#.{-}%(\n|\?\>)@='
-        \ . '|//.{-}%(\n|\?\>)@='
+  let pat_syntax  = '\c\v'
+        \ . '%(' . phpclose . ').{-}%(' . phpopen . '|$)'
+        \ . '|#.{-}%(\n|' . phpclose . ')@='
+        \ . '|//.{-}%(\n|' . phpclose . ')@='
         \ . '|/\*.{-}\*/'
         \ . "|'[^']*'"
         \ . '|"%(\\.|[^"])*"'
@@ -275,7 +274,6 @@ function! s:Parse(src)
         \ . '|<function>'
         \ . '|<class>'
         \ . '|[;(){}]'
-        \ . ')'
   let items = []
   let i = match(a:src, pat_syntax)
   " parse args
