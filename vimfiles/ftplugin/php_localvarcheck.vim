@@ -1,5 +1,5 @@
 " highlight unused/unassigned local variable
-" Last Change:  2009-10-08
+" Last Change:  2009-10-09
 " Maintainer:   Yukihiro Nakadaira <yukihiro.nakadaira@gmail.com>
 " License:      This file is placed in the public domain.
 "
@@ -218,11 +218,16 @@ function! s:FindBadVariables(src)
   let assigned = {}
   let used = {}
   let bad = {}
-  for [var, is_assign, is_global] in s:Parse(a:src)
+  for [var, is_assign, is_combined, is_global] in s:Parse(a:src)
     if has_key(special, var)
       continue
     endif
     if is_assign
+      if is_combined
+        if !has_key(assigned, var)
+          let bad[var] = 1
+        endif
+      endif
       let assigned[var] = 1
       " global variable may be used in somewhere else.
       if is_global
@@ -245,7 +250,7 @@ function! s:FindBadVariables(src)
   return keys(bad)
 endfunction
 
-" @return [['$varname', is_assign, is_global], ...]
+" @return [['$varname', is_assign, is_combined, is_global], ...]
 function! s:Parse(src)
   if exists('g:php_noShortTags')
     let phpopen = '\<\?php'
@@ -283,7 +288,7 @@ function! s:Parse(src)
       if s[0] == ')'
         break
       elseif s[0] == '$'
-        call add(items, [s, 1, 0])
+        call add(items, [s, 1, 0, 0])
         let e = i + len(s)
       else
         let e = i + len(s)
@@ -297,7 +302,7 @@ function! s:Parse(src)
     if s[0] == '"'
       for var in s:MatchStrAll(s, '\v\\.|\$\w+')
         if var[0] == '$'
-          call add(items, [var, 0, 0])
+          call add(items, [var, 0, 0, 0])
         endif
       endfor
       let e = i + len(s)
@@ -305,16 +310,19 @@ function! s:Parse(src)
       if match(s, '^<<<\s*''') == -1
         for var in s:MatchStrAll(s, '\v\\.|\$\w+')
           if var[0] == '$'
-            call add(items, [var, 0, 0])
+            call add(items, [var, 0, 0, 0])
           endif
         endfor
       endif
       let e = i + len(s)
     elseif s[0] == '$'
-      if match(a:src, '^\_s*=[^=>]', i + len(s)) != -1
-        call add(items, [s, 1, 0])
+      let op = matchstr(a:src, '^\_s*\zs\%([&./\-%*|+^]=\|<<=\|>>=\|=[^=>]\@=\)', i + len(s))
+      if op == '='
+        call add(items, [s, 1, 0, 0])
+      elseif op != ''
+        call add(items, [s, 1, 1, 0])
       else
-        call add(items, [s, 0, 0])
+        call add(items, [s, 0, 0, 0])
       endif
       let e = i + len(s)
     elseif s ==? 'as'
@@ -323,9 +331,9 @@ function! s:Parse(src)
         " error
         break
       endif
-      call add(items, [_[1], 1, 0])
+      call add(items, [_[1], 1, 0, 0])
       if _[2] != ''
-        call add(items, [_[2], 1, 0])
+        call add(items, [_[2], 1, 0, 0])
       endif
       let e = i + len(_[0])
     elseif s ==? 'list'
@@ -335,7 +343,7 @@ function! s:Parse(src)
         if t == ')'
           break
         elseif t[0] == '$'
-          call add(items, [t, 1, 0])
+          call add(items, [t, 1, 0, 0])
         endif
         let j = match(a:src, pat_syntax, j + len(t))
       endwhile
@@ -351,7 +359,7 @@ function! s:Parse(src)
         if t == ';'
           break
         elseif t[0] == '$'
-          call add(items, [t, 1, 0])
+          call add(items, [t, 1, 0, 0])
         endif
         let j = match(a:src, pat_syntax, j + len(t))
       endwhile
@@ -367,7 +375,7 @@ function! s:Parse(src)
         if t == ';'
           break
         elseif t[0] == '$'
-          call add(items, [t, 1, 1])
+          call add(items, [t, 1, 0, 1])
         endif
         let j = match(a:src, pat_syntax, j + len(t))
       endwhile
