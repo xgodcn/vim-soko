@@ -106,12 +106,14 @@ function! s:LocalVarCheck()
   let cache_key = line('.')
   if !has_key(b:php_localvarcheck_cache_pos, cache_key)
     let pos = s:FindFunction()
-    if g:php_localvarcheck_global && (pos[0] == 0 || pos[3] == 0 || pos[3] < line('.'))
-      let pos = s:FindPhp()
+    if g:php_localvarcheck_global
+      if pos[0] == 0 || pos[3] == 0 || pos[3] < line('.')
+        let pos = s:FindPhp()
+      endif
     endif
     let b:php_localvarcheck_cache_pos[cache_key] = pos
   endif
-  let [start, startcol, open, end, endcol] = b:php_localvarcheck_cache_pos[cache_key]
+  let [start, startcol, open, end, endcol, abstract] = b:php_localvarcheck_cache_pos[cache_key]
 
   if b:php_localvarcheck_changedtick == b:changedtick
         \ && w:php_localvarcheck_start == start
@@ -127,7 +129,7 @@ function! s:LocalVarCheck()
   let w:php_localvarcheck_matches = []
 
   " set highlight
-  if start == 0 || end == 0 || end < line('.')
+  if start == 0 || end == 0 || end < line('.') || abstract
     let b:php_localvarcheck_changedtick = b:changedtick
     let w:php_localvarcheck_start = 0
     let w:php_localvarcheck_end = 0
@@ -155,7 +157,7 @@ function! s:LocalVarCheck()
 endfunction
 
 function! s:FindFunction()
-  let [start, startcol, open, end, endcol] = [0, 0, 0, 0, 0]
+  let [start, startcol, open, end, endcol, abstract] = [0, 0, 0, 0, 0, 0]
 
   if exists('g:syntax_on')
     let skip = 'synIDattr(synID(line("."), col("."), 0), "name") !~? "phpDefine\\|phpParent"'
@@ -173,23 +175,28 @@ function! s:FindFunction()
   endwhile
 
   if start != 0
-    let open = search('{', 'W')
+    let open = search('\c\v\{|\}|<function>', 'W')
     while open != 0 && eval(skip)
-      let open = search('{', 'W')
+      let open = search('\c\v\{|\}|<function>', 'W')
     endwhile
   endif
 
-  if start != 0 && open != 0
+  " If not '{', it may be a abstract method.
+  if open != 0 && getline('.')[col('.') - 1] != '{'
+    let [open, end, endcol, abstract] = [start, start, startcol, 1]
+  endif
+
+  if start != 0 && open != 0 && abstract != 1
     let [end, endcol] = searchpairpos('{', '', '}', 'W', skip)
   endif
 
   call winrestview(view)
 
-  return [start, startcol, open, end, endcol]
+  return [start, startcol, open, end, endcol, abstract]
 endfunction
 
 function! s:FindPhp()
-  let [start, startcol, open, end, endcol] = [0, 0, 0, 0, 0]
+  let [start, startcol, open, end, endcol, abstract] = [0, 0, 0, 0, 0, 0]
 
   let view = winsaveview()
 
@@ -209,7 +216,7 @@ function! s:FindPhp()
 
   call winrestview(view)
 
-  return [start, startcol, open, end, endcol]
+  return [start, startcol, open, end, endcol, abstract]
 endfunction
 
 function! s:FindBadVariables(src)
@@ -278,6 +285,7 @@ function! s:Parse(src)
         \ . '|<global>'
         \ . '|<function>'
         \ . '|<class>'
+        \ . '|<interface>'
         \ . '|[;(){}]'
   let items = []
   let i = match(a:src, pat_syntax)
@@ -384,8 +392,8 @@ function! s:Parse(src)
         break
       endif
       let e = j
-    elseif s ==? 'function' || s ==? 'class'
-      " skip function or class
+    elseif s ==? 'function' || s ==? 'class' || s ==? 'interface'
+      " skip block
       let j = match(a:src, pat_syntax, i + len(s))
       while j != -1
         let t = matchstr(a:src, pat_syntax, j)
