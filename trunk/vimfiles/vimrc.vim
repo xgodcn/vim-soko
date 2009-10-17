@@ -107,8 +107,12 @@ augroup vimrcEx
 augroup END
 
 augroup filetypedetect
-  " use "text" as default filetype
-  autocmd BufEnter,FileType * if &ft == '' | setl ft=text | endif
+  " emit FileType event for ft=''
+  autocmd BufEnter *
+        \   if !exists('b:__did_filetype')
+        \ |   let b:__did_filetype = 1
+        \ |   if &ft == '' | setl ft= | endif
+        \ | endif
   autocmd BufRead,BufNewFile *.as           setf javascript
   autocmd BufRead,BufNewFile SConstruct     setf python
 augroup END
@@ -122,7 +126,7 @@ syntax on
 filetype plugin indent on
 
 augroup filetypeplugin
-  autocmd FileType text,vim setl sw=2 sts=2 et
+  autocmd FileType {},vim setl sw=2 sts=2 et
 augroup END
 augroup filetypeindent
 augroup END
