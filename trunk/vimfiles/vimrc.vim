@@ -23,7 +23,7 @@ set backspace=indent,eol,start
 set textwidth=72
 set formatoptions+=nmB fo-=t fo-=c
 set autoindent
-set shiftwidth=4 softtabstop=4 expandtab
+set shiftwidth=2 softtabstop=2 expandtab
 set cinoptions=t0,:0,g0
 set tags+=./tags;
 set guioptions-=t             " disable tearoff menu
@@ -107,12 +107,6 @@ augroup vimrcEx
 augroup END
 
 augroup filetypedetect
-  " emit FileType event for ft=''
-  autocmd BufEnter *
-        \   if !exists('b:__did_filetype')
-        \ |   let b:__did_filetype = 1
-        \ |   if &ft == '' | setl ft= | endif
-        \ | endif
   autocmd BufRead,BufNewFile *.as           setf javascript
   autocmd BufRead,BufNewFile SConstruct     setf python
 augroup END
@@ -126,7 +120,7 @@ syntax on
 filetype plugin indent on
 
 augroup filetypeplugin
-  autocmd FileType {},vim setl sw=2 sts=2 et
+  autocmd FileType c,cpp,java,python,php setl sw=4 sts=4 et
 augroup END
 augroup filetypeindent
 augroup END
