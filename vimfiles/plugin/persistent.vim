@@ -1,4 +1,4 @@
-" Last Change: 2009-10-31
+" Last Change: 2009-11-01
 
 if exists("loaded_persistent")
   finish
@@ -19,7 +19,7 @@ endif
 let g:persistent_savedir = fnamemodify(g:persistent_savedir, ':p:s?/$??')
 
 if !exists("g:persistent_options")
-  let g:persistent_options = ["&l:sw", "&l:sts", "&l:ts", "&l:et"]
+  let g:persistent_options = 'sw sts ts et'
 endif
 
 augroup PlugPersistent
@@ -29,7 +29,10 @@ augroup PlugPersistent
 augroup END
 
 function! s:OnEnter()
-  let ft = (&ft != '' ? &ft : '_')
+  let ft = s:GetBufVar('&ft')
+  if ft == ''
+    let ft = '_'
+  endif
   let dir = s:GetPath()
   while g:persistent_savedir <=? dir
     let p = dir . '/' . ft . '.vim'
@@ -45,12 +48,15 @@ function! s:OnLeave()
   if !filereadable(expand('<afile>'))
     return
   endif
-  let ft = (&ft != '' ? &ft : '_')
+  let ft = s:GetBufVar('&ft')
+  if ft == ''
+    let ft = '_'
+  endif
   let dir = s:GetPath()
   let p = dir . '/' . ft . '.vim'
   let lines = []
-  for opt in sort(g:persistent_options)
-    call add(lines, printf("let %s = %s", opt, string(eval(opt))))
+  for name in sort(split(g:persistent_options))
+    call add(lines, printf("let %s = %s", name, string(s:GetBufVar('&' . name))))
   endfor
   if !isdirectory(dir)
     call mkdir(dir, 'p')
@@ -64,6 +70,10 @@ function! s:GetPath()
   let dir = substitute(dir, '^\([^/]\):/', '/\1/', '')
   let dir = substitute(dir, '/$', '', '')
   return g:persistent_savedir . dir
+endfunction
+
+function! s:GetBufVar(varname)
+  return getbufvar(str2nr(expand('<abuf>')), a:varname)
 endfunction
 
 let s:save_cpo = &cpo
