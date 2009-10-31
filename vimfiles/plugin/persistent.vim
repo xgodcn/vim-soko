@@ -65,7 +65,7 @@ function! s:OnLeave()
 endfunction
 
 function! s:GetPath()
-  let dir = fnamemodify(expand('<afile>'), ':p:h')
+  let dir = expand('<afile>:p:h')
   let dir = substitute(dir, '\\', '/', 'g')
   let dir = substitute(dir, '^\([^/]\):/', '/\1/', '')
   let dir = substitute(dir, '/$', '', '')
