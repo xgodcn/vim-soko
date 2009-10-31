@@ -24,13 +24,13 @@ endif
 
 augroup PlugPersistent
   au!
-  autocmd BufRead,BufNewFile * call s:Load(bufname("%"))
-  autocmd BufLeave,BufUnload * call s:Save(expand("<afile>"))
+  autocmd BufRead,BufNewFile * call s:OnEnter()
+  autocmd BufLeave,BufUnload * call s:OnLeave()
 augroup END
 
-function! s:Load(bufname)
+function! s:OnEnter()
   let ft = (&ft != '' ? &ft : '_')
-  let dir = s:GetPath(a:bufname)
+  let dir = s:GetPath()
   while g:persistent_savedir <=? dir
     let p = dir . '/' . ft . '.vim'
     if filereadable(p)
@@ -41,9 +41,12 @@ function! s:Load(bufname)
   endwhile
 endfunction
 
-function! s:Save(bufname)
+function! s:OnLeave()
+  if !filereadable(expand('<afile>'))
+    return
+  endif
   let ft = (&ft != '' ? &ft : '_')
-  let dir = s:GetPath(a:bufname)
+  let dir = s:GetPath()
   let p = dir . '/' . ft . '.vim'
   let lines = []
   for opt in sort(g:persistent_options)
@@ -55,8 +58,8 @@ function! s:Save(bufname)
   call writefile(lines, p)
 endfunction
 
-function! s:GetPath(bufname)
-  let dir = fnamemodify(a:bufname, ':p:h')
+function! s:GetPath()
+  let dir = fnamemodify(expand('<afile>'), ':p:h')
   let dir = substitute(dir, '\\', '/', 'g')
   let dir = substitute(dir, '^\([^/]\):/', '/\1/', '')
   let dir = substitute(dir, '/$', '', '')
