@@ -31,13 +31,10 @@ augroup END
 function! s:Load(bufname)
   let ft = (&ft != '' ? &ft : '_')
   let dir = s:GetPath(a:bufname)
-  while 1
+  while g:persistent_savedir <=? dir
     let p = dir . '/' . ft . '.vim'
     if filereadable(p)
       source `=p`
-      break
-    endif
-    if dir == g:persistent_savedir
       break
     endif
     let dir = fnamemodify(dir, ':h')
