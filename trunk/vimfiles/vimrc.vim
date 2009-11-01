@@ -1,4 +1,6 @@
+let &runtimepath = join(split(&rtp, ',') + split(globpath(&rtp, 'plugins/*/'), '\n'), ',')
 set encoding=utf-8
+set termencoding=default
 set fileencodings=ucs-bom,utf-8,euc-jp,cp932
 set ambiwidth=double
 let &backupdir = fnamemodify(finddir('backup', &runtimepath), ':p:~')
@@ -16,7 +18,7 @@ set showcmd
 set cmdheight=2
 set laststatus=2
 set wildmenu
-set statusline=%f\ %m%r%y%{_bomb()}%{_fenc()}%{_ff()}%=%v\ %l/%L
+set statusline=%!MyStatusLine()
 set winminheight=0
 set noequalalways
 set backspace=indent,eol,start
@@ -40,17 +42,30 @@ vmap m  <Plug>MarkerToggle
 
 command! -range -register -bang Number call s:Number(<line1>, <line2>, "<reg>", "<bang>")
 
-function _bomb()
-  return &bomb ? '[bomb]' : ''
+function MyStatusLine()
+  let bomb = (&bomb ? '[bomb]' : '')
+  let fenc = '[' . (&fenc != '' ? &fenc : &enc) . ']'
+  let ff = '[' . &ff . ']'
+  let qf = (exists('g:_qf') ? '[G:' . g:_qf . ']' : '')
+  let loc = (exists('w:_loc') ? '[L:' . w:_loc . ']' : '')
+  let stl = '%f %m%r%y%{bomb}%{fenc}%{ff}%{qf}%{loc}%=%v %l/%L'
+  return substitute(stl, '%{\([^}]*\)}', '\=eval(submatch(1))', 'g')
 endfunction
 
-function _fenc()
-  return &fenc != '' ? '['.&fenc.']' : '['.&enc.']'
+function s:qf_update()
+  let g:_qf = len(getqflist())
+  if g:_qf == 0
+    unlet g:_qf
+  endif
+  let w:_loc = len(getloclist(0))
+  if w:_loc == 0
+    unlet w:_loc
+  endif
 endfunction
 
-function _ff()
-  return '['.&ff.']'
-endfunction
+augroup statusline
+  autocmd QuickFixCmdPost,WinEnter * call s:qf_update()
+augroup END
 
 function s:ExpandTab()
   setl expandtab!
@@ -106,11 +121,6 @@ augroup vimrcEx
   autocmd InsertLeave,CursorMovedI * if pumvisible() == 0 | pclose | endif
 augroup END
 
-augroup filetypedetect
-  autocmd BufRead,BufNewFile *.as           setf javascript
-  autocmd BufRead,BufNewFile SConstruct     setf python
-augroup END
-
 augroup filetypeplugin
   autocmd FileType * setl sw< sts< ts< et< tw< fo<
 augroup END
@@ -122,9 +132,42 @@ filetype plugin indent on
 augroup filetypeplugin
   autocmd FileType c,cpp,java,python,php setl sw=4 sts=4 et
 augroup END
+
 augroup filetypeindent
+  autocmd FileType html,xhtml,xml,java setl indentexpr=
+  autocmd FileType php setl autoindent indentkeys-==<?
+  autocmd FileType javascript setl nocindent smartindent
 augroup END
+
 augroup syntax
 augroup END
+
+augroup filetypeplugin
+  autocmd FileType * au! Lint * <buffer>
+  if executable('splint')
+    autocmd FileType c compiler splint
+          \ | let &l:makeprg = 'splint +quiet %'
+          \ | autocmd Lint BufWritePost <buffer> call s:Lint()
+  endif
+  if executable('php')
+    autocmd FileType php compiler php
+          \ | let &l:makeprg = 'php -d short_open_tag=0 -d asp_tags=1 -lq %'
+          \ | autocmd Lint BufWritePost <buffer> call s:Lint()
+  endif
+augroup END
+
+augroup Lint
+  " touch
+augroup END
+
+function s:Lint()
+  silent lmake!
+  redraw!
+  call setloclist(0, filter(getloclist(0), 'v:val.valid'), 'r')
+  call s:qf_update()
+endfunction
+
+let g:php_noShortTags = 1
+let g:php_asp_tags = 1
 
 runtime macros/matchit.vim
