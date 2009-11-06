@@ -645,3 +645,102 @@ abc
     	        	bbb
 }
 
+
+1257457620
+{
+X aaaaa
+     bbbbb
+}
+{
+X aaaaa
+     bbbbb
+}
+
+
+1257468164
+{
+X aaaaa
+ bbbbb
+}
+{
+X aaaaa
+ bbbbb
+}
+
+
+1257500340
+{
+/*** aaa
+  ** bbb
+  ** ****/
+}
+{
+/***
+  ** aaa
+  ** bbb
+  ******/
+}
+{
+/*** aaa
+  ** bbb
+  ******/
+}
+{
+/*** aaa
+  ** bbb
+  ******/
+}
+{
+/***
+  ** aaa
+  ** bbb
+  ******/
+}
+{
+/*** aaa
+  ** bbb
+  ******/
+}
+
+
+1257516766
+{
+# aaa
+## bbb
+}
+{
+## aaa bbb
+}
+{
+# aaa
+## bbb
+}
+{
+## aaa bbb
+}
+
+
+1254595219
+{
+/* aaaaa
+ * bbbbb
+ * ccccc
+ * */
+
+/* aaaaa
+ * bbbbb
+ * ccccc
+ * */
+}
+{
+/* aaaaa
+ * bbbbb
+ * ccccc
+ * */
+
+/* aaaaa
+ * bbbbb
+ * ccccc
+ * */
+}
+
