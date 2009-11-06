@@ -1,6 +1,6 @@
 " Maintainer:   Yukihiro Nakadaira <yukihiro.nakadaira@gmail.com>
 " License:      This file is placed in the public domain.
-" Last Change:  2009-10-04
+" Last Change:  2009-11-06
 "
 " Options:
 "
@@ -115,7 +115,7 @@ function s:lib.format_normal_mode(lnum, count)
     let lnum = a:lnum + i
     let lines[0] = self.retab(lines[0])
     let fo_2 = self.get_second_line_leader(lines)
-    let new_lines = self.format_line(self.join_lines(lines), 1, fo_2)
+    let new_lines = self.format_lines(lines, fo_2)
     if len(lines) > len(new_lines)
       silent execute printf("%ddelete _ %d", lnum, len(lines) - len(new_lines))
     elseif len(lines) < len(new_lines)
@@ -145,7 +145,7 @@ function s:lib.format_insert_mode(char)
   let [line, rest] = [line[: col - 1] . a:char, line[col :]]
 
   let fo_2 = self.get_second_line_leader(getline(lnum, lnum + 1))
-  let lines = self.format_line(line, 1, fo_2)
+  let lines = self.format_lines([line], fo_2)
   if len(lines) == 1
     return a:char
   endif
@@ -164,26 +164,33 @@ function s:lib.format_insert_mode(char)
   return a:char
 endfunction
 
-function s:lib.format_line(line, cnt, fo_2)
-  let col = self.find_boundary(a:line)
-  if col == -1
-    return [a:line]
-  endif
-  let line1 = substitute(a:line[: col - 1], '\s*$', '', '')
-  let line2 = substitute(a:line[col :], '^\s*', '', '')
-  if a:fo_2 != -1
-    let leader = a:fo_2
-  else
-    let leader = self.make_next_line_leader(line1)
-  endif
-  let line2 = leader . line2
-  " TODO: This is ugly hack but simple.  make option?
-  " " * */" -> " */"
-  if mode() == 'n' && leader =~ '\S' && line2 =~ '^\s*\*\s\+\*/\s*$'
-    let line2 = matchstr(line2, '^\s*') . '*/'
-  endif
-  " use same leader for following lines
-  return [line1] + self.format_line(line2, a:cnt + 1, a:fo_2)
+function s:lib.format_lines(lines, fo_2)
+  let lines = copy(a:lines)
+  let res = []
+  while !empty(lines)
+    if empty(res)
+      let line = remove(lines, 0)
+    else
+      let line = self.join_lines([remove(res, -1), remove(lines, 0)])
+    endif
+    while 1
+      let col = self.find_boundary(line)
+      if col == -1
+        call add(res, line)
+        break
+      endif
+      let line1 = substitute(line[: col - 1], '\s*$', '', '')
+      let line2 = substitute(line[col :], '^\s*', '', '')
+      if a:fo_2 != -1
+        let leader = a:fo_2
+      else
+        let leader = self.make_next_line_leader(line1)
+      endif
+      call add(res, line1)
+      let line = leader . line2
+    endwhile
+  endwhile
+  return res
 endfunction
 
 function s:lib.find_boundary(line)
@@ -305,7 +312,10 @@ function s:lib.get_paragraph(lines)
   "     => [ [1, ["line2", "line3"]], [5, ["line6"]] ]
 
   let res = []
-  let pl = map(copy(a:lines), 'self.parse_leader(v:val)')
+  let pl = []
+  for line in a:lines
+    call add(pl, self.parse_leader(line))
+  endfor
   let i = 0
   while i < len(a:lines)
     while i < len(a:lines) && pl[i][3] == ""
@@ -335,6 +345,17 @@ function s:lib.get_paragraph(lines)
             \ && pl[i-1][1] != pl[i][1] && pl[i][4] !~# '[me]'
         " start of comment (comment leader is changed)
         break
+      elseif pl[start][4] !~# 'f'
+            \ && pl[i-1][1] == pl[i][1] && pl[i-1][2] != '' && pl[i][2] == ''
+        " @see opt.c:same_leader()
+        " :set comments=:#
+        " 1: # aaa      ->    1: # aaa
+        " 2: ## bbb           2: ## bbb
+        "
+        " 1: ## aaa           1: ## aaa bbb
+        " 1: # bbb
+        " start of comment (comment leader is changed)
+        break
       elseif (&formatoptions =~# 'n' && pl[i][3] =~ &formatlistpat)
         " start of list
         break
@@ -359,9 +380,13 @@ function s:lib.join_lines(lines)
 
   let res = a:lines[0]
   for line in a:lines[1:]
-    let [indent, com_str, mindent, text, com_flags] = self.parse_leader(line)
-    if com_flags =~# '[se]'
-      let text = com_str . mindent . text
+    if self.is_comment_enabled()
+      let [indent, com_str, mindent, text, com_flags] = self.parse_leader(line)
+      if com_flags =~# '[se]'
+        let text = com_str . mindent . text
+      endif
+    else
+      let text = line
     endif
     if res == ""
       let res = text
@@ -523,75 +548,83 @@ function s:lib.make_next_line_leader(line)
       let indent = ''
     endif
     let [indent, com_str, mindent] = [indent, '', listpat_indent]
-  elseif com_flags =~# 'f'
-    let [indent, com_str, mindent] = [indent, '', repeat(' ', self.str_width(com_str)) . mindent . listpat_indent]
-  elseif com_flags =~# 's'
-    if !&autoindent
-      let indent = ''
-    endif
-    " make a middle of three-piece comment
-    let coms = self.parse_opt_comments(&comments)
-    for i in range(len(coms))
-      if coms[i][0] =~# 's'
-        let [s, m, e] = coms[i : i + 2]
-        if s == [com_flags, com_str]
-          break
-        endif
-      endif
-    endfor
-    if leader !~ ' $' && m[0] =~# 'b'
-      let extra_space = ' '
-    endif
-    let off = matchstr(com_flags, '-\?\d\+\ze[^0-9]*') + 0
-    let adjust = matchstr(com_flags, '\c[lr]\ze[^lr]*')
-    if adjust ==# 'r'
-      let newindent = self.str_width(indent . com_str) - self.str_width(m[1])
-      if newindent < 0
-        let newindent = 0
-      endif
-    else
-      let newindent = self.str_width(indent)
-      let w1 = self.str_width(com_str)
-      let w2 = self.str_width(m[1])
-      if w1 > w2 && mindent[0] != "\t"
-        let mindent = repeat(' ', w1 - w2) . mindent
-      endif
-    endif
-    let _leader = repeat(' ', newindent) . m[1] . mindent
-    " Recompute the indent, it may have changed.
-    if &autoindent || do_si
-      let newindent = self.str_width(matchstr(_leader, '^\s*'))
-    endif
-    if newindent + off < 0
-      let off = -newindent
-      let newindent = 0
-    else
-      let newindent += off
-    endif
-    " Correct trailing spaces for the shift, so that alignment remains equal.
-    " Don't do it when there is a tab before the space
-    while off > 0 && _leader != '' && _leader =~ ' $' && _leader !~ '\t'
-      let _leader = strpart(_leader, 0, len(_leader) - 1)
-      let off -= 1
-    endwhile
-    let _ = matchlist(_leader, '^\s*\(\S*\)\(\s*\)$')
-    if _[2] != ''
-      let extra_space = ''
-    endif
-    let [indent, com_str, mindent] = [repeat(' ', newindent), _[1], _[2] . extra_space . listpat_indent]
-  elseif com_flags =~# 'm'
-    let [indent, com_str, mindent] = [indent, com_str, mindent . listpat_indent]
   elseif com_flags =~# 'e'
     let [indent, com_str, mindent] = [indent, '', '']
   else
-    let [indent, com_str, mindent] = [indent, com_str, mindent . listpat_indent]
+    let extra_space = ''
+    if com_flags =~# 's'
+      if !&autoindent
+        let indent = ''
+      endif
+      let coms = self.parse_opt_comments(&comments)
+      for i in range(len(coms))
+        if coms[i][0] =~# 's'
+          let [s, m, e] = coms[i : i + 2]
+          if s == [com_flags, com_str]
+            break
+          endif
+        endif
+      endfor
+      let lead_repl = m[1]
+      if leader !~ ' $' && m[0] =~# 'b'
+        let extra_space = ' '
+      endif
+    elseif com_flags =~# 'm'
+      " pass
+    elseif com_flags =~# 'f'
+      let lead_repl = ''
+    else
+      " pass
+    endif
+    if exists('lead_repl')
+      let off = matchstr(com_flags, '-\?\d\+\ze[^0-9]*') + 0
+      let adjust = matchstr(com_flags, '\c[lr]\ze[^lr]*')
+      if adjust ==# 'r'
+        let newindent = self.str_width(indent . com_str) - self.str_width(lead_repl)
+        if newindent < 0
+          let newindent = 0
+        endif
+      else
+        let newindent = self.str_width(indent)
+        let w1 = self.str_width(com_str)
+        let w2 = self.str_width(lead_repl)
+        if w1 > w2 && mindent[0] != "\t"
+          let mindent = repeat(' ', w1 - w2) . mindent
+        endif
+      endif
+      let _leader = repeat(' ', newindent) . lead_repl . mindent
+      " Recompute the indent, it may have changed.
+      if &autoindent || do_si
+        let newindent = self.str_width(matchstr(_leader, '^\s*'))
+      endif
+      if newindent + off < 0
+        let off = -newindent
+        let newindent = 0
+      else
+        let newindent += off
+      endif
+      " Correct trailing spaces for the shift, so that alignment remains equal.
+      " Don't do it when there is a tab before the space
+      while off > 0 && _leader != '' && _leader =~ ' $' && _leader !~ '\t'
+        let _leader = strpart(_leader, 0, len(_leader) - 1)
+        let off -= 1
+      endwhile
+      let _ = matchlist(_leader, '^\s*\(\S*\)\(\s*\)$')
+      if _[2] != ''
+        let extra_space = ''
+      endif
+      let [indent, com_str, mindent] = [repeat(' ', newindent), _[1], _[2] . extra_space . listpat_indent]
+    else
+      let [indent, com_str, mindent] = [indent, com_str, mindent . listpat_indent]
+    endif
   endif
   if &copyindent
-    let indent = self.copy_indent(a:line, indent)
+    let [indent, rest] = self.copy_indent(a:line, indent)
   else
     let indent = self.retab(indent)
+    let rest = ''
   endif
-  let leader = indent . com_str . mindent
+  let leader = indent . rest . com_str . mindent
   if com_str == ''
     let leader = self.retab(leader, len(indent))
   endif
@@ -599,6 +632,7 @@ function s:lib.make_next_line_leader(line)
 endfunction
 
 function s:lib.copy_indent(line1, line2)
+  " @return [copied_indent, rest_indent . text]
   let indent1 = matchstr(a:line1, '^\s*')
   let indent2 = matchstr(a:line2, '^\s*')
   let text = matchstr(a:line2, '^\s*\zs.*$')
@@ -606,9 +640,9 @@ function s:lib.copy_indent(line1, line2)
   let n2 = self.str_width(indent2)
   let indent = matchstr(indent1, '^\s*\%<' . (n2 + 2) . 'v')
   if n2 > n1
-    let indent .= repeat(' ', n2 - n1)
+    let text = repeat(' ', n2 - n1) . text
   endif
-  return indent . text
+  return [indent, text]
 endfunction
 
 function s:lib.retab(line, ...)
