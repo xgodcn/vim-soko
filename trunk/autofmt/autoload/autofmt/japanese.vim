@@ -1,6 +1,6 @@
 " Maintainer:   Yukihiro Nakadaira <yukihiro.nakadaira@gmail.com>
 " License:      This file is placed in the public domain.
-" Last Change:  2009-10-04
+" Last Change:  2009-11-08
 "
 " Options:
 "
@@ -27,10 +27,6 @@ endfunction
 
 function autofmt#japanese#import()
   return s:lib
-endfunction
-
-function autofmt#japanese#test()
-  call s:lib.test()
 endfunction
 
 let s:compat = autofmt#compat#import()
