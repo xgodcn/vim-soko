@@ -709,7 +709,6 @@ gqgqoi
 :set formatexpr=autofmt#compat#formatexpr()
 gqgqoi
         aaa bbb ccc
-:set autoindent&
 ENDTEST
 
 1254595176
@@ -730,7 +729,6 @@ gqgqoi
 :set formatexpr=autofmt#compat#formatexpr()
 gqgqoi
 	aaa bbb ccc
-:set autoindent& expandtab&
 ENDTEST
 
 1254595177
@@ -756,7 +754,6 @@ gqgqjgqgqjgqgqoi
 	    aaa bbb
 i    	aaa bbb
 i    	    aaa bbb
-:set autoindent& expandtab& copyindent&
 ENDTEST
 
 1254595178
@@ -779,7 +776,6 @@ i    	        -       aaa bbb
 /^{/+1
 :set formatexpr=autofmt#compat#formatexpr()
 i    	        -       aaa bbb
-:set autoindent& expandtab& copyindent&
 ENDTEST
 
 1254595179
@@ -816,7 +812,6 @@ iX aaaaa bbbbb
 /^{/+1
 :set formatexpr=autofmt#compat#formatexpr()
 iX aaaaa bbbbb
-:set autoindent&
 ENDTEST
 
 1257468164

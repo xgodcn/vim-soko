@@ -1,3 +1,4 @@
 :set cp
-:map dotest /^STARTTESTj:set ff=unix cpo-=A:.,/ENDTEST/-1w! Xdotest:set ff& cpo+=Anj0:so! Xdotestdotest
+:map clean :set autoindent& expandtab& copyindent& formatoptions& textwidth& comments& formatlistpat&
+:map dotest /^STARTTESTj:set ff=unix cpo-=A:.,/ENDTEST/-1w! Xdotest:set ff& cpo+=Anj0:so! Xdotestcleandotest
 dotest
