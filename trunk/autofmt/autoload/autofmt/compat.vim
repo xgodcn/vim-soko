@@ -1,6 +1,6 @@
 " Maintainer:   Yukihiro Nakadaira <yukihiro.nakadaira@gmail.com>
 " License:      This file is placed in the public domain.
-" Last Change:  2009-11-06
+" Last Change:  2009-11-11
 "
 " Options:
 "
@@ -310,6 +310,16 @@ function s:lib.get_paragraph(lines)
   "   For example:
   "     lines = ["", "line2", "line3", "", "", "line6", ""]
   "     => [ [1, ["line2", "line3"]], [5, ["line6"]] ]
+  "
+  " TODO: check for 'f' comment or 'formatlistpat'.  make option?
+  "     orig           vim                 useful?
+  "   1: - line1     1: - line1 line2    1: - line1
+  "   2: line2                           2: line2
+  " use indent?
+  "   1: hoge fuga   1: hoge fuga        1: hoge fuga
+  "   2:   - list1   2:   - list1        2:   - list1
+  "   3:   - list2   3:   - list2 hoge   3:   - list2
+  "   4: hoge fuga   4:     fuga         4: hoge fuga
 
   let res = []
   let pl = []
@@ -327,36 +337,32 @@ function s:lib.get_paragraph(lines)
     let start = i
     let i += 1
     while i < len(a:lines) && pl[i][3] != ""
-      " TODO: check for 'f' comment or 'formatlistpat'.  make option?
-      "     orig           vim                 useful?
-      "   1: - line1     1: - line1 line2    1: - line1
-      "   2: line2                           2: line2
-      " use indent?
-      "   1: hoge fuga   1: hoge fuga        1: hoge fuga
-      "   2:   - list1   2:   - list1        2:   - list1
-      "   3:   - list2   3:   - list2 hoge   3:   - list2
-      "   4: hoge fuga   4:     fuga         4: hoge fuga
-      if pl[start][4] !~# 'f'
-            \ && ((pl[i-1][1] == "" && pl[i][1] != "")
-            \  || (pl[i-1][1] != "" && pl[i][1] == ""))
-        " start/end of comment
+      " @see opt.c:same_leader()
+
+      if pl[start][4] =~# 'f'
+        if pl[i][1] != ''
+          break
+        endif
+      elseif pl[start][4] =~# 'e'
         break
-      elseif pl[start][4] !~# 'f'
-            \ && pl[i-1][1] != pl[i][1] && pl[i][4] !~# '[me]'
-        " start of comment (comment leader is changed)
-        break
-      elseif pl[start][4] !~# 'f'
-            \ && pl[i-1][1] == pl[i][1] && pl[i-1][2] != '' && pl[i][2] == ''
-        " @see opt.c:same_leader()
+      elseif pl[start][4] =~# 's'
+        if pl[i][4] !~# 'm'
+          break
+        endif
+      elseif pl[i-1][1] != pl[i][1] || (pl[i-1][2] != '' && pl[i][2] == '')
+        " start/end of comment or different comment
+        "
+        " MEMO:
         " :set comments=:#
         " 1: # aaa      ->    1: # aaa
         " 2: ## bbb           2: ## bbb
         "
         " 1: ## aaa           1: ## aaa bbb
-        " 1: # bbb
-        " start of comment (comment leader is changed)
+        " 2: # bbb
         break
-      elseif (&formatoptions =~# 'n' && pl[i][3] =~ &formatlistpat)
+      endif
+
+      if (&formatoptions =~# 'n' && pl[i][3] =~ &formatlistpat)
         " start of list
         break
       elseif &formatoptions =~# '2'
@@ -368,6 +374,7 @@ function s:lib.get_paragraph(lines)
           break
         endif
       endif
+
       let i += 1
     endwhile
     call add(res, [start, a:lines[start : i - 1]])
@@ -481,6 +488,21 @@ function s:lib.parse_opt_comments(comments)
   return res
 endfunction
 
+function s:lib.find_three_piece_comments(comments, flags, str)
+  let coms = self.parse_opt_comments(a:comments)
+  for i in range(len(coms))
+    if coms[i][0] == a:flags && coms[i][1] == a:str
+      if a:flags =~# 's'
+        return coms[i : i + 2]
+      elseif a:flags =~# 'm'
+        return coms[i - 1 : i + 1]
+      elseif a:flags =~# 'e'
+        return coms[i - 2 : i]
+      endif
+    endif
+  endfor
+endfunction
+
 function s:lib.line2list(line)
   let res = []
   let [col, virtcol] = [0, 0]
@@ -556,15 +578,7 @@ function s:lib.make_next_line_leader(line)
       if !&autoindent
         let indent = ''
       endif
-      let coms = self.parse_opt_comments(&comments)
-      for i in range(len(coms))
-        if coms[i][0] =~# 's'
-          let [s, m, e] = coms[i : i + 2]
-          if s == [com_flags, com_str]
-            break
-          endif
-        endif
-      endfor
+      let [s, m, e] = self.find_three_piece_comments(&comments, com_flags, com_str)
       let lead_repl = m[1]
       if leader !~ ' $' && m[0] =~# 'b'
         let extra_space = ' '
