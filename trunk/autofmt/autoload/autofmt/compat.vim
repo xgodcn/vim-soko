@@ -689,7 +689,7 @@ function s:lib.char_width(c, ...)
   if a:c == ""
     return 0
   elseif a:c == "\t"
-    return self.tab_width(vcol)
+    return &tabstop - (vcol % &tabstop)
   elseif a:c =~ '^.\%2v'  " single-width char
     return 1
   elseif a:c =~ '^.\%3v'  " double-width char or ctrl-code (^X)
@@ -700,10 +700,6 @@ function s:lib.char_width(c, ...)
     return 6
   endif
   return 0
-endfunction
-
-function s:lib.tab_width(vcol)
-  return &tabstop - (a:vcol % &tabstop)
 endfunction
 
 function s:lib.get_opt(name)
