@@ -43,7 +43,7 @@
 " TODO:
 "   'cindent', 'lispindent', 'smartindent', 'indentexpr'
 "
-"   'formatoptions': 'w' 'v' 'b'
+"   'formatoptions': 'a' 'w' 'v' 'b' 'l'
 "
 "   hoge(); /* format comment here */
 "   hoge(); /* format
