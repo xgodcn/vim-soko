@@ -1,5 +1,5 @@
 " highlight unused/unassigned local variable
-" Last Change:  2009-10-09
+" Last Change:  2009-11-12
 " Maintainer:   Yukihiro Nakadaira <yukihiro.nakadaira@gmail.com>
 " License:      This file is placed in the public domain.
 "
@@ -9,10 +9,6 @@
 "
 "   g:php_localvarcheck_global (default: 0)
 "     If 1, global scope code are also highlighted.
-
-if exists("b:did_ftplugin")
-  finish
-endif
 
 let s:save_cpo = &cpo
 set cpo&vim
