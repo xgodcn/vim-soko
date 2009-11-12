@@ -22,7 +22,7 @@ DISTFILES = \
 
 all: package
 
-package:
+package: clean test
 	mkdir autofmt
 	cp --parents $(DISTFILES) autofmt
 	rm -f autofmt.zip
