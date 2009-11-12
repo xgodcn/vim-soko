@@ -1,6 +1,6 @@
 " Maintainer:   Yukihiro Nakadaira <yukihiro.nakadaira@gmail.com>
 " License:      This file is placed in the public domain.
-" Last Change:  2009-11-11
+" Last Change:  2009-11-12
 "
 " Options:
 "
@@ -165,31 +165,34 @@ function s:lib.format_insert_mode(char)
 endfunction
 
 function s:lib.format_lines(lines, fo_2)
-  let lines = copy(a:lines)
   let res = []
-  while !empty(lines)
-    if empty(res)
-      let line = remove(lines, 0)
-    else
-      let line = self.join_lines([remove(res, -1), remove(lines, 0)])
+  let line = self.join_lines(a:lines)
+  while 1
+    let col = self.find_boundary(line)
+    if col == -1
+      call add(res, line)
+      break
     endif
-    while 1
-      let col = self.find_boundary(line)
-      if col == -1
-        call add(res, line)
-        break
-      endif
-      let line1 = substitute(line[: col - 1], '\s*$', '', '')
-      let line2 = substitute(line[col :], '^\s*', '', '')
-      if a:fo_2 != -1
-        let leader = a:fo_2
-      else
-        let leader = self.make_next_line_leader(line1)
-      endif
-      call add(res, line1)
-      let line = leader . line2
-    endwhile
+    let line1 = substitute(line[: col - 1], '\s*$', '', '')
+    let line2 = substitute(line[col :], '^\s*', '', '')
+    if a:fo_2 != -1
+      let leader = a:fo_2
+    else
+      let leader = self.make_next_line_leader(line1)
+    endif
+    call add(res, line1)
+    let line = leader . line2
   endwhile
+  if self.is_comment_enabled() && mode() == 'n'
+    " " * */" -> " */"
+    let [indent, com_str, mindent, text, com_flags] = self.parse_leader(res[-1])
+    if com_flags =~# 'm'
+      let [s, m, e] = self.find_three_piece_comments(&comments, com_flags, com_str)
+      if text == e[1]
+        let res[-1] = indent . e[1]
+      endif
+    endif
+  endif
   return res
 endfunction
 
