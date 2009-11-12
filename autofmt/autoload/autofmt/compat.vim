@@ -314,6 +314,8 @@ function s:lib.get_paragraph(lines)
   "     lines = ["", "line2", "line3", "", "", "line6", ""]
   "     => [ [1, ["line2", "line3"]], [5, ["line6"]] ]
   "
+  " @see opt.c:same_leader()
+  "
   " TODO: check for 'f' comment or 'formatlistpat'.  make option?
   "     orig           vim                 useful?
   "   1: - line1     1: - line1 line2    1: - line1
@@ -340,8 +342,6 @@ function s:lib.get_paragraph(lines)
     let start = i
     let i += 1
     while i < len(a:lines) && pl[i][3] != ""
-      " @see opt.c:same_leader()
-
       if pl[start][4] =~# 'f'
         if pl[i][1] != ''
           break
@@ -354,17 +354,8 @@ function s:lib.get_paragraph(lines)
         endif
       elseif pl[i-1][1] != pl[i][1] || (pl[i-1][2] != '' && pl[i][2] == '')
         " start/end of comment or different comment
-        "
-        " MEMO:
-        " :set comments=:#
-        " 1: # aaa      ->    1: # aaa
-        " 2: ## bbb           2: ## bbb
-        "
-        " 1: ## aaa           1: ## aaa bbb
-        " 2: # bbb
         break
       endif
-
       if (&formatoptions =~# 'n' && pl[i][3] =~ &formatlistpat)
         " start of list
         break
@@ -377,7 +368,6 @@ function s:lib.get_paragraph(lines)
           break
         endif
       endif
-
       let i += 1
     endwhile
     call add(res, [start, a:lines[start : i - 1]])
