@@ -706,10 +706,24 @@ abc
 1257516766
 {
 # aaa
+#bbb
+}
+{
+#aaa bbb
+}
+{
+# aaa
 ## bbb
 }
 {
 ## aaa bbb
+}
+{
+# aaa
+#bbb
+}
+{
+#aaa bbb
 }
 {
 # aaa

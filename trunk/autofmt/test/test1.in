@@ -880,7 +880,15 @@ STARTTEST
 /^{/+1
 2gqgq
 /^{/+1
+2gqgq
+/^{/+1
+2gqgq
+/^{/+1
 :set formatexpr=autofmt#compat#formatexpr()
+2gqgq
+/^{/+1
+2gqgq
+/^{/+1
 2gqgq
 /^{/+1
 2gqgq
@@ -889,10 +897,26 @@ ENDTEST
 1257516766
 {
 # aaa
+#bbb
+}
+{
+#aaa
+# bbb
+}
+{
+# aaa
 ## bbb
 }
 {
 ## aaa
+# bbb
+}
+{
+# aaa
+#bbb
+}
+{
+#aaa
 # bbb
 }
 {
