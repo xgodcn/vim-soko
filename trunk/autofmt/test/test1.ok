@@ -648,22 +648,22 @@ abc
 
 1257457620
 {
-X aaaaa
+- aaaaa
      bbbbb
 }
 {
-X aaaaa
+- aaaaa
      bbbbb
 }
 
 
 1257468164
 {
-X aaaaa
+- aaaaa
  bbbbb
 }
 {
-X aaaaa
+- aaaaa
  bbbbb
 }
 
@@ -717,30 +717,5 @@ X aaaaa
 }
 {
 ## aaa bbb
-}
-
-
-1254595219
-{
-/* aaaaa
- * bbbbb
- * ccccc
- * */
-
-/* aaaaa
- * bbbbb
- * ccccc
- * */
-}
-{
-/* aaaaa
- * bbbbb
- * ccccc
- * */
-
-/* aaaaa
- * bbbbb
- * ccccc
- * */
 }
 
