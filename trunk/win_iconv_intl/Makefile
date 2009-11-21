@@ -13,7 +13,7 @@ libintl.zip: libintl.dll
 	zip -r libintl.zip libintl
 
 msvcrt:
-	svn export ../win_iconv msvcrt; \
+	svn checkout http://win-iconv.googlecode.com/svn/trunk/ msvcrt; \
 	cd msvcrt; \
 	$(MAKE);
 
@@ -41,7 +41,7 @@ libintl.dll: $(GETTEXT).tar.gz msvcrt
 	./configure; \
 	cd intl; \
 	cp Makefile Makefile.orig; \
-	sed "s/-version-info/-avoid-version &/" Makefile.orig > Makefile; \
+	sed -e "s/-version-info/-avoid-version &/" -e "s/-liconv/-Wl,&/" Makefile.orig > Makefile; \
 	$(MAKE); \
 	cd ../../..; \
 	cp $(GETTEXT)/gettext-runtime/intl/.libs/libintl.dll ./; \
