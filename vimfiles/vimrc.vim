@@ -18,7 +18,13 @@ set showcmd
 set cmdheight=2
 set laststatus=2
 set wildmenu
-set statusline=%!MyStatusLine()
+let &statusline = "%f %m%r%y"
+      \ . "%{&bomb ? '[bomb]' : ''}"
+      \ . "[%{&fenc!='' ? &fenc : &enc}]"
+      \ . "[%{&ff}]"
+      \ . "%{exists('g:_qf') ? '[G:'.g:_qf.']' : ''}"
+      \ . "%{exists('w:_loc') ? '[L:'.w:_loc.']' : ''}"
+      \ . "%=%v %l/%L"
 set winminheight=0
 set noequalalways
 set backspace=indent,eol,start
@@ -41,16 +47,6 @@ nmap mm <Plug>MarkerToggle
 vmap m  <Plug>MarkerToggle
 
 command! -range -register -bang Number call s:Number(<line1>, <line2>, "<reg>", "<bang>")
-
-function MyStatusLine()
-  let bomb = (&bomb ? '[bomb]' : '')
-  let fenc = '[' . (&fenc != '' ? &fenc : &enc) . ']'
-  let ff = '[' . &ff . ']'
-  let qf = (exists('g:_qf') ? '[G:' . g:_qf . ']' : '')
-  let loc = (exists('w:_loc') ? '[L:' . w:_loc . ']' : '')
-  let stl = '%f %m%r%y%{bomb}%{fenc}%{ff}%{qf}%{loc}%=%v %l/%L'
-  return substitute(stl, '%{\([^}]*\)}', '\=eval(submatch(1))', 'g')
-endfunction
 
 function s:qf_update()
   let g:_qf = len(getqflist())
