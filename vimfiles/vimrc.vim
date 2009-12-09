@@ -126,7 +126,7 @@ syntax on
 filetype plugin indent on
 
 augroup filetypeplugin
-  autocmd FileType c,cpp,java,python,php setl sw=4 sts=4 et
+  autocmd FileType c,cpp,java,python,php,perl setl sw=4 sts=4 et
 augroup END
 
 augroup filetypeindent
