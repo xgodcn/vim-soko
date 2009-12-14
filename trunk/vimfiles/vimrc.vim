@@ -22,8 +22,8 @@ let &statusline = "%f %m%r%y"
       \ . "%{&bomb ? '[bomb]' : ''}"
       \ . "[%{&fenc!='' ? &fenc : &enc}]"
       \ . "[%{&ff}]"
-      \ . "%{exists('g:_qf') ? '[G:'.g:_qf.']' : ''}"
-      \ . "%{exists('w:_loc') ? '[L:'.w:_loc.']' : ''}"
+      \ . "%#Error#%{exists('g:_qf') ? '[G:'.g:_qf.']' : ''}%*"
+      \ . "%#Error#%{exists('w:_loc') ? '[L:'.w:_loc.']' : ''}%*"
       \ . "%=%v %l/%L"
 set winminheight=0
 set noequalalways
