@@ -115,6 +115,8 @@ augroup vimrcEx
   autocmd WinEnter * call s:MinWindow(3)
   " close completion preview window
   autocmd InsertLeave,CursorMovedI * if pumvisible() == 0 | pclose | endif
+  " lint
+  autocmd BufWritePost * call s:Lint()
 augroup END
 
 augroup filetypeplugin
@@ -138,25 +140,18 @@ augroup END
 augroup syntax
 augroup END
 
-augroup filetypeplugin
-  autocmd FileType * au! Lint * <buffer>
-  if executable('splint')
-    autocmd FileType c compiler splint
-          \ | let &l:makeprg = 'splint +quiet %'
-          \ | autocmd Lint BufWritePost <buffer> call s:Lint()
-  endif
-  if executable('php')
-    autocmd FileType php compiler php
-          \ | let &l:makeprg = 'php -d short_open_tag=0 -d asp_tags=1 -lq %'
-          \ | autocmd Lint BufWritePost <buffer> call s:Lint()
-  endif
-augroup END
-
-augroup Lint
-  " touch
-augroup END
-
 function s:Lint()
+  if &ft == 'c' && executable('splint')
+    compiler splint
+    let &l:makeprg = 'splint +quiet %'
+  elseif &ft == 'php' && executable('php')
+    compiler php
+    let &l:makeprg = 'php -d short_open_tag=0 -d asp_tags=1 -lq %'
+  elseif &ft == 'python' && executable('pyflakes')
+    compiler pyflakes
+  else
+    return
+  endif
   silent lmake!
   redraw!
   call setloclist(0, filter(getloclist(0), 'v:val.valid'), 'r')
