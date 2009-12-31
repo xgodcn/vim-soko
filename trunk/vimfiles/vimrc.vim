@@ -18,13 +18,7 @@ set showcmd
 set cmdheight=2
 set laststatus=2
 set wildmenu
-let &statusline = "%f %m%r%y"
-      \ . "%{&bomb ? '[bomb]' : ''}"
-      \ . "[%{&fenc!='' ? &fenc : &enc}]"
-      \ . "[%{&ff}]"
-      \ . "%#Error#%{exists('g:_qf') ? '[G:'.g:_qf.']' : ''}%*"
-      \ . "%#Error#%{exists('w:_loc') ? '[L:'.w:_loc.']' : ''}%*"
-      \ . "%=%v %l/%L"
+set statusline=%f\ %m%r%y%{_bomb()}%{_fenc()}%{_ff()}%#Error#%{_qf()}%{_loc()}%*%=%v\ %l/%L
 set winminheight=0
 set noequalalways
 set backspace=indent,eol,start
@@ -39,29 +33,33 @@ set iminsert=0 imsearch=0     " turn off IM in default
 set mouse=a                   " enable mouse for all
 set mousemodel=popup
 
-vnoremap * "9y/<C-R>='\V'.substitute(escape(@9,'\/'),'\n','\\n','g')<CR><CR>
-inoremap <expr> <Leader>date strftime("%Y-%m-%d")
-inoremap <script> <S-Tab> <SID>ExpandTab<Tab><SID>ExpandTab
-inoremap <expr> <SID>ExpandTab <SID>ExpandTab()
-nmap mm <Plug>MarkerToggle
-vmap m  <Plug>MarkerToggle
-
-command! -range -register -bang Number call s:Number(<line1>, <line2>, "<reg>", "<bang>")
-
-function s:qf_update()
-  let g:_qf = len(getqflist())
-  if g:_qf == 0
-    unlet g:_qf
-  endif
-  let w:_loc = len(getloclist(0))
-  if w:_loc == 0
-    unlet w:_loc
-  endif
+function _bomb()
+  return &bomb ? '[bomb]' : ''
 endfunction
 
-augroup statusline
-  autocmd QuickFixCmdPost,WinEnter * call s:qf_update()
-augroup END
+function _fenc()
+  return '[' . ((&fenc == '') ? &enc : &fenc) . ']'
+endfunction
+
+function _ff()
+  return '[' . &ff . ']'
+endfunction
+
+function _qf()
+  let n = len(getqflist())
+  if n == 0
+    return ''
+  endif
+  return '[G:' . n . ']'
+endfunction
+
+function _loc()
+  let n = len(getloclist(0))
+  if n == 0
+    return ''
+  endif
+  return '[L:' . n . ']'
+endfunction
 
 function s:ExpandTab()
   setl expandtab!
@@ -90,6 +88,32 @@ function s:MinWindow(threshold)
   endif
 endfunction
 
+function s:Lint()
+  if &ft == 'c' && executable('splint')
+    compiler splint
+    let &l:makeprg = 'splint +quiet %'
+  elseif &ft == 'php' && executable('php')
+    compiler php
+    let &l:makeprg = 'php -d short_open_tag=0 -d asp_tags=1 -lq %'
+  elseif &ft == 'python' && executable('pyflakes')
+    compiler pyflakes
+  else
+    return
+  endif
+  silent lmake!
+  redraw!
+  call setloclist(0, filter(getloclist(0), 'v:val.valid'), 'r')
+endfunction
+
+vnoremap * "9y/<C-R>='\V'.substitute(escape(@9,'\/'),'\n','\\n','g')<CR><CR>
+inoremap <expr> <Leader>date strftime("%Y-%m-%d")
+inoremap <script> <S-Tab> <SID>ExpandTab<Tab><SID>ExpandTab
+inoremap <expr> <SID>ExpandTab <SID>ExpandTab()
+nmap mm <Plug>MarkerToggle
+vmap m  <Plug>MarkerToggle
+
+command! -range -register -bang Number call s:Number(<line1>, <line2>, "<reg>", "<bang>")
+
 augroup vimrcEx
   au!
 
@@ -117,6 +141,12 @@ augroup vimrcEx
   autocmd InsertLeave,CursorMovedI * if pumvisible() == 0 | pclose | endif
   " lint
   autocmd BufWritePost * call s:Lint()
+  " don't copy location list
+  autocmd VimEnter,WinEnter *
+        \   if !exists('w:_init')
+        \ |   let w:_init = 1
+        \ |   lexpr []
+        \ | endif
 augroup END
 
 augroup filetypeplugin
@@ -139,24 +169,6 @@ augroup END
 
 augroup syntax
 augroup END
-
-function s:Lint()
-  if &ft == 'c' && executable('splint')
-    compiler splint
-    let &l:makeprg = 'splint +quiet %'
-  elseif &ft == 'php' && executable('php')
-    compiler php
-    let &l:makeprg = 'php -d short_open_tag=0 -d asp_tags=1 -lq %'
-  elseif &ft == 'python' && executable('pyflakes')
-    compiler pyflakes
-  else
-    return
-  endif
-  silent lmake!
-  redraw!
-  call setloclist(0, filter(getloclist(0), 'v:val.valid'), 'r')
-  call s:qf_update()
-endfunction
 
 let g:php_noShortTags = 1
 let g:php_asp_tags = 1
