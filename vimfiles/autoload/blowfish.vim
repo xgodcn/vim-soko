@@ -125,6 +125,7 @@ function blowfish#test()
     let salt += repeat([0], 8 - len(salt))
   endif
   let key = s:hex2bytes(md5#md5bin(password + salt))
+  let iv = s:hex2bytes(md5#md5bin(key + password + salt))
   let encrypted = blowfish#encrypt(key, data, 1)
   " added "Salted__XXXXXXXX" header
   let header = s:str2bytes("Salted__") + salt
