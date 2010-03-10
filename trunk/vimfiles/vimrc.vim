@@ -105,8 +105,46 @@ function s:Lint()
   call setloclist(0, filter(getloclist(0), 'v:val.valid'), 'r')
 endfunction
 
+function! s:Abbrev(src)
+  for [cond, pat, expr] in s:abbrev
+    if eval(cond)
+      let _ = matchlist(a:src, pat)
+      if !empty(_)
+        return repeat("\<BS>", len(_[0])) . eval(expr)
+      endif
+    endif
+  endfor
+  return ''
+endfunction
+
+function! _AbbrevFile()
+  let src = strpart(getline('.'), 0, col('.') - 1)
+  let sep = has('win32') ? '\' : '/'
+  for i in range(len(src))
+    if src[i - 1] !~ '\f' && isdirectory(src[i : ])
+      let path = src[i : ]
+      break
+    endif
+  endfor
+  if exists('path')
+    let lst = split(glob(substitute(path, '[\\/]*$', '/*', '')), '\n')
+    let lst = map(lst, 'isdirectory(v:val) ? v:val . sep : v:val')
+    call complete(col('.') - len(path), lst)
+  endif
+  return ''
+endfunction
+
+let s:abbrev = [
+      \ ['mode() =~ "[ic]"', '\<date$', 'strftime("%Y-%m-%d")'],
+      \ ['mode() =~ "[ic]"', '\<time$', 'strftime("%H:%S:%M")'],
+      \ ['mode() =~ "[ic]"', '\<dir$', 'expand("%:h")."/"'],
+      \ ['mode() =~ "[i]"', '\ze[\\/]$', '"\<C-R>=_AbbrevFile()\<CR>"'],
+      \ ]
+
+inoremap <expr> <C-Z> <SID>Abbrev(strpart(getline('.'), 0, col('.') - 1))
+cnoremap <expr> <C-Z> <SID>Abbrev(strpart(getcmdline(), 0, getcmdpos() - 1))
+
 vnoremap * "9y/<C-R>='\V'.substitute(escape(@9,'\/'),'\n','\\n','g')<CR><CR>
-inoremap <expr> <Leader>date strftime("%Y-%m-%d")
 inoremap <script> <S-Tab> <SID>ExpandTab<Tab><SID>ExpandTab
 inoremap <expr> <SID>ExpandTab <SID>ExpandTab()
 nmap mm <Plug>MarkerToggle
@@ -133,8 +171,6 @@ augroup vimrcEx
   autocmd ColorScheme * hi CursorIM guibg=purple
   " weaken special chars
   autocmd ColorScheme * hi SpecialKey guifg=gray
-  " shortcut to file's directory
-  autocmd BufEnter * let $w = expand("%:p:h")
   " minimize window
   autocmd WinEnter * call s:MinWindow(3)
   " close completion preview window
