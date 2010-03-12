@@ -141,8 +141,8 @@ let s:abbrev = [
       \ ['mode() =~ "[i]"', '\ze[\\/]$', '"\<C-R>=_AbbrevFile()\<CR>"'],
       \ ]
 
-inoremap <expr> <C-Z> <SID>Abbrev(strpart(getline('.'), 0, col('.') - 1))
-cnoremap <expr> <C-Z> <SID>Abbrev(strpart(getcmdline(), 0, getcmdpos() - 1))
+inoremap <expr> <C-]> <SID>Abbrev(strpart(getline('.'), 0, col('.') - 1))
+cnoremap <expr> <C-]> <SID>Abbrev(strpart(getcmdline(), 0, getcmdpos() - 1))
 
 vnoremap * "9y/<C-R>='\V'.substitute(escape(@9,'\/'),'\n','\\n','g')<CR><CR>
 inoremap <script> <S-Tab> <SID>ExpandTab<Tab><SID>ExpandTab
