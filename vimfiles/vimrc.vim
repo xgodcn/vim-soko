@@ -94,7 +94,8 @@ function s:Lint()
     let &l:makeprg = 'splint +quiet %'
   elseif &ft == 'php' && executable('php')
     compiler php
-    let &l:makeprg = 'php -d short_open_tag=0 -d asp_tags=1 -lq %'
+  elseif &ft == 'python' && executable('pylint')
+    compiler pylint
   elseif &ft == 'python' && executable('pyflakes')
     compiler pyflakes
   else
@@ -102,7 +103,7 @@ function s:Lint()
   endif
   silent lmake!
   redraw!
-  call setloclist(0, filter(getloclist(0), 'v:val.valid'), 'r')
+  "call setloclist(0, filter(getloclist(0), 'v:val.valid'), 'r')
 endfunction
 
 function! s:Abbrev(src)
