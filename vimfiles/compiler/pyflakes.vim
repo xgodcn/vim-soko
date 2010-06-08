@@ -4,14 +4,14 @@ if exists("current_compiler")
 endif
 let current_compiler = "pyflakes"
 
-if exists(":CompilerSet") != 2
-  command -nargs=* CompilerSet setlocal <args>
-endif
+CompilerSet makeprg=pyflakes
+      \\ $*
+      \\ %
 
-CompilerSet makeprg=pyflakes\ %
+CompilerSet errorformat=
+      \%f:%l:\ %m
 
 " import a
 " import a.b <- ignore message for this
-CompilerSet errorformat=%-G%f:%l:\ redefinition\ of\ unused\ %.%#
-"
-CompilerSet errorformat+=%f:%l:\ %m
+CompilerSet errorformat+=%-G%f:%l:\ redefinition\ of\ unused\ %.%#
+
