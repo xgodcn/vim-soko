@@ -1,3 +1,4 @@
+
 if exists("current_compiler")
   finish
 endif
@@ -7,8 +8,10 @@ CompilerSet makeprg=pylint
       \\ --reports=n
       \\ --include-ids=y
       \\ --output-format=parseable
+      \\ $*
       \\ %
 
-CompilerSet errorformat& errorformat+=
+CompilerSet errorformat=
+      \%f:%l:\ %m,
       \%-GNo\ config\ file\ found\\,\ using\ default\ configuration
 
