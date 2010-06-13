@@ -89,21 +89,22 @@ function s:MinWindow(threshold)
 endfunction
 
 function s:Lint()
+  let cmd = 'compiler %s | exe "silent lmake!" | let loc += getloclist(0)'
+  let loc = []
   if &ft == 'c' && executable('splint')
-    compiler splint
-    let &l:makeprg = 'splint +quiet %'
+    execute printf(cmd, 'splint')
+  elseif &ft == 'php' && executable('phpmd')
+    execute printf(cmd, 'php')
+    execute printf(cmd, 'phpmd')
   elseif &ft == 'php' && executable('php')
-    compiler php
+    execute printf(cmd, 'php')
   elseif &ft == 'python' && executable('pylint')
-    compiler pylint
+    execute printf(cmd, 'pylint')
   elseif &ft == 'python' && executable('pyflakes')
-    compiler pyflakes
-  else
-    return
+    execute printf(cmd, 'pyflakes')
   endif
-  silent lmake!
   redraw!
-  "call setloclist(0, filter(getloclist(0), 'v:val.valid'), 'r')
+  call setloclist(0, loc)
 endfunction
 
 function! s:Abbrev(src)
