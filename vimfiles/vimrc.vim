@@ -91,17 +91,27 @@ endfunction
 function s:Lint()
   let cmd = 'compiler %s | exe "silent lmake!" | let loc += getloclist(0)'
   let loc = []
-  if &ft == 'c' && executable('splint')
-    execute printf(cmd, 'splint')
-  elseif &ft == 'php' && executable('phpmd')
-    execute printf(cmd, 'php')
-    execute printf(cmd, 'phpmd')
-  elseif &ft == 'php' && executable('php')
-    execute printf(cmd, 'php')
-  elseif &ft == 'python' && executable('pylint')
-    execute printf(cmd, 'pylint')
-  elseif &ft == 'python' && executable('pyflakes')
-    execute printf(cmd, 'pyflakes')
+  if &ft == 'c'
+    if executable('splint')
+      execute printf(cmd, 'splint')
+    endif
+  elseif &ft == 'php'
+    if executable('php')
+      execute printf(cmd, 'php')
+    endif
+    if executable('phpmd')
+      execute printf(cmd, 'phpmd')
+    endif
+  elseif &ft == 'python'
+    if executable('pylint')
+      execute printf(cmd, 'pylint')
+    endif
+    if executable('pyflakes')
+      execute printf(cmd, 'pyflakes')
+    endif
+    if executable('pep8')
+      execute printf(cmd, 'pep8')
+    endif
   endif
   redraw!
   call setloclist(0, loc)
