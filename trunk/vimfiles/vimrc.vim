@@ -228,6 +228,5 @@ augroup syntax
 augroup END
 
 let g:php_noShortTags = 1
-let g:php_asp_tags = 1
 
 runtime macros/matchit.vim
