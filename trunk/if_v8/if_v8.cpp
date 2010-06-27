@@ -2,7 +2,7 @@
  *
  * v8 interface to Vim
  *
- * Last Change: 2010-05-18
+ * Last Change: 2010-06-27
  * Maintainer: Yukihiro Nakadaira <yukihiro.nakadaira@gmail.com>
  */
 #include <cstdio>
@@ -79,7 +79,7 @@ static Handle<Boolean> VimDictIdxQuery(uint32_t index, const AccessorInfo& info)
 static Handle<Boolean> VimDictIdxDelete(uint32_t index, const AccessorInfo& info);
 static Handle<Value> VimDictGet(Local<String> property, const AccessorInfo& info);
 static Handle<Value> VimDictSet(Local<String> property, Local<Value> value, const AccessorInfo& info);
-static Handle<Boolean> VimDictQuery(Local<String> property, const AccessorInfo& info);
+static Handle<Integer> VimDictQuery(Local<String> property, const AccessorInfo& info);
 static Handle<Boolean> VimDictDelete(Local<String> property, const AccessorInfo& info);
 static Handle<Array> VimDictEnumerate(const AccessorInfo& info);
 
@@ -849,7 +849,9 @@ static Handle<Boolean>
 VimDictIdxQuery(uint32_t index, const AccessorInfo& info)
 {
   TRACE("VimDictIdxQuery");
-  return VimDictQuery(Integer::New(index)->ToString(), info);
+  if (VimDictQuery(Integer::New(index)->ToString(), info).IsEmpty())
+      return False();
+  return True();
 }
 
 static Handle<Boolean>
@@ -911,7 +913,7 @@ VimDictSet(Local<String> property, Local<Value> value, const AccessorInfo& info)
   return value;
 }
 
-static Handle<Boolean>
+static Handle<Integer>
 VimDictQuery(Local<String> property, const AccessorInfo& info)
 {
   TRACE("VimDictQuery");
@@ -921,8 +923,8 @@ VimDictQuery(Local<String> property, const AccessorInfo& info)
   String::Utf8Value key(property);
   dictitem_T *di = dict_find(dict, (char_u*)*key, -1);
   if (di == NULL)
-    return False();
-  return True();
+    return Handle<Integer>();
+  return Integer::New(None);
 }
 
 static Handle<Boolean>
