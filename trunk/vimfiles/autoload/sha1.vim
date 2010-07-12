@@ -1,7 +1,7 @@
 " sha1 digest calculator
 " This is a port of rfc3174 sha1 function.
 " http://www.ietf.org/rfc/rfc3174.txt
-" Last Change:  2010-02-13
+" Last Change:  2010-07-12
 " Maintainer:   Yukihiro Nakadaira <yukihiro.nakadaira@gmail.com>
 " Original Copyright:
 " Copyright (C) The Internet Society (2001).  All Rights Reserved.
@@ -33,38 +33,58 @@
 let s:save_cpo = &cpo
 set cpo&vim
 
-function! sha1#sha1(str)
-  return s:SHA1Digest(s:str2bytes(a:str))
+function! sha1#sha1(data)
+  return sha1#new(a:data).hexdigest()
 endfunction
 
-function! sha1#sha1bin(bin)
-  return s:SHA1Digest(a:bin)
+" @deprecated
+function! sha1#sha1bin(data)
+  return sha1#new(a:data).hexdigest()
+endfunction
+
+function! sha1#new(...)
+  let data = get(a:000, 0, [])
+  return s:sha1.new(data)
 endfunction
 
 function! sha1#test()
   call s:main()
 endfunction
 
-function! s:SHA1Digest(bytes)
-  let sha = deepcopy(s:SHA1Context, 1)
-  let Message_Digest = repeat([0], 20)
+let s:sha1 = {}
 
-  let err = s:SHA1Reset(sha)
+function s:sha1.new(...)
+  let data = get(a:000, 0, [])
+  let obj = deepcopy(self)
+  let obj.context = deepcopy(s:SHA1Context)
+  let err = s:SHA1Reset(obj.context)
   if err
     throw printf("SHA1Reset Error %d", err)
   endif
+  call obj.update(data)
+  return obj
+endfunction
 
-  let err = s:SHA1Input(sha, a:bytes)
+function s:sha1.update(data)
+  let data = (type(a:data) == type("")) ? s:str2bytes(a:data) : a:data
+  let err = s:SHA1Input(self.context, data)
   if err
     throw printf("SHA1Input Error %d", err)
   endif
+  return self
+endfunction
 
-  let err = s:SHA1Result(sha, Message_Digest)
+function s:sha1.digest()
+  let digest = repeat([0], 20)
+  let err = s:SHA1Result(self.context, digest)
   if err
     throw printf("SHA1Result Error %d", err)
   endif
+  return digest
+endfunction
 
-  return join(map(Message_Digest, 'printf("%02x", v:val)'), '')
+function s:sha1.hexdigest()
+  return join(map(self.digest(), 'printf("%02x", v:val)'), '')
 endfunction
 
 "

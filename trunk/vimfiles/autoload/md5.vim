@@ -1,10 +1,10 @@
 " md5 digest calculator
 " This is a port of rfc1321 md5 function.
 " http://www.ietf.org/rfc/rfc1321.txt
-" Last Change:  2009-10-11
+" Last Change:  2010-07-12
 " Maintainer:   Yukihiro Nakadaira <yukihiro.nakadaira@gmail.com>
 "
-" License:
+" Original License:
 " Copyright (C) 1991-2, RSA Data Security, Inc. Created 1991. All
 " rights reserved.
 "
@@ -29,27 +29,49 @@
 let s:save_cpo = &cpo
 set cpo&vim
 
-function! md5#md5(str)
-  return s:MD5Digest(s:str2bytes(a:str))
+function! md5#md5(data)
+  return md5#new(a:data).hexdigest()
 endfunction
 
-function! md5#md5bin(bin)
-  return s:MD5Digest(a:bin)
+" @deprecated
+function! md5#md5bin(data)
+  return md5#new(a:data).hexdigest()
+endfunction
+
+function! md5#new(...)
+  let data = get(a:000, 0, [])
+  return s:md5.new(data)
 endfunction
 
 function! md5#test()
   call s:MDTestSuite()
 endfunction
 
-function! s:MD5Digest(str)
-  let context = deepcopy(s:MD5_CTX, 1)
+let s:md5 = {}
+
+function s:md5.new(...)
+  let data = get(a:000, 0, [])
+  let obj = deepcopy(self)
+  let obj.context = deepcopy(s:MD5_CTX)
+  call s:MD5Init(obj.context)
+  call obj.update(data)
+  return obj
+endfunction
+
+function s:md5.update(data)
+  let data = (type(a:data) == type("")) ? s:str2bytes(a:data) : a:data
+  call s:MD5Update(self.context, data, len(data))
+  return self
+endfunction
+
+function s:md5.digest()
   let digest = repeat([0], 16)
+  call s:MD5Final(digest, self.context)
+  return digest
+endfunction
 
-  call s:MD5Init(context)
-  call s:MD5Update(context, a:str, len(a:str))
-  call s:MD5Final(digest, context)
-
-  return join(map(digest, 'printf("%02x", v:val)'), '')
+function s:md5.hexdigest()
+  return join(map(self.digest(), 'printf("%02x", v:val)'), '')
 endfunction
 
 " MD5.H - header file for MD5C.C
@@ -390,7 +412,7 @@ function! s:MDTestSuite()
 endfunction
 
 function! s:MDTest(str, expected)
-  let result = s:MD5Digest(s:str2bytes(a:str))
+  let result = md5#new(a:str).hexdigest()
   echo printf("MD5 (\"%s\") = %s", a:str, result)
   if result != a:expected
     echoerr 'failed'
