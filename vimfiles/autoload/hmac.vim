@@ -1,25 +1,26 @@
 " This is a port of rfc2104 hmac function.
 " http://www.ietf.org/rfc/rfc2104.txt
-" Last Change:  2010-02-13
+" Last Change:  2010-07-13
 " Maintainer:   Yukihiro Nakadaira <yukihiro.nakadaira@gmail.com>
 " License: This file is placed in the public domain.
 
 " @param mixed key List or String
 " @param mixed text List or String
-" @param Funcref hash   function digest_hex(key:List, text:List):String
-" @param Number blocksize
-function hmac#hmac(key, text, hash, blocksize)
-  let key = (type(a:key) == type("")) ? s:str2bytes(a:key) : a:key
-  let text = (type(a:text) == type("")) ? s:str2bytes(a:text) : a:text
-  return s:Hmac(key, text, a:hash, a:blocksize)
+" @param Funcref digestmod
+function hmac#hmac(key, text, digestmod)
+  return hmac#new(a:key, a:text, a:digestmod).hexdigest()
 endfunction
 
 function hmac#md5(key, text)
-  return hmac#hmac(a:key, a:text, 'md5#md5bin', 64)
+  return hmac#new(a:key, a:text, function('md5#new')).hexdigest()
 endfunction
 
 function hmac#sha1(key, text)
-  return hmac#hmac(a:key, a:text, 'sha1#sha1bin', 64)
+  return hmac#new(a:key, a:text, function('sha1#new')).hexdigest()
+endfunction
+
+function hmac#new(...)
+  return call(s:hmac.new, a:000, s:hmac)
 endfunction
 
 " http://www.ietf.org/rfc/rfc2202.txt
@@ -100,24 +101,44 @@ function s:test(name, func, key, data, digest)
   endif
 endfunction
 
-" @param List key
-" @param List text
-" @param Funcref hash
-" @param Number blocksize
-function! s:Hmac(key, text, hash, blocksize)
-  let key = a:key
-  if len(key) > a:blocksize
-    let key = s:hex2bytes(call(a:hash, [key]))
+let s:hmac = {}
+
+function s:hmac.new(key, ...)
+  let key = (type(a:key) == type("")) ? s:str2bytes(a:key) : a:key
+  let msg = get(a:000, 0, [])
+  let Digestmod = get(a:000, 1, function('md5#new'))
+  let blocksize = get(a:000, 2, 64) " 512-bit HMAC
+  let obj = deepcopy(self)
+  let obj.digestmod = Digestmod
+  if len(key) > blocksize
+    let key = Digestmod(key).digest()
   endif
-  let k_ipad = repeat([0], a:blocksize)
-  let k_opad = repeat([0], a:blocksize)
-  for i in range(a:blocksize)
+  let k_ipad = repeat([0], blocksize)
+  let k_opad = repeat([0], blocksize)
+  for i in range(blocksize)
     let k_ipad[i] = s:bitwise_xor(get(key, i, 0), 0x36)
     let k_opad[i] = s:bitwise_xor(get(key, i, 0), 0x5c)
   endfor
-  let hash1 = s:hex2bytes(call(a:hash, [k_ipad + a:text]))
-  let hmac = call(a:hash, [k_opad + hash1])
-  return hmac
+  let obj.inner = Digestmod(k_ipad).update(msg)
+  let obj.outer = Digestmod(k_opad)
+  return obj
+endfunction
+
+function s:hmac.update(msg)
+  call self.inner.update(a:msg)
+endfunction
+
+function s:hmac.digest()
+  let outer = self.outer.copy()
+  return outer.update(self.inner.digest()).digest()
+endfunction
+
+function s:hmac.hexdigest()
+  return join(map(self.digest(), 'printf("%02x", v:val)'), '')
+endfunction
+
+function s:hmac.copy()
+  return deepcopy(self)
 endfunction
 
 function! s:str2bytes(str)

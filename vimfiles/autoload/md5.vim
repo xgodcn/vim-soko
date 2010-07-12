@@ -1,7 +1,7 @@
 " md5 digest calculator
 " This is a port of rfc1321 md5 function.
 " http://www.ietf.org/rfc/rfc1321.txt
-" Last Change:  2010-07-12
+" Last Change:  2010-07-13
 " Maintainer:   Yukihiro Nakadaira <yukihiro.nakadaira@gmail.com>
 "
 " Original License:
@@ -72,6 +72,10 @@ endfunction
 
 function s:md5.hexdigest()
   return join(map(self.digest(), 'printf("%02x", v:val)'), '')
+endfunction
+
+function s:md5.copy()
+  return deepcopy(self)
 endfunction
 
 " MD5.H - header file for MD5C.C
