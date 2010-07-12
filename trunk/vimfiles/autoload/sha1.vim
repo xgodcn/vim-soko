@@ -1,7 +1,7 @@
 " sha1 digest calculator
 " This is a port of rfc3174 sha1 function.
 " http://www.ietf.org/rfc/rfc3174.txt
-" Last Change:  2010-07-12
+" Last Change:  2010-07-13
 " Maintainer:   Yukihiro Nakadaira <yukihiro.nakadaira@gmail.com>
 " Original Copyright:
 " Copyright (C) The Internet Society (2001).  All Rights Reserved.
@@ -85,6 +85,10 @@ endfunction
 
 function s:sha1.hexdigest()
   return join(map(self.digest(), 'printf("%02x", v:val)'), '')
+endfunction
+
+function s:sha1.copy()
+  return deepcopy(self)
 endfunction
 
 "
