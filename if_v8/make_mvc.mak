@@ -1,3 +1,4 @@
+# nmake -f make_mvc.mak build-v8 build-vim if_v8.dll
 V8DIR=.\v8
 V8CFLAGS=/I$(V8DIR)\include /DUSING_V8_SHARED
 V8LDFLAGS=$(V8DIR)\v8.lib
@@ -19,7 +20,7 @@ MSVCVER=10.0
 !ERROR "Can't detect MSVCVER"
 !ENDIF
 
-all: build-v8 build-vim if_v8.dll
+all: if_v8.dll
 
 if_v8.dll: if_v8.cpp vimext.h gvim.lib
 	cl $(CFLAGS) if_v8.cpp $(LDFLAGS)
