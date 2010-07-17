@@ -14,8 +14,7 @@ clean:
 
 build-v8:
 	test -d v8 || svn co http://v8.googlecode.com/svn/trunk v8
-	#cd v8 && scons mode=release
-	cd v8 && GCC_VERSION=44 CCFLAGS=-fPIC scons arch=x64 mode=release
+	cd v8 && scons mode=release
 
 build-vim:
 	test -d vim || hg clone https://vim.googlecode.com/hg/ vim
