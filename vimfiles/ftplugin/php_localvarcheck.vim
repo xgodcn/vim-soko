@@ -1,5 +1,5 @@
 " highlight unused/unassigned local variable
-" Last Change:  2009-11-12
+" Last Change:  2010-07-21
 " Maintainer:   Yukihiro Nakadaira <yukihiro.nakadaira@gmail.com>
 " License:      This file is placed in the public domain.
 "
@@ -275,6 +275,7 @@ function! s:Parse(src)
         \ . '|"%(\\.|[^"])*"'
         \ . '|\<\<\<\s*''?(\w+)''?.{-}\n\1;'
         \ . '|\$\w+'
+        \ . '|::\$\w+'
         \ . '|<as>'
         \ . '|<list>'
         \ . '|<static>'
