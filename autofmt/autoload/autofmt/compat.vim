@@ -1,6 +1,6 @@
 " Maintainer:   Yukihiro Nakadaira <yukihiro.nakadaira@gmail.com>
 " License:      This file is placed in the public domain.
-" Last Change:  2009-11-12
+" Last Change:  2010-07-25
 "
 " Options:
 "
@@ -26,9 +26,6 @@
 "   formatting) can be formatted in practical.
 "
 "   Do not work when 'formatoptions' have 'a' flag.
-"
-"   To return 1 means to use Vim's internal formatting but it doesn't work in
-"   Normal mode, return value is simply ignored.
 "
 "   v:lnum can be changed when using "normal! i\<BS>" or something that uses
 "   v:lnum.  Take care to use such command in formatexpr.
