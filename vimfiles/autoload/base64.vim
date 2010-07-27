@@ -1,5 +1,5 @@
 " base64 codec
-" Last Change: 2010-07-25
+" Last Change: 2010-07-27
 " Maintainer:   Yukihiro Nakadaira <yukihiro.nakadaira@gmail.com>
 " License:      This file is placed in the public domain.
 " Reference:
@@ -10,13 +10,19 @@ let s:save_cpo = &cpo
 set cpo&vim
 
 function! base64#b64encode(data)
-  let b64 = s:b64encode(s:str2bytes(a:data), s:standard_table, '=')
+  let bytes = (type(a:data) == type("")) ? s:str2bytes(a:data) : a:data
+  let b64 = s:b64encode(bytes, s:standard_table, '=')
   return join(b64, '')
 endfunction
 
 function! base64#b64decode(data)
-  let bytes = s:b64decode(split(a:data, '\zs'), s:standard_table, '=')
-  return s:bytes2str(bytes)
+  return s:bytes2str(base64#b64decode_b(a:data))
+endfunction
+
+function! base64#b64decode_b(data)
+  let b64 = split(a:data, '\zs')
+  let bytes = s:b64decode(b64, s:standard_table, '=')
+  return bytes
 endfunction
 
 function! base64#test()
@@ -60,6 +66,11 @@ function! base64#test()
   else
     echoerr "test8: failed"
   endif
+  if base64#b64decode_b(base64#b64encode("hello")) == [104, 101, 108, 108, 111]
+    echo "test9: ok"
+  else
+    echoerr "test9: failed"
+  endif
 endfunction
 
 let s:standard_table = [
@@ -85,12 +96,11 @@ function! s:b64encode(bytes, table, pad)
     call add(b64, a:table[n / 0x40 % 0x40])
     call add(b64, a:table[n % 0x40])
   endfor
-  if len(a:bytes) % 3 == 1
-    let b64[-1] = a:pad
-    let b64[-2] = a:pad
-  endif
   if len(a:bytes) % 3 == 2
     let b64[-1] = a:pad
+  elseif len(a:bytes) % 3 == 1
+    let b64[-1] = a:pad
+    let b64[-2] = a:pad
   endif
   return b64
 endfunction
@@ -111,10 +121,10 @@ function! s:b64decode(b64, table, pad)
     call add(bytes, n % 0x100)
   endfor
   if a:b64[-1] == a:pad
-    unlet a:b64[-1]
-  endif
-  if a:b64[-2] == a:pad
-    unlet a:b64[-1]
+    unlet bytes[-1]
+  elseif a:b64[-2] == a:pad
+    unlet bytes[-1]
+    unlet bytes[-1]
   endif
   return bytes
 endfunction
