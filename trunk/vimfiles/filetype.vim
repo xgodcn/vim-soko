@@ -14,6 +14,8 @@ augroup END
 function s:detect()
   if getline(1) =~ '^# HG changeset patch'
     setf diff
+  elseif getline(1) =~ '^<?php'
+    setf php
   endif
 endfunction
 
