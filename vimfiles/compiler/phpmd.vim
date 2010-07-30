@@ -7,7 +7,7 @@ let current_compiler = "phpmd"
 CompilerSet makeprg=phpmd
       \\ %
       \\ text
-      \\ codesize,naming,unusedcode
+      \\ codesize,naming,unusedcode,design
       \\ $*
 
 CompilerSet errorformat=
