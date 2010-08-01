@@ -1,4 +1,4 @@
-let &runtimepath = join(split(&rtp, ',') + split(globpath(&rtp, 'plugins/*/'), '\n'), ',')
+let &runtimepath = join(split(&rtp, ',') + split(globpath(&rtp, 'package/*/'), '\n'), ',')
 set encoding=utf-8
 set termencoding=default
 set fileencodings=ucs-bom,utf-8,euc-jp,cp932
