@@ -3,8 +3,8 @@ set encoding=utf-8
 set termencoding=default
 set fileencodings=ucs-bom,utf-8,euc-jp,cp932
 set ambiwidth=double
-let &backupdir = fnamemodify(finddir('backup', &runtimepath), ':p:~')
-let &directory = fnamemodify(finddir('swapfile', &runtimepath), ':p:~')
+let &backupdir = fnamemodify(finddir('backup', &runtimepath), ':p')
+let &directory = fnamemodify(finddir('swapfile', &runtimepath), ':p')
 let &backup = isdirectory(&backupdir)
 let &writebackup = isdirectory(&backupdir)
 let &swapfile = isdirectory(&directory)
@@ -30,7 +30,7 @@ set cinoptions=t0,:0,g0
 set tags+=./tags;
 set guioptions-=t             " disable tearoff menu
 set iminsert=0 imsearch=0     " turn off IM in default
-set mouse=a                   " enable mouse for all
+set mouse=nvi
 set mousemodel=popup
 
 function _bomb()
@@ -165,11 +165,14 @@ let s:abbrev = [
 inoremap <expr> <C-]> <SID>Abbrev(strpart(getline('.'), 0, col('.') - 1))
 cnoremap <expr> <C-]> <SID>Abbrev(strpart(getcmdline(), 0, getcmdpos() - 1))
 
-vnoremap * "9y/<C-R>='\V'.substitute(escape(@9,'\/'),'\n','\\n','g')<CR><CR>
+xnoremap * "9y/<C-R>='\V'.substitute(escape(@9,'\/'),'\n','\\n','g')<CR><CR>
 inoremap <script> <S-Tab> <SID>ExpandTab<Tab><SID>ExpandTab
 inoremap <expr> <SID>ExpandTab <SID>ExpandTab()
 nmap mm <Plug>MarkerToggle
-vmap m  <Plug>MarkerToggle
+xmap m  <Plug>MarkerToggle
+
+nnoremap K <Nop>
+xnoremap K <Nop>
 
 command! -range -register -bang Number call s:Number(<line1>, <line2>, "<reg>", "<bang>")
 
