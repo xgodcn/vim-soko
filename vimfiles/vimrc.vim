@@ -198,7 +198,10 @@ augroup vimrcEx
   " minimize window
   autocmd WinEnter * call s:MinWindow(3)
   " close completion preview window
-  autocmd InsertLeave,CursorMovedI * if pumvisible() == 0 | pclose | endif
+  autocmd InsertLeave,CursorMovedI *
+        \   if pumvisible() == 0 && bufname('%') != '[Command Line]'
+        \ |   pclose
+        \ | endif
   " lint
   autocmd BufWritePost * call s:Lint()
   " don't copy location list
