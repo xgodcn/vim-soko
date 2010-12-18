@@ -64,7 +64,7 @@ static Handle<Value> VimListCreate(const Arguments& args);
 static void VimListDestroy(Persistent<Value> object, void* parameter);
 static Handle<Value> VimListGet(uint32_t index, const AccessorInfo& info);
 static Handle<Value> VimListSet(uint32_t index, Local<Value> value, const AccessorInfo& info);
-static Handle<Boolean> VimListQuery(uint32_t index, const AccessorInfo& info);
+static Handle<Integer> VimListQuery(uint32_t index, const AccessorInfo& info);
 static Handle<Boolean> VimListDelete(uint32_t index, const AccessorInfo& info);
 static Handle<Array> VimListEnumerate(const AccessorInfo& info);
 static Handle<Value> VimListLength(Local<String> property, const AccessorInfo& info);
@@ -75,7 +75,7 @@ static void VimDictDestroy(Persistent<Value> object, void* parameter);
 static Handle<Value> VimDictCreate(const Arguments& args);
 static Handle<Value> VimDictIdxGet(uint32_t index, const AccessorInfo& info);
 static Handle<Value> VimDictIdxSet(uint32_t index, Local<Value> value, const AccessorInfo& info);
-static Handle<Boolean> VimDictIdxQuery(uint32_t index, const AccessorInfo& info);
+static Handle<Integer> VimDictIdxQuery(uint32_t index, const AccessorInfo& info);
 static Handle<Boolean> VimDictIdxDelete(uint32_t index, const AccessorInfo& info);
 static Handle<Value> VimDictGet(Local<String> property, const AccessorInfo& info);
 static Handle<Value> VimDictSet(Local<String> property, Local<Value> value, const AccessorInfo& info);
@@ -718,7 +718,7 @@ VimListSet(uint32_t index, Local<Value> value, const AccessorInfo& info)
   return value;
 }
 
-static Handle<Boolean>
+static Handle<Integer>
 VimListQuery(uint32_t index, const AccessorInfo& info)
 {
   TRACE("VimListQuery");
@@ -727,8 +727,8 @@ VimListQuery(uint32_t index, const AccessorInfo& info)
   list_T *list = static_cast<list_T*>(external->Value());
   listitem_T *li = list_find(list, index);
   if (li == NULL)
-    return False();
-  return True();
+    return Integer::New(DontEnum);
+  return Integer::New(None);
 }
 
 static Handle<Boolean>
@@ -845,13 +845,13 @@ VimDictIdxSet(uint32_t index, Local<Value> value, const AccessorInfo& info)
   return VimDictSet(Integer::New(index)->ToString(), value, info);
 }
 
-static Handle<Boolean>
+static Handle<Integer>
 VimDictIdxQuery(uint32_t index, const AccessorInfo& info)
 {
   TRACE("VimDictIdxQuery");
   if (VimDictQuery(Integer::New(index)->ToString(), info).IsEmpty())
-      return False();
-  return True();
+    return Integer::New(DontEnum);
+  return Integer::New(None);
 }
 
 static Handle<Boolean>
