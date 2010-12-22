@@ -32,6 +32,7 @@ set guioptions-=t             " disable tearoff menu
 set iminsert=0 imsearch=0     " turn off IM in default
 set mouse=nvi
 set mousemodel=popup
+set wildignorecase
 
 function _bomb()
   return &bomb ? '[bomb]' : ''
