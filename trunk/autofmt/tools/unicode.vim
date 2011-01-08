@@ -61,9 +61,18 @@ function! s:main()
 
   enew
 
+  " MEMO: line length is optimized for Vim's reading buffer size.
   $put ='let s:tmp = []'
-  for [start, end, prop] in linebreak
-    $put =printf('call add(s:tmp, [0x%04X, 0x%04X, ''%s''])', start, end, prop)
+  let n = 3
+  for i in range(0, len(linebreak) - 1, n)
+    let s = ''
+    for [start, end, prop] in linebreak[i : i + n - 1]
+      if s != ''
+        let s .= ','
+      endif
+      let s .= printf('[0x%04X,0x%04X,''%s'']', start, end, prop)
+    endfor
+    $put =printf('call extend(s:tmp, [%s])', s)
   endfor
   $put ='let s:linebreak_table = s:tmp'
   $put ='unlet s:tmp'
