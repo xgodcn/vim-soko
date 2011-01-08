@@ -61,14 +61,15 @@ function! s:main()
 
   enew
 
-  $put ='let s:linebreak_table = ['
+  $put ='let s:tmp = []'
   for [start, end, prop] in linebreak
-    $put =printf('\ [0x%04X, 0x%04X, ''%s''],', start, end, prop)
+    $put =printf('call add(s:tmp, [0x%04X, 0x%04X, ''%s''])', start, end, prop)
   endfor
-  $put ='\ ]'
+  $put ='let s:linebreak_table = s:tmp'
+  $put ='unlet s:tmp'
   $put =''
 
-  $put ='let s:linebreak_bmp = ['
+  $put ='let s:tmp = []'
   for x in range(0x100)
     let row = []
     for y in range(0x100)
@@ -84,9 +85,10 @@ function! s:main()
       let row = [prop]
     endif
     let s = join(map(row, "'''' . v:val . ''''"), ',')
-    $put =printf('\ [%s],', s)
+    $put =printf('call add(s:tmp, [%s])', s)
   endfor
-  $put ='\ ]'
+  $put ='let s:linebreak_bmp = s:tmp'
+  $put ='unlet s:tmp'
   $put =''
 
 endfunction
