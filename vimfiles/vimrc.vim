@@ -3,8 +3,15 @@ set encoding=utf-8
 set termencoding=default
 set fileencodings=ucs-bom,utf-8,euc-jp,cp932
 set ambiwidth=double
-let &backupdir = fnamemodify(finddir('backup', &runtimepath), ':p')
-let &directory = fnamemodify(finddir('swapfile', &runtimepath), ':p')
+if isdirectory(expand('~/vimfiles'))
+  set backupdir=~/vimfiles/backup
+  set directory=~/vimfiles/directory
+  set undodir=~/vimfiles/undo
+else
+  set backupdir=~/.vim/backup
+  set directory=~/.vim/directory
+  set undodir=~/.vim/undo
+endif
 let &backup = isdirectory(&backupdir)
 let &writebackup = isdirectory(&backupdir)
 let &swapfile = isdirectory(&directory)
