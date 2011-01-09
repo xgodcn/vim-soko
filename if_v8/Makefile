@@ -4,6 +4,9 @@ V8LDFLAGS=-L$(V8DIR) -lv8 -lpthread
 CFLAGS=$(V8CFLAGS) -W -Wall -Werror -Wno-unused-parameter -fPIC
 LDFLAGS=$(V8LDFLAGS) -shared
 
+# To build static libv8.so for if_v8.so. (ubuntu 10.10 64bit)
+# $ cd v8 && CCFLAGS=-fPIC scons arch=x64 mode=release
+
 all: if_v8.so
 
 if_v8.so: if_v8.cpp vimext.h
