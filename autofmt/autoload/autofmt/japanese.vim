@@ -1,6 +1,6 @@
 " Maintainer:   Yukihiro Nakadaira <yukihiro.nakadaira@gmail.com>
 " License:      This file is placed in the public domain.
-" Last Change:  2011-01-08
+" Last Change:  2011-01-10
 "
 " Options:
 "
@@ -43,15 +43,20 @@ let s:lib.autofmt_allow_over_tw = 0
 " should be dangled over the 'textwidth' or commited to next line with
 " previous character.
 let s:lib.autofmt_allow_over_tw_char = ""
-      \ . ",)]}、〕〉》」』】〙〗〟’”⦆»"
-      \ . "ヽヾーァィゥェォッャュョヮヵヶゝゞぁぃぅぇぉっゃゅょゃゎゕゖ々"
-      \ . "‐゠–〜"
-      \ . "?!‼⁇⁈⁉"
+      \ . ",)]}、〕〉》」』】〟’”»"
+      \ . "ヽヾーァィゥェォッャュョヮヵヶゝゞぁぃぅぇぉっゃゅょゃゎ々"
+      \ . "‐"
+      \ . "?!"
       \ . "・:;"
       \ . "。."
 " compatible character with different width or code point
 let s:lib.autofmt_allow_over_tw_char .= ""
       \ . "°′″，．：；？！）］｝…～"
+" not in cp932
+if &encoding == 'utf-8'
+  let s:lib.autofmt_allow_over_tw_char .= "〙〗⦆ゕゖ゠–〜‼⁇⁈⁉"
+endif
+
 
 function! s:lib.check_boundary(lst, i)
   let [lst, i] = [a:lst, a:i]
