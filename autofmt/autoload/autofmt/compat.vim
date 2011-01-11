@@ -1,6 +1,6 @@
 " Maintainer:   Yukihiro Nakadaira <yukihiro.nakadaira@gmail.com>
 " License:      This file is placed in the public domain.
-" Last Change:  2011-01-08
+" Last Change:  2011-01-11
 "
 " Options:
 "
@@ -19,6 +19,10 @@
 "   ambiwidth
 "   autoindent
 "   copyindent
+"   wrapmargin
+"   foldcolumn
+"   number
+"   relativenumber
 "
 "
 " Note:
@@ -127,7 +131,8 @@ function s:lib.formatexpr()
 endfunction
 
 function s:lib.format_normal_mode(lnum, count)
-  if &textwidth == 0
+  let self.textwidth = self.comp_textwidth(1)
+  if self.textwidth == 0
     return
   endif
   let para = self.get_paragraph(getline(a:lnum, a:lnum + a:count - 1))
@@ -150,12 +155,14 @@ function s:lib.format_insert_mode(char)
   " @warning char can be "" when completion is used
   " @return a:char for debug
 
+  let self.textwidth = self.comp_textwidth(0)
+
   let lnum = line('.')
   let col = col('.') - 1
   let vcol = (virtcol('.') - 1) + s:strdisplaywidth(a:char)
   let line = getline(lnum)
 
-  if &textwidth == 0 || vcol <= &textwidth
+  if self.textwidth == 0 || vcol <= self.textwidth
         \ || &formatoptions !~# '[tc]'
         \ || (&fo !~# 't' && &fo =~# 'c' && self.parse_leader(line)[1] == "")
     return a:char
@@ -240,13 +247,13 @@ function s:lib.find_boundary(line)
     endif
     if brk == "allow_break"
       let break_idx = i
-      if &textwidth < lst[next - 1].virtcol
+      if self.textwidth < lst[next - 1].virtcol
         return lst[break_idx].col
       endif
       let is_prev_one_letter = (i == 0 || lst[i - 1].c =~ '\s') &&
             \ (i + 1 == len(lst) || lst[i + 1].c =~ '\s')
     elseif brk == "allow_break_before"
-      if &textwidth < lst[next - 1].virtcol && break_idx != -1
+      if self.textwidth < lst[next - 1].virtcol && break_idx != -1
         return lst[break_idx].col
       endif
       let is_prev_one_letter = (i == 0 || lst[i - 1].c =~ '\s') &&
@@ -701,6 +708,70 @@ function s:lib.get_opt(name)
         \ get(b:, a:name,
         \ get(g:, a:name,
         \ get(self, a:name)))))
+endfunction
+
+" vim/src/edit.c
+" Find out textwidth to be used for formatting:
+"	if 'textwidth' option is set, use it
+"	else if 'wrapmargin' option is set, use W_WIDTH(curwin) - 'wrapmargin'
+"	if invalid value, use 0.
+"	Set default to window width (maximum 79) for "gq" operator.
+" @param ff   force formatting (for "gq" command)
+function s:lib.comp_textwidth(ff)
+  let textwidth = &textwidth
+
+  if textwidth == 0 && &wrapmargin
+    " The width is the window width minus 'wrapmargin' minus all the
+    " things that add to the margin.
+    let textwidth = winwidth(0) - &wrapmargin
+
+    if self.is_cmdwin()
+      let textwidth -= 1
+    endif
+
+    if has('folding')
+      let textwidth -= &foldcolumn
+    endif
+
+    if has('signs')
+      if self.has_sign() || has('netbeans_enabled')
+        let textwidth -= 1
+      endif
+    endif
+
+    if &number || &relativenumber
+      let textwidth -= 8
+    endif
+  endif
+
+  if textwidth < 0
+    let textwidth = 0
+  endif
+
+  if a:ff && textwidth == 0
+    let textwidth = winwidth(0) - 1
+    if textwidth > 79
+      let textwidth = 79
+    endif
+  endif
+
+  return textwidth
+endfunction
+
+" FIXME: How to detect command-line window?
+function s:lib.is_cmdwin()
+  return bufname('%') == '[Command Line]'
+endfunction
+
+" FIXME: This may break another :redir session?
+" It is useful if vim provide builtin function for this.
+function s:lib.has_sign()
+  redir => s
+  execute printf('silent sign place buffer=%d', bufnr('%'))
+  redir END
+  let lines = split(s, '\n')
+  " When no sign, lines == ['--- Signs ---']
+  return len(lines) > 1
 endfunction
 
 let &cpo = s:cpo_save
