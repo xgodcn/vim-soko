@@ -1,6 +1,6 @@
 " Maintainer:   Yukihiro Nakadaira <yukihiro.nakadaira@gmail.com>
 " License:      This file is placed in the public domain.
-" Last Change:  2011-01-11
+" Last Change:  2011-01-15
 "
 " Options:
 "
@@ -135,6 +135,7 @@ function s:lib.format_normal_mode(lnum, count)
   if self.textwidth == 0
     return
   endif
+  let offset = 0
   let para = self.get_paragraph(getline(a:lnum, a:lnum + a:count - 1))
   for [i, lines] in reverse(para)
     let lnum = a:lnum + i
@@ -147,8 +148,9 @@ function s:lib.format_normal_mode(lnum, count)
       call append(lnum, repeat([""], len(new_lines) - len(lines)))
     endif
     call setline(lnum, new_lines)
-    call cursor(lnum + len(new_lines) - 1, 1)
+    let offset += len(new_lines) - len(lines)
   endfor
+  call cursor(a:lnum + (a:count - 1) + offset, 1)
 endfunction
 
 function s:lib.format_insert_mode(char)

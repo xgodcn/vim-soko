@@ -1,6 +1,6 @@
 VIMPROG = vim
 
-SCRIPTS = test1.out test2.out test3.out test4.out todo.out
+SCRIPTS := $(patsubst %.ok, %.out, $(wildcard *.ok))
 
 .SUFFIXES: .in .out
 
