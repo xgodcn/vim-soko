@@ -132,23 +132,48 @@ endfunction
 
 function s:lib.format_normal_mode(lnum, count)
   let self.textwidth = self.comp_textwidth(1)
+
   if self.textwidth == 0
     return
   endif
+
   let offset = 0
   let para = self.get_paragraph(getline(a:lnum, a:lnum + a:count - 1))
-  for [i, lines] in reverse(para)
-    let lnum = a:lnum + i
-    let lines[0] = self.retab(lines[0])
+  for [i, lines] in para
+    let lnum = a:lnum + i + offset
     let fo_2 = self.get_second_line_leader(lines)
-    let new_lines = self.format_lines(lines, fo_2)
-    if len(lines) > len(new_lines)
-      silent execute printf("%ddelete _ %d", lnum, len(lines) - len(new_lines))
-    elseif len(lines) < len(new_lines)
-      call append(lnum, repeat([""], len(new_lines) - len(lines)))
+    let lines[0] = self.retab(lines[0])
+    let line = self.join_lines(lines)
+    execute printf('%ddelete _ %d', lnum, len(lines))
+    let offset -= len(lines)
+    call append(lnum - 1, line)
+    let offset += 1
+
+    while 1
+      let line = getline(lnum)
+      let lines = self.format_line_one(line, fo_2)
+      if len(lines) == 1
+        break
+      endif
+      call setline(lnum, lines[0])
+      call append(lnum, lines[1])
+      let lnum += 1
+      let offset += 1
+    endwhile
+
+    if self.is_comment_enabled()
+      " " * */" -> " */"
+      let line = getline(lnum)
+      let [indent, com_str, mindent, text, com_flags] = self.parse_leader(line)
+      if com_flags =~# 'm'
+        let [s, m, e] = self.find_three_piece_comments(&comments, com_flags, com_str)
+        if text == e[1]
+          let line = indent . e[1]
+          call setline(lnum, line)
+        endif
+      endif
     endif
-    call setline(lnum, new_lines)
-    let offset += len(new_lines) - len(lines)
+
   endfor
   call cursor(a:lnum + (a:count - 1) + offset, 1)
 endfunction
@@ -170,59 +195,48 @@ function s:lib.format_insert_mode(char)
     return a:char
   endif
 
-  " split line at the cursor and add v:char temporary
+  " split line at the cursor and insert v:char temporarily
   let [line, rest] = [line[: col - 1] . a:char, line[col :]]
-
   let fo_2 = self.get_second_line_leader(getline(lnum, lnum + 1))
-  let lines = self.format_lines([line], fo_2)
-  if len(lines) == 1
-    return a:char
-  endif
+  call setline(lnum, line)
 
-  let col = len(lines[-1]) - len(a:char)
+  while 1
+    let line = getline(lnum)
+    let lines = self.format_line_one(line, fo_2)
+    if len(lines) == 1
+      break
+    endif
+    call setline(lnum, lines[0])
+    call append(lnum, lines[1])
+    let lnum += 1
+  endwhile
 
   " remove v:char and restore actual line
+  let line = getline(lnum)
+  let col = len(line) - len(a:char)
   if a:char != ""
-    let lines[-1] = substitute(lines[-1], '.$', '', '')
+    let line = substitute(line, '.$', '', '')
   endif
-  let lines[-1] .= rest
+  call setline(lnum, line . rest)
+  call cursor(lnum, col + 1)
 
-  call append(lnum, repeat([""], len(lines) - 1))
-  call setline(lnum, lines)
-  call cursor(lnum + len(lines) - 1, col + 1)
   return a:char
 endfunction
 
-function s:lib.format_lines(lines, fo_2)
-  let res = []
-  let line = self.join_lines(a:lines)
-  while 1
-    let col = self.find_boundary(line)
-    if col == -1
-      call add(res, line)
-      break
-    endif
-    let line1 = substitute(line[: col - 1], '\s*$', '', '')
-    let line2 = substitute(line[col :], '^\s*', '', '')
-    if a:fo_2 != -1
-      let leader = a:fo_2
-    else
-      let leader = self.make_next_line_leader(line1)
-    endif
-    call add(res, line1)
-    let line = leader . line2
-  endwhile
-  if self.is_comment_enabled() && mode() == 'n'
-    " " * */" -> " */"
-    let [indent, com_str, mindent, text, com_flags] = self.parse_leader(res[-1])
-    if com_flags =~# 'm'
-      let [s, m, e] = self.find_three_piece_comments(&comments, com_flags, com_str)
-      if text == e[1]
-        let res[-1] = indent . e[1]
-      endif
-    endif
+function s:lib.format_line_one(line, fo_2)
+  let col = self.find_boundary(a:line)
+  if col == -1
+    return [a:line]
   endif
-  return res
+  let line1 = substitute(a:line[: col - 1], '\s*$', '', '')
+  let line2 = substitute(a:line[col :], '^\s*', '', '')
+  if a:fo_2 != -1
+    let leader = a:fo_2
+  else
+    let leader = self.make_next_line_leader(line1)
+  endif
+  let line2 = leader . line2
+  return [line1, line2]
 endfunction
 
 function s:lib.find_boundary(line)
