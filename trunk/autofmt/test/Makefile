@@ -1,6 +1,6 @@
 VIMPROG = vim
 
-SCRIPTS = test1.out test2.out test3.out test4.out
+SCRIPTS = test1.out test2.out test3.out test4.out todo.out
 
 .SUFFIXES: .in .out
 

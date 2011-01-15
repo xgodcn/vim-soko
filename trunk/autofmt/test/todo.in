@@ -1,0 +1,38 @@
+Results of todo:
+
+STARTTEST
+:set fo=2 noai tw=10
+/^{/+1
+:set formatexpr=
+gq}2jgq}
+/^{/+1
+:set formatexpr=autofmt#compat#formatexpr()
+gq}2jgq}
+ENDTEST
+
+1295084009
+{
+
+    aa bb cc
+  dd ee ff
+
+aa bb cc
+    dd ee ff
+  gg hh ii
+
+}
+{
+
+    aa bb cc
+  dd ee ff
+
+aa bb cc
+    dd ee ff
+  gg hh ii
+
+}
+
+STARTTEST
+:g/^STARTTEST/.,/^ENDTEST/d
+:1;/^Results/,$wq! test.out
+ENDTEST
