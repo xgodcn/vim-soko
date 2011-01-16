@@ -144,7 +144,7 @@ function s:lib.format_normal_mode(lnum, count)
     let fo_2 = self.get_second_line_leader(lines)
     let lines[0] = self.retab(lines[0])
     let line = self.join_lines(lines)
-    execute printf('%ddelete _ %d', lnum, len(lines))
+    execute printf('silent %ddelete _ %d', lnum, len(lines))
     let offset -= len(lines)
     call append(lnum - 1, line)
     let offset += 1
