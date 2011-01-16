@@ -1,0 +1,292 @@
+Results of todo4:
+
+
+case1
+{
+aa bb cc
+dd ee ff
+  aa bb cc
+dd ee ff
+
+aa bb cc
+dd ee ff
+  aa bb cc
+dd ee ff
+}
+{
+aa bb cc
+dd ee ff
+  aa bb cc
+dd ee ff
+
+aa bb cc
+dd ee ff
+  aa bb cc
+dd ee ff
+}
+
+
+case2
+{
+aa bb cc
+dd ee ff
+  aa bb cc
+  dd ee ff
+
+  aa bb cc
+  dd ee ff
+    aa bb
+    cc dd
+    ee ff
+}
+{
+aa bb cc
+dd ee ff
+  aa bb cc
+  dd ee ff
+
+  aa bb cc
+  dd ee ff
+    aa bb
+    cc dd
+    ee ff
+}
+
+
+case3
+{
+aa bb cc
+	dd
+	ee
+	ff
+  aa bb cc
+  dd ee ff
+
+  aa bb cc
+  dd ee ff
+    aa bb
+    cc dd
+    ee ff
+}
+{
+aa bb cc
+dd ee ff
+  aa bb cc
+dd ee ff
+
+aa bb cc
+dd ee ff
+  aa bb cc
+dd ee ff
+}
+
+
+case4
+{
+aa bb cc
+	dd
+	ee
+	ff;
+  aa bb cc
+	  dd
+	  ee
+	  ff;
+
+  aa bb cc
+	  dd
+	  ee
+	  ff;
+    aa bb
+	    cc
+	    dd
+	    ee
+	    ff;
+}
+{
+aa bb cc
+dd ee ff;
+  aa bb cc
+dd ee ff;
+
+  aa bb cc
+dd ee ff;
+    aa bb
+cc dd ee
+ff;
+}
+
+
+case5
+{
+aa bb cc
+dd ee ff
+  aa bb cc
+dd ee ff
+
+aa bb cc
+dd ee ff
+  aa bb cc
+dd ee ff
+}
+{
+aa bb cc
+dd ee ff
+  aa bb cc
+dd ee ff
+
+aa bb cc
+dd ee ff
+  aa bb cc
+dd ee ff
+}
+
+
+case6
+{
+(aa bb cc
+dd ee ff)
+  (aa bb
+cc dd ee
+ff)
+
+(aa bb cc
+dd ee ff)
+  (aa bb
+cc dd ee
+ff)
+}
+{
+(aa bb cc
+dd ee ff)
+  (aa bb
+cc dd ee
+ff)
+
+(aa bb cc
+dd ee ff)
+  (aa bb
+cc dd ee
+ff)
+}
+
+
+case7
+{
+aa bb cc
+dd ee ff
+  aa bb cc
+dd ee ff
+
+aa bb cc
+dd ee ff
+  aa bb cc
+dd ee ff
+}
+{
+aa bb cc
+dd ee ff
+  aa bb cc
+  dd ee ff
+
+aa bb cc
+dd ee ff
+  aa bb cc
+  dd ee ff
+}
+
+
+case8
+{
+(aa bb cc
+  dd ee
+  ff)
+  (aa bb
+      cc
+      dd
+      ee
+      ff)
+
+(aa bb cc
+  dd ee
+  ff)
+  (aa bb
+      cc
+      dd
+      ee
+      ff)
+}
+{
+(aa bb cc
+dd ee ff)
+  (aa bb
+  cc dd ee
+  ff)
+
+(aa bb cc
+dd ee ff)
+  (aa bb
+  cc dd ee
+  ff)
+}
+
+
+case9
+{
+aa bb cc
+dd ee ff
+  aa bb cc
+  dd ee ff
+
+  aa bb cc
+  dd ee ff
+    aa bb
+    cc dd
+    ee ff
+}
+{
+aa bb cc
+dd ee ff
+  aa bb cc
+dd ee ff
+
+aa bb cc
+dd ee ff
+  aa bb cc
+dd ee ff
+}
+
+
+case10
+{
+if aaa do
+  bbb
+  while
+    ccc
+    #if
+    ddd
+    #endif
+
+if aaa do
+  bbb
+  while
+    ccc
+#if ddd
+    eee
+#endif
+    fff
+}
+{
+if aaa do
+bbb while
+ccc #if
+ddd #endif
+
+if aaa do
+bbb while
+ccc
+#if ddd
+eee
+#endif
+fff
+}
+
