@@ -265,28 +265,76 @@ if aaa do
     #if
     ddd
     #endif
+    { aaa
+    { bbb
+    } }
 
-if aaa do
-  bbb
-  while
-    ccc
+if aaa
+  do bbb
+    while
+      ccc
 #if ddd
-    eee
+      eee
 #endif
-    fff
+      fff
+      {
+	aaa
+	{
+	  bbb
+	}
+      }
 }
 {
 if aaa do
 bbb while
 ccc #if
 ddd #endif
+{ aaa {
+bbb } }
 
-if aaa do
-bbb while
+if aaa
+  do bbb
+    while
 ccc
 #if ddd
 eee
 #endif
 fff
+{
+  aaa
+  {
+    bbb
+  }
+}
+}
+
+
+case11
+{
+aa bb cc
+ dd ee ff
+  aa bb cc
+   dd ee
+    ff
+
+ aa bb cc
+  dd ee ff
+     aa bb
+      cc
+       dd
+	ee
+	 ff
+}
+{
+aa bb cc
+dd ee ff
+  aa bb cc
+dd ee ff
+
+ aa bb cc
+dd ee ff
+   aa bb
+cc dd ee
+ff
 }
 
