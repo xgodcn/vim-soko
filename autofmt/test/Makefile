@@ -15,7 +15,7 @@ report:
 		fi"
 
 clean:
-	-rm -rf *.out *.failed test.log test.ok X*
+	-rm -rf *.out *.failed test.log test.ok X* debug.log
 
 .in.out:
 	-rm -rf $*.failed test.ok test.out X*
