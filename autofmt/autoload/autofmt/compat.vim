@@ -1,6 +1,6 @@
 " Maintainer:   Yukihiro Nakadaira <yukihiro.nakadaira@gmail.com>
 " License:      This file is placed in the public domain.
-" Last Change:  2011-01-15
+" Last Change:  2011-01-20
 "
 " Options:
 "
@@ -429,7 +429,7 @@ function s:lib.join_lines(lines)
         let text = com_str . mindent . text
       endif
     else
-      let text = line
+      let text = substitute(line, '^\s\+', '', '')
     endif
     if res == ""
       let res = text
