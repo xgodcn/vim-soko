@@ -1,4 +1,4 @@
-Results of todo4:
+Results of test7:
 
 
 case1
@@ -70,14 +70,17 @@ aa bb cc
 }
 {
 aa bb cc
-dd ee ff
+	dd
+	ee
+	ff
   aa bb cc
-dd ee ff
+  dd ee ff
 
-aa bb cc
-dd ee ff
   aa bb cc
-dd ee ff
+  dd ee ff
+    aa bb
+    cc dd
+    ee ff
 }
 
 
@@ -104,15 +107,23 @@ aa bb cc
 }
 {
 aa bb cc
-dd ee ff;
+	dd
+	ee
+	ff;
   aa bb cc
-dd ee ff;
+	  dd
+	  ee
+	  ff;
 
   aa bb cc
-dd ee ff;
+	  dd
+	  ee
+	  ff;
     aa bb
-cc dd ee
-ff;
+	    cc
+	    dd
+	    ee
+	    ff;
 }
 
 
@@ -186,12 +197,12 @@ dd ee ff
 aa bb cc
 dd ee ff
   aa bb cc
-  dd ee ff
+dd ee ff
 
 aa bb cc
 dd ee ff
   aa bb cc
-  dd ee ff
+dd ee ff
 }
 
 
@@ -217,16 +228,22 @@ case8
 }
 {
 (aa bb cc
-dd ee ff)
-  (aa bb
-  cc dd ee
+  dd ee
   ff)
+  (aa bb
+      cc
+      dd
+      ee
+      ff)
 
 (aa bb cc
-dd ee ff)
-  (aa bb
-  cc dd ee
+  dd ee
   ff)
+  (aa bb
+      cc
+      dd
+      ee
+      ff)
 }
 
 
@@ -247,12 +264,13 @@ dd ee ff
 aa bb cc
 dd ee ff
   aa bb cc
-dd ee ff
+  dd ee ff
 
-aa bb cc
-dd ee ff
   aa bb cc
-dd ee ff
+  dd ee ff
+    aa bb
+    cc dd
+    ee ff
 }
 
 
@@ -286,26 +304,30 @@ if aaa
 }
 {
 if aaa do
-bbb while
-ccc #if
-ddd #endif
-{ aaa {
-bbb } }
+  bbb
+  while
+    ccc
+    #if
+    ddd
+    #endif
+    { aaa
+    { bbb
+    } }
 
 if aaa
   do bbb
     while
-ccc
+      ccc
 #if ddd
-eee
+      eee
 #endif
-fff
-{
-  aaa
-  {
-    bbb
-  }
-}
+      fff
+      {
+	aaa
+	{
+	  bbb
+	}
+      }
 }
 
 
@@ -327,14 +349,74 @@ aa bb cc
 }
 {
 aa bb cc
-dd ee ff
+ dd ee ff
   aa bb cc
-dd ee ff
+   dd ee
+    ff
 
  aa bb cc
-dd ee ff
-   aa bb
-cc dd ee
-ff
+  dd ee ff
+     aa bb
+      cc
+       dd
+	ee
+	 ff
+}
+
+
+case12
+{
+  aa
+	  label:
+}
+{
+  aa
+	  label:
+}
+{
+  aa
+	  label:
+}
+{
+  aa
+	  label:
+}
+
+
+case13
+{
+  a;
+label:
+}
+{
+  a;
+label:
+}
+{
+  a;
+label:
+}
+{
+  a;
+label:
+}
+
+
+case14
+{
+  a;
+  bbbbb;
+}
+{
+  a;
+  bbbbb;
+}
+{
+  a;
+  bbbbb;
+}
+{
+  a;
+  bbbbb;
 }
 
