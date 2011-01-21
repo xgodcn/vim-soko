@@ -1,6 +1,6 @@
 " Maintainer:   Yukihiro Nakadaira <yukihiro.nakadaira@gmail.com>
 " License:      This file is placed in the public domain.
-" Last Change:  2011-01-20
+" Last Change:  2011-01-21
 "
 " Options:
 "
@@ -23,6 +23,11 @@
 "   foldcolumn
 "   number
 "   relativenumber
+"   cindent
+"   lispindent
+"   smartindent
+"   indentexpr
+"   paste
 "
 "
 " Note:
@@ -42,8 +47,6 @@
 "
 "
 " TODO:
-"   'cindent', 'lispindent', 'smartindent', 'indentexpr'
-"
 "   'formatoptions': 'a' 'w' 'v' 'b' 'l'
 "
 "   hoge(); /* format comment here */
@@ -110,7 +113,7 @@ endif
 let s:lib = {}
 
 function s:lib.formatexpr()
-  if mode() =~# '[iR]' && &formatoptions =~# 'a'
+  if mode() =~# '[iR]' && self.has_format_options('a')
     " When 'formatoptions' have "a" flag (paragraph formatting), it is
     " impossible to format using User Function.  Paragraph is concatenated to
     " one line before this function is invoked and cursor is placed at end of
@@ -141,28 +144,13 @@ function s:lib.format_normal_mode(lnum, count)
   let para = self.get_paragraph(getline(a:lnum, a:lnum + a:count - 1))
   for [i, lines] in para
     let lnum = a:lnum + i + offset
-    let fo_2 = self.get_second_line_leader(lines)
-    let lines[0] = self.retab(lines[0])
-    let line = self.join_lines(lines)
-    execute printf('silent %ddelete _ %d', lnum, len(lines))
-    let offset -= len(lines)
-    call append(lnum - 1, line)
-    let offset += 1
+    call setline(lnum, self.retab(getline(lnum)))
 
-    while 1
-      let line = getline(lnum)
-      let lines = self.format_line_one(line, fo_2)
-      if len(lines) == 1
-        break
-      endif
-      call setline(lnum, lines[0])
-      call append(lnum, lines[1])
-      let lnum += 1
-      let offset += 1
-    endwhile
+    let offset += self.format_lines(lnum, len(lines))
 
     if self.is_comment_enabled()
       " " * */" -> " */"
+      let lnum = a:lnum + i + (len(lines) - 1) + offset
       let line = getline(lnum)
       let [indent, com_str, mindent, text, com_flags] = self.parse_leader(line)
       if com_flags =~# 'm'
@@ -189,27 +177,19 @@ function s:lib.format_insert_mode(char)
   let vcol = (virtcol('.') - 1) + s:strdisplaywidth(a:char)
   let line = getline(lnum)
 
-  if self.textwidth == 0 || vcol <= self.textwidth
-        \ || &formatoptions !~# '[tc]'
-        \ || (&fo !~# 't' && &fo =~# 'c' && self.parse_leader(line)[1] == "")
+  if self.textwidth == 0
+        \ || vcol <= self.textwidth
+        \ || (!self.has_format_options('t') && !self.has_format_options('c'))
+        \ || (!self.has_format_options('t') && self.has_format_options('c')
+        \     && !self.is_comment(line))
     return a:char
   endif
 
   " split line at the cursor and insert v:char temporarily
   let [line, rest] = [line[: col - 1] . a:char, line[col :]]
-  let fo_2 = self.get_second_line_leader(getline(lnum, lnum + 1))
   call setline(lnum, line)
 
-  while 1
-    let line = getline(lnum)
-    let lines = self.format_line_one(line, fo_2)
-    if len(lines) == 1
-      break
-    endif
-    call setline(lnum, lines[0])
-    call append(lnum, lines[1])
-    let lnum += 1
-  endwhile
+  let lnum += self.format_lines(lnum, 1)
 
   " remove v:char and restore actual line
   let line = getline(lnum)
@@ -223,20 +203,36 @@ function s:lib.format_insert_mode(char)
   return a:char
 endfunction
 
-function s:lib.format_line_one(line, fo_2)
-  let col = self.find_boundary(a:line)
-  if col == -1
-    return [a:line]
+function s:lib.format_lines(lnum, count)
+  let lnum = a:lnum
+  let prev_lines = line('$')
+  let fo_2 = self.get_second_line_leader(getline(lnum, lnum + a:count - 1))
+  let lines = getline(lnum, lnum + a:count - 1)
+  let line = self.join_lines(lines)
+  call setline(lnum, line)
+  if a:count > 1
+    execute printf('silent %ddelete _ %d', lnum + 1, a:count - 1)
   endif
-  let line1 = substitute(a:line[: col - 1], '\s*$', '', '')
-  let line2 = substitute(a:line[col :], '^\s*', '', '')
-  if a:fo_2 != -1
-    let leader = a:fo_2
-  else
-    let leader = self.make_next_line_leader(line1)
-  endif
-  let line2 = leader . line2
-  return [line1, line2]
+  while 1
+    let line = getline(lnum)
+    let col = self.find_boundary(line)
+    if col == -1
+      break
+    endif
+    let line1 = substitute(line[: col - 1], '\s*$', '', '')
+    let line2 = substitute(line[col :], '^\s*', '', '')
+    call setline(lnum, line1)
+    call append(lnum, line2)
+    if fo_2 != -1
+      let leader = fo_2
+    else
+      let leader = self.make_leader(lnum + 1)
+    endif
+    call setline(lnum + 1, leader . line2)
+    let lnum += 1
+    let fo_2 = -1
+  endwhile
+  return line('$') - prev_lines
 endfunction
 
 function s:lib.find_boundary(line)
@@ -339,7 +335,7 @@ function s:lib.skip_leader(line)
     let [indent, text] = matchlist(a:line, '\v^(\s*)(.*)$')[1:2]
     let col += len(indent)
   endif
-  if &formatoptions =~# 'n'
+  if self.has_format_options('n')
     let listpat = matchstr(text, &formatlistpat)
     if listpat != ""
       let col += len(listpat)
@@ -399,10 +395,10 @@ function s:lib.get_paragraph(lines)
         " start/end of comment or different comment
         break
       endif
-      if (&formatoptions =~# 'n' && pl[i][3] =~ &formatlistpat)
+      if self.has_format_options('n') && pl[i][3] =~ &formatlistpat
         " start of list
         break
-      elseif &formatoptions =~# '2'
+      elseif self.has_format_options('2')
         " separate with indent
         " make this behavior optional?
         let indent1 = s:strdisplaywidth(pl[i-1][0] . pl[i-1][1] . pl[i-1][2])
@@ -459,20 +455,35 @@ function s:lib.join_line(line1, line2)
     return a:line1
   elseif &joinspaces && bc =~# ((&cpoptions =~# 'j') ? '[.]' : '[.?!]')
     return a:line1 . "  " . a:line2
-  elseif (&formatoptions =~# 'M' && (len(bc) != 1 || len(ac) != 1))
-        \ || (&formatoptions =~# 'B' && (len(bc) != 1 && len(ac) != 1))
+  elseif (self.has_format_options('M') && (len(bc) != 1 || len(ac) != 1))
+        \ || (self.has_format_options('B') && (len(bc) != 1 && len(ac) != 1))
     return a:line1 . a:line2
   else
     return a:line1 . " " . a:line2
   endif
 endfunction
 
+" vim/src/options.c
+" Return TRUE if format option 'x' is in effect.
+" Take care of no formatting when 'paste' is set.
+function s:lib.has_format_options(x)
+  if &paste
+    return 0
+  endif
+  return stridx(&formatoptions, a:x) != -1
+endfunction
+
 function s:lib.is_comment_enabled()
   if mode() == 'n'
-    return &formatoptions =~# 'q'
+    return self.has_format_options('q')
   else
-    return &formatoptions =~# 'c'
+    return self.has_format_options('c')
   endif
+endfunction
+
+function s:lib.is_comment(line)
+  let com_str = self.parse_leader(a:line)[1]
+  return com_str != ""
 endfunction
 
 function s:lib.parse_leader(line)
@@ -561,7 +572,7 @@ function s:lib.list2line(lst)
 endfunction
 
 function s:lib.get_second_line_leader(lines)
-  if &formatoptions !~# '2' || len(a:lines) <= 1
+  if self.has_format_options('2') || len(a:lines) <= 1
     return -1
   endif
   let [indent1, com_str1, mindent1, text1, _] = self.parse_leader(a:lines[0])
@@ -578,30 +589,43 @@ function s:lib.get_second_line_leader(lines)
   return -1
 endfunction
 
-function s:lib.make_next_line_leader(line)
+function s:lib.make_leader(lnum)
+  let prev_line = getline(a:lnum - 1)
+
+  if self.is_comment_enabled() && self.is_comment(prev_line)
+    return self.make_comment_leader(prev_line)
+  endif
+
+  let listpat = matchstr(prev_line, &formatlistpat)
+
+  if self.has_format_options('n') && listpat != ''
+    let indent = repeat(' ', s:strdisplaywidth(listpat))
+  else
+    let indent = repeat(' ', self.comp_indent(a:lnum))
+  endif
+
+  if &copyindent
+    let [indent, rest] = self.copy_indent(prev_line, indent)
+    let indent = indent . rest
+  else
+    let indent = self.retab(indent)
+  endif
+
+  return indent
+endfunction
+
+function s:lib.make_comment_leader(line)
   let do_si = !&paste && &smartindent && !&cindent
   let [indent, com_str, mindent, text, com_flags] = self.parse_leader(a:line)
   let extra_space = ''
   let leader = indent . com_str . mindent
-  if &formatoptions =~# 'n'
+  if self.has_format_options('n')
     let listpat = matchstr(text, &formatlistpat)
     let listpat_indent = repeat(' ', s:strdisplaywidth(listpat))
   else
     let listpat_indent = ""
   endif
-  if !self.is_comment_enabled()
-    if com_str == ""
-      if !&autoindent && listpat_indent == ''
-        let indent = ''
-      endif
-      let [indent, com_str, mindent] = [indent, '', listpat_indent]
-    else
-      if !&autoindent
-        let indent = ''
-      endif
-      let [indent, com_str, mindent] = [indent, '', '']
-    endif
-  elseif com_str == ""
+  if com_str == ""
     if !&autoindent
       let indent = ''
     endif
@@ -788,6 +812,61 @@ function s:lib.has_sign()
   let lines = split(s, '\n')
   " When no sign, lines == ['--- Signs ---']
   return len(lines) > 1
+endfunction
+
+function s:lib.comp_indent(lnum)
+  if &indentexpr != ''
+    if &paste
+      return 0
+    endif
+    let v:lnum = a:lnum
+    return eval(&indentexpr)
+  elseif &cindent
+    if &paste
+      return 0
+    endif
+    return cindent(a:lnum)
+  elseif &lisp
+    if &paste
+      return 0
+    endif
+    if !&autoindent
+      return 0
+    endif
+    return lispindent(a:lnum)
+  elseif &smartindent
+    if &paste
+      return 0
+    endif
+    return self.smartindent(a:lnum)
+  elseif &autoindent
+    return indent(a:lnum - 1)
+  endif
+  return 0
+endfunction
+
+function s:lib.smartindent(lnum)
+  if &paste
+    return 0
+  endif
+  let prev_lnum = a:lnum - 1
+  while prev_lnum > 1 && getline(prev_lnum) =~ '^#'
+    let prev_lnum -= 1
+  endwhile
+  if prev_lnum <= 1
+    return 0
+  endif
+  let prev_line = getline(prev_lnum)
+  let firstword = matchstr(prev_line, '^\s*\zs\w\+')
+  let cinwords = split(&cinwords, ',')
+  if prev_line =~ '{$' || index(cinwords, firstword) != -1
+    let n = indent(prev_lnum) + &shiftwidth
+    if &shiftround
+      let n = n - (n % &shiftwidth)
+    endif
+    return n
+  endif
+  return indent(prev_lnum)
 endfunction
 
 let &cpo = s:cpo_save
