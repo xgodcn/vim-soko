@@ -1,7 +1,7 @@
 Results of todo:
 
 
-1295084009
+case1
 {
 
     aa bb
@@ -17,13 +17,38 @@ ii
 {
 
     aa bb
-  cc   dd
-  ee ff
+  cc dd ee
+ff
 
 aa bb cc
     dd ee
-  ff   gg
-  hh ii
+ff gg hh
+ii
+
+}
+
+
+case2
+{
+
+		aa
+	    bb cc dd
+ee ff
+
+		aa
+	    bb cc dd
+ee ff
+
+}
+{
+
+		aa
+	    bb cc dd
+ee ff
+
+		aa
+	    bb cc dd
+ee ff
 
 }
 

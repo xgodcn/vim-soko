@@ -1,16 +1,19 @@
+Test for fo=2.
+
+
 Results of todo:
 
 STARTTEST
 :set fo=2 noai tw=10
 /^{/+1
 :set formatexpr=
-gq}2jgq}
+j2gqgq2j3gqgq
 /^{/+1
 :set formatexpr=autofmt#compat#formatexpr()
-gq}2jgq}
+j2gqgq2j3gqgq
 ENDTEST
 
-1295084009
+case1
 {
 
     aa bb cc
@@ -29,6 +32,36 @@ aa bb cc
 aa bb cc
     dd ee ff
   gg hh ii
+
+}
+
+STARTTEST
+:set fo=2 noai tw=20
+/^{/+1
+:set formatexpr=
+j2gqgq2j2gqgq
+/^{/+1
+:set formatexpr=autofmt#compat#formatexpr()
+j2gqgq2j2gqgq
+ENDTEST
+
+case2
+{
+
+		aa bb cc
+	    dd ee ff
+
+		aa bb cc
+            dd ee ff
+
+}
+{
+
+		aa bb cc
+	    dd ee ff
+
+		aa bb cc
+            dd ee ff
 
 }
 
