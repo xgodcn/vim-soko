@@ -52,3 +52,29 @@ ee ff
 
 }
 
+
+case3
+{
+    aa bb
+xx yy
+  cc dd ee
+}
+{
+    aa bb
+xx yy
+  cc dd ee
+}
+
+
+case4
+{
+    aa bb
+    xx yy
+  cc dd ee
+}
+{
+    aa bb
+    xx yy
+  cc dd ee
+}
+
