@@ -163,7 +163,10 @@ function s:lib.format_normal_mode(lnum, count)
     endif
 
   endfor
-  call cursor(a:lnum + (a:count - 1) + offset, 1)
+
+  " The cursor is left on the first non-blank of the last formatted line.
+  let lnum = a:lnum + (a:count - 1) + offset
+  execute printf('keepjumps normal! %dG', lnum)
 endfunction
 
 function s:lib.format_insert_mode(char)
