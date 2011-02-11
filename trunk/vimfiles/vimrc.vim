@@ -5,11 +5,11 @@ set fileencodings=ucs-bom,utf-8,euc-jp,cp932
 set ambiwidth=double
 if isdirectory(expand('~/vimfiles'))
   set backupdir=~/vimfiles/backup
-  set directory=~/vimfiles/directory
+  set directory=~/vimfiles/swapfile
   set undodir=~/vimfiles/undo
 else
   set backupdir=~/.vim/backup
-  set directory=~/.vim/directory
+  set directory=~/.vim/swapfile
   set undodir=~/.vim/undo
 endif
 let &backup = isdirectory(&backupdir)
