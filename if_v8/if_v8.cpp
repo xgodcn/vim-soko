@@ -37,7 +37,10 @@ static Handle<FunctionTemplate> VimFunc;
 // the same List/Dictionary is instantiated by only one V8 object.
 static LookupMap objcache;
 
-// v:['%v8_weak%']
+// register
+static dict_T *v_reg;
+
+// reg['%v8_weak%']
 // keep reference to avoid garbage collect.
 static dict_T *v_weak;
 
@@ -148,12 +151,20 @@ init_v8(std::string args)
 
   HandleScope handle_scope;
 
+  char expr[] = "g:__if_v8";
+  typval_T *ptv;
+  ptv = eval_expr((char_u *)expr, NULL);
+  if (ptv == NULL)
+      return "init_v8(): cannot get register variable";
+  v_reg = ptv->vval.v_dict;
+  free_tv(ptv);
+
   v_weak = dict_alloc();
   if (v_weak == NULL)
     return "init_v8(): error dict_alloc()";
   typval_T tv;
   tv_set_dict(&tv, v_weak);
-  dict_set_tv_nocopy(&vimvardict, (char_u*)"%v8_weak%", &tv);
+  dict_set_tv_nocopy(v_reg, (char_u*)"%v8_weak%", &tv);
 
   VimList = Persistent<FunctionTemplate>::New(FunctionTemplate::New(VimListCreate));
   VimList->SetClassName(String::New("VimList"));
@@ -544,7 +555,7 @@ ExecuteString(Handle<String> source, Handle<Value> name, bool print_result, bool
   if (print_result && !result->IsUndefined()) {
     typval_T tv;
     tv_set_string(&tv, (char_u*)(*String::Utf8Value(result)));
-    dict_set_tv_nocopy(&vimvardict, (char_u*)"%v8_print%", &tv);
+    dict_set_tv_nocopy(v_reg, (char_u*)"%v8_print%", &tv);
   }
   return true;
 }
@@ -582,7 +593,7 @@ ReportException(TryCatch* try_catch)
   }
   typval_T tv;
   tv_set_string(&tv, (char_u*)strm.str().c_str());
-  dict_set_tv_nocopy(&vimvardict, (char_u*)"%v8_errmsg%", &tv);
+  dict_set_tv_nocopy(v_reg, (char_u*)"%v8_errmsg%", &tv);
 }
 
 static Handle<Value>

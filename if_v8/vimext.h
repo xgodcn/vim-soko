@@ -667,19 +667,19 @@ func_ref(
     typval_T tv;
     dictitem_T *di;
     hashitem_T *hi;
-    char exprbuf[] = "let v:['%v8_func2%'] = v:['%v8_func1%']";
+    char exprbuf[] = "let g:X__if_v8_func2 = g:X__if_v8_func1";
     tv.v_type = VAR_FUNC;
     tv.v_lock = 0;
     tv.vval.v_string = name;
-    dict_set_tv_nocopy(&vimvardict, (char_u*)"%v8_func1%", &tv);
+    dict_set_tv_nocopy(&globvardict, (char_u*)"X__if_v8_func1", &tv);
     do_cmdline_cmd((char_u*)exprbuf);
-    hi = hash_find(&vimvardict.dv_hashtab, (char_u*)"%v8_func1%");
+    hi = hash_find(&globvardict.dv_hashtab, (char_u*)"X__if_v8_func1");
     di = HI2DI(hi);
-    hash_remove(&vimvardict.dv_hashtab, hi);
+    hash_remove(&globvardict.dv_hashtab, hi);
     vim_free(di);
-    hi = hash_find(&vimvardict.dv_hashtab, (char_u*)"%v8_func2%");
+    hi = hash_find(&globvardict.dv_hashtab, (char_u*)"X__if_v8_func2");
     di = HI2DI(hi);
-    hash_remove(&vimvardict.dv_hashtab, hi);
+    hash_remove(&globvardict.dv_hashtab, hi);
     vim_free(di);
 }
 
