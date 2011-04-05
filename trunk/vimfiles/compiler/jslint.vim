@@ -1,3 +1,5 @@
+" [JSLINT, The JavaScript Code Quality Tool]
+" http://www.jslint.com/
 
 if exists("current_compiler")
   finish
