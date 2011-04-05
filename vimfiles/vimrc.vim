@@ -97,34 +97,57 @@ function s:MinWindow(threshold)
 endfunction
 
 function s:Lint()
-  let cmd = 'compiler %s | exe "silent lmake!" | let loc += getloclist(0)'
   let loc = []
   if &ft == 'c'
     if executable('splint')
-      execute printf(cmd, 'splint')
+      let loc += s:DoLint('splint', '')
     endif
   elseif &ft == 'php'
     if executable('php')
-      execute printf(cmd, 'php')
+      let loc += s:DoLint('php', '')
     endif
     if executable('phpmd')
-      execute printf(cmd, 'phpmd')
+      let loc += s:DoLint('phpmd', '')
     endif
   elseif &ft == 'python'
     if executable('pylint')
-      execute printf(cmd, 'pylint')
+      let loc += s:DoLint('pylint', '')
     endif
     if executable('pyflakes')
-      execute printf(cmd, 'pyflakes')
+      let loc += s:DoLint('pyflakes', '')
     endif
     if executable('pep8')
-      execute printf(cmd, 'pep8')
+      let loc += s:DoLint('pep8', '')
+    endif
+  elseif &ft == 'javascript'
+    if executable('jslint')
+      let loc += s:DoLint('jslint', '')
+    endif
+    if executable('gjslint')
+      let loc += s:DoLint('gjslint', '')
+    endif
+  elseif &ft == 'html'
+    if executable('jslint')
+      let loc += s:DoLint('jslint', '--no')
+    endif
+    if executable('gjslint')
+      let loc += s:DoLint('gjslint', '--check_html')
     endif
   else
     return
   endif
   redraw!
   call setloclist(0, loc)
+endfunction
+
+function! s:DoLint(compiler, opt)
+  execute 'compiler ' . a:compiler
+  execute 'silent lmake! ' . a:opt
+  let loc = getloclist(0)
+  for e in loc
+    let e.text = a:compiler . ': ' . e.text
+  endfor
+  return loc
 endfunction
 
 function! s:Abbrev(src)
