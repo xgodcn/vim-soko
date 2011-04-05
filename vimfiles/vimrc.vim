@@ -120,6 +120,8 @@ function s:Lint()
     if executable('pep8')
       execute printf(cmd, 'pep8')
     endif
+  else
+    return
   endif
   redraw!
   call setloclist(0, loc)
