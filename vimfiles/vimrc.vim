@@ -123,12 +123,18 @@ function s:Lint()
     if executable('jslint')
       let loc += s:DoLint('jslint', '')
     endif
+    if executable('jshint')
+      let loc += s:DoLint('jshint', '')
+    endif
     if executable('gjslint')
       let loc += s:DoLint('gjslint', '')
     endif
   elseif &ft == 'html'
     if executable('jslint')
       let loc += s:DoLint('jslint', '--no')
+    endif
+    if executable('jshint')
+      let loc += s:DoLint('jshint', '--no')
     endif
     if executable('gjslint')
       let loc += s:DoLint('gjslint', '--check_html')
