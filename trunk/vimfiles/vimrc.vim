@@ -143,6 +143,7 @@ function s:Lint()
   endif
   redraw!
   call setloclist(0, loc)
+  doautocmd QuickFixCmdPost
 endfunction
 
 function! s:DoLint(compiler, opt)
@@ -247,6 +248,7 @@ augroup vimrcEx
         \   if !exists('w:_init')
         \ |   let w:_init = 1
         \ |   lexpr []
+        \ |   doautocmd QuickFixCmdPost
         \ | endif
   " update qf statusline
   autocmd QuickFixCmdPost,WinEnter * let g:__qf = len(getqflist())
