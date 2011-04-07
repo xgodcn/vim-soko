@@ -22,7 +22,6 @@ set hlsearch
 set grepprg=internal
 set list listchars=tab:>-,trail:-
 set showcmd
-set cmdheight=2
 set laststatus=2
 set wildmenu
 set statusline=%f\ %m%r%y%{_bomb()}%{_fenc()}%{_ff()}%#Error#%{_qf()}%{_loc()}%*%=%v\ %l/%L
@@ -54,7 +53,7 @@ function _ff()
 endfunction
 
 function _qf()
-  let n = len(getqflist())
+  let n = get(g:, '__qf', 0)
   if n == 0
     return ''
   endif
@@ -62,7 +61,7 @@ function _qf()
 endfunction
 
 function _loc()
-  let n = len(getloclist(0))
+  let n = get(w:, '__loc', 0)
   if n == 0
     return ''
   endif
@@ -249,6 +248,9 @@ augroup vimrcEx
         \ |   let w:_init = 1
         \ |   lexpr []
         \ | endif
+  " update qf statusline
+  autocmd QuickFixCmdPost,WinEnter * let g:__qf = len(getqflist())
+  autocmd QuickFixCmdPost,WinEnter * let w:__loc = len(getloclist(0))
 augroup END
 
 augroup filetypeplugin
