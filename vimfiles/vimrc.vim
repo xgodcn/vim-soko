@@ -132,9 +132,6 @@ function s:Lint()
     if executable('jslint')
       let loc += s:DoLint('jslint', '--on')
     endif
-    if executable('jshint')
-      let loc += s:DoLint('jshint', '--on')
-    endif
     if executable('gjslint')
       let loc += s:DoLint('gjslint', '--check_html')
     endif
