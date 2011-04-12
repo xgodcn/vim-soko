@@ -1,3 +1,5 @@
+" pep8 - Python style guide checker
+" http://pypi.python.org/pypi/pep8
 
 if exists("current_compiler")
   finish

@@ -108,6 +108,9 @@ function s:Lint()
     if executable('phpmd')
       let loc += s:DoLint('phpmd', '')
     endif
+    if 0 && executable('phpcs')
+      let loc += s:DoLint('phpcs', '--standard=Zend')
+    endif
   elseif &ft == 'python'
     if executable('pylint')
       let loc += s:DoLint('pylint', '')

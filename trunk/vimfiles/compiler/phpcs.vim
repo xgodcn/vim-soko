@@ -1,3 +1,5 @@
+" PHP_CodeSniffer
+" http://pear.php.net/package/PHP_CodeSniffer
 
 if exists("current_compiler")
   finish
@@ -6,7 +8,6 @@ let current_compiler = "phpcs"
 
 CompilerSet makeprg=phpcs
       \\ --report=csv
-      \\ --standard=Zend
       \\ $*
       \\ %
 

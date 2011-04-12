@@ -1,3 +1,5 @@
+" pyflakes: passive checker of Python programs
+" http://pypi.python.org/pypi/pyflakes
 
 if exists("current_compiler")
   finish
@@ -10,8 +12,4 @@ CompilerSet makeprg=pyflakes
 
 CompilerSet errorformat=
       \%f:%l:\ %m
-
-" import a
-" import a.b <- ignore message for this
-CompilerSet errorformat+=%-G%f:%l:\ redefinition\ of\ unused\ %.%#
 
