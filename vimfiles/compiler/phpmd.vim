@@ -1,3 +1,5 @@
+" PHPMD - PHP Mess Detector
+" http://phpmd.org/
 
 if exists("current_compiler")
   finish

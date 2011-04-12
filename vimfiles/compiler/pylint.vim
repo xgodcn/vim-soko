@@ -1,3 +1,5 @@
+" pylint: python code static checker
+" http://pypi.python.org/pypi/pylint
 
 if exists("current_compiler")
   finish
