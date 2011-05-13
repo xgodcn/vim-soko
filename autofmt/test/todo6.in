@@ -1,0 +1,53 @@
+BUG: short lines not re-indented
+
+
+Results of todo6:
+
+STARTTEST
+:set fo=cq tw=10 ai
+/^{/+1
+:set formatexpr=
+2gqgq
+/^{/+1
+:set formatexpr=autofmt#compat#formatexpr()
+2gqgq
+ENDTEST
+
+case1
+{
+     aaaaa
+   bbbbb
+}
+{
+     aaaaa
+   bbbbb
+}
+
+STARTTEST
+:set fo=cq tw=10 ai
+/^{/+1
+:set formatexpr=
+4gqgq
+/^{/+1
+:set formatexpr=autofmt#compat#formatexpr()
+4gqgq
+ENDTEST
+
+case2
+{
+/*
+ *   aaaaa
+ * bbbbb
+ */
+}
+{
+/*
+ *   aaaaa
+ * bbbbb
+ */
+}
+
+STARTTEST
+:g/^STARTTEST/.,/^ENDTEST/d
+:1;/^Results/,$wq! test.out
+ENDTEST

@@ -1,0 +1,28 @@
+Results of todo6:
+
+
+case1
+{
+     aaaaa
+     bbbbb
+}
+{
+     aaaaa
+     bbbbb
+}
+
+
+case2
+{
+/*
+ *   aaaaa
+ *   bbbbb
+ */
+}
+{
+/*
+ *   aaaaa
+ *   bbbbb
+ */
+}
+
