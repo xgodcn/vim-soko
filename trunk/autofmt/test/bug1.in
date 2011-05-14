@@ -1,49 +1,53 @@
-BUG: short lines not re-indented
+BUG: second line is not properly indented.
 
 
-Results of todo6:
+Results of bug1:
 
 STARTTEST
 :set fo=cq tw=10 ai
 /^{/+1
 :set formatexpr=
-2gqgq
+3gqgq
 /^{/+1
 :set formatexpr=autofmt#compat#formatexpr()
-2gqgq
+3gqgq
 ENDTEST
 
 case1
 {
-     aaaaa
-   bbbbb
+      aaaaa
+    bbbbb
+  ccccc
 }
 {
-     aaaaa
-   bbbbb
+      aaaaa
+    bbbbb
+  ccccc
 }
 
 STARTTEST
 :set fo=cq tw=10 ai
 /^{/+1
 :set formatexpr=
-4gqgq
+5gqgq
 /^{/+1
 :set formatexpr=autofmt#compat#formatexpr()
-4gqgq
+5gqgq
 ENDTEST
 
 case2
 {
 /*
- *   aaaaa
- * bbbbb
+ *     aaaaa
+ *   bbbbb
+ * ccccc
  */
 }
 {
 /*
- *   aaaaa
- * bbbbb
+ *     aaaaa
+ *   bbbbb
+ * ccccc
  */
 }
 
