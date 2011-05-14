@@ -1,6 +1,6 @@
 " Maintainer:   Yukihiro Nakadaira <yukihiro.nakadaira@gmail.com>
 " License:      This file is placed in the public domain.
-" Last Change:  2011-01-21
+" Last Change:  2011-05-15
 "
 " Options:
 "
@@ -575,7 +575,7 @@ function s:lib.list2line(lst)
 endfunction
 
 function s:lib.get_second_line_leader(lines)
-  if self.has_format_options('2') || len(a:lines) <= 1
+  if !self.has_format_options('2') || len(a:lines) <= 1
     return -1
   endif
   let [indent1, com_str1, mindent1, text1, _] = self.parse_leader(a:lines[0])
