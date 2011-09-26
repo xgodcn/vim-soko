@@ -215,6 +215,34 @@ xnoremap K <Nop>
 
 command! -range -register -bang Number call s:Number(<line1>, <line2>, "<reg>", "<bang>")
 
+" WORKAROUND: BufReadPre reset the cursor position of the all window
+" which is bound to the target file.
+" ---
+"  autocmd BufReadPre * :
+"  call setline('.', range(1, 100))
+"  normal! G
+"  write! test.txt
+"  " cursor is at line 100
+"  new %
+"  " on window1, cursor is at line100
+"  " on window2, cursor is at line1 (cursor moved unexpectedly)
+" ---
+" In apply_autocmds_group(), check_lnums(TRUE) reset the cursor.
+function! s:restore_cursor()
+  let bufnr = bufnr('%')
+  let winnr = winnr()
+  let tabpagenr = tabpagenr()
+  " XXX: redraw is required to update other window for some reason.
+  tabdo windo
+        \ if bufnr('%') == bufnr
+        \     && line("'\"") > 1 && line("'\"") <= line("$") |
+        \   exe "normal! g`\"" |
+        \   redraw |
+        \ endif
+  execute tabpagenr . "tabnext"
+  execute winnr . "wincmd w"
+endfunction
+
 augroup vimrcEx
   au!
 
@@ -223,10 +251,11 @@ augroup vimrcEx
   " (happens when dropping a file on gvim).
   " Also don't do it when the mark is in the first line, that is the default
   " position when opening a file.
-  autocmd BufReadPost *
-        \ if line("'\"") > 1 && line("'\"") <= line("$") |
-        \   exe "normal! g`\"" |
-        \ endif
+  "autocmd BufReadPost *
+  "      \ if line("'\"") > 1 && line("'\"") <= line("$") |
+  "      \   exe "normal! g`\"" |
+  "      \ endif
+  autocmd BufReadPost * call s:restore_cursor()
 
   " shut up beep.  t_vb should be set after GUI init
   autocmd VimEnter * set visualbell t_vb=
