@@ -502,12 +502,30 @@ function s:lib.parse_leader(line)
   if a:line =~# '^\s*$'
     return [a:line, "", "", "", ""]
   endif
+  let middle = []
   for [flags, str] in self.parse_opt_comments(&comments)
     let mx = printf('\v^(\s*)(\V%s\v)(\s%s|$)(.*)$', escape(str, '\'),
           \ (flags =~# 'b') ? '+' : '*')
+    " If we found a middle match previously, use that match when this is
+    " not a middle or end. */
+    if !empty(middle) && flags !~# '[me]'
+      break
+    endif
     if a:line =~# mx
       let res = matchlist(a:line, mx)[1:4] + [flags]
-      if flags =~# 'n'
+      " We have found a match, stop searching unless this is a middle
+      " comment. The middle comment can be a substring of the end
+      " comment in which case it's better to return the length of the
+      " end comment and its flags.  Thus we keep searching with middle
+      " and end matches and use an end match if it matches better.
+      if flags =~# 'm'
+        let middle = res
+        continue
+      elseif flags =~# 'e'
+        if !empty(middle) && strchars(res[1]) <= strchars(middle[1])
+          let res = middle
+        endif
+      elseif flags =~# 'n'
         " nested comment
         while 1
           let [indent, com_str, mindent, text, com_flags] = self.parse_leader(res[3])
@@ -520,6 +538,9 @@ function s:lib.parse_leader(line)
       return res
     endif
   endfor
+  if !empty(middle)
+    return middle
+  endif
   return matchlist(a:line, '\v^(\s*)()()(.*)$')[1:4] + [""]
 endfunction
 
