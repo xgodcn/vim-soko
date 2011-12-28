@@ -221,9 +221,9 @@ function! s:restore_cursor()
   let bufnr = bufnr('%')
   let tabpagenr = tabpagenr()
   " XXX: redraw is required to update other window for some reason.
-  tabdo
+  keepjumps tabdo
         \ let winnr = winnr() |
-        \ windo
+        \ keepjumps windo
         \   if bufnr('%') == bufnr |
         \     if line("'\"") > 1 && line("'\"") <= line("$") |
         \       execute "normal! g`\"" |
