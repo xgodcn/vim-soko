@@ -215,20 +215,18 @@ xnoremap K <Nop>
 
 command! -range -register -bang Number call s:Number(<line1>, <line2>, "<reg>", "<bang>")
 
-" When re-opening file, Vim resets cursor position on all window which
-" is opening same file.  We need to restore all cursor.
-function! s:restore_cursor()
+function! s:saveview()
+  let w:_lastview = winsaveview()
+endfunction
+
+function! s:restview()
   let bufnr = bufnr('%')
   let tabpagenr = tabpagenr()
-  " XXX: redraw is required to update other window for some reason.
   keepjumps tabdo
         \ let winnr = winnr() |
         \ keepjumps windo
-        \   if bufnr('%') == bufnr |
-        \     if line("'\"") > 1 && line("'\"") <= line("$") |
-        \       execute "normal! g`\"" |
-        \       redraw |
-        \     endif |
+        \   if bufnr('%') == bufnr && exists('w:_lastview') |
+        \     call winrestview(w:_lastview) |
         \   endif |
         \ execute winnr . "wincmd w"
   execute tabpagenr . "tabnext"
@@ -237,16 +235,20 @@ endfunction
 augroup vimrcEx
   au!
 
+  " When re-opening file, Vim resets cursor position on all window which
+  " is opening same file.  Restore all cursor position.
+  autocmd WinLeave * call s:saveview()
+  autocmd BufReadPost * call s:restview()
+
   " When editing a file, always jump to the last known cursor position.
   " Don't do it when the position is invalid or when inside an event handler
   " (happens when dropping a file on gvim).
   " Also don't do it when the mark is in the first line, that is the default
   " position when opening a file.
-  "autocmd BufReadPost *
-  "      \ if line("'\"") > 1 && line("'\"") <= line("$") |
-  "      \   exe "normal! g`\"" |
-  "      \ endif
-  autocmd BufReadPost * call s:restore_cursor()
+  autocmd BufReadPost *
+        \ if line("'\"") > 1 && line("'\"") <= line("$") |
+        \   exe "normal! g`\"" |
+        \ endif
 
   " shut up beep.  t_vb should be set after GUI init
   autocmd VimEnter * set visualbell t_vb=
