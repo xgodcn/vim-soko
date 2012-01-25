@@ -1,6 +1,6 @@
 " Maintainer:   Yukihiro Nakadaira <yukihiro.nakadaira@gmail.com>
 " License:      This file is placed in the public domain.
-" Last Change:  2011-05-15
+" Last Change:  2012-01-25
 "
 " Options:
 "
@@ -210,6 +210,9 @@ function s:lib.format_lines(lnum, count)
   let lnum = a:lnum
   let prev_lines = line('$')
   let fo_2 = self.get_second_line_leader(getline(lnum, lnum + a:count - 1))
+  " If the line doesn't start with a comment leader, then don't start
+  " one in a following broken line. (edit.c:internal_format():6063)
+  let no_leader = !self.is_comment(getline(lnum))
   let lines = getline(lnum, lnum + a:count - 1)
   let line = self.join_lines(lines)
   call setline(lnum, line)
@@ -229,7 +232,7 @@ function s:lib.format_lines(lnum, count)
     if fo_2 != -1
       let leader = fo_2
     else
-      let leader = self.make_leader(lnum + 1)
+      let leader = self.make_leader(lnum + 1, no_leader)
     endif
     call setline(lnum + 1, leader . line2)
     let lnum += 1
@@ -613,10 +616,10 @@ function s:lib.get_second_line_leader(lines)
   return -1
 endfunction
 
-function s:lib.make_leader(lnum)
+function s:lib.make_leader(lnum, no_leader)
   let prev_line = getline(a:lnum - 1)
 
-  if self.is_comment_enabled() && self.is_comment(prev_line)
+  if !a:no_leader && self.is_comment_enabled() && self.is_comment(prev_line)
     return self.make_comment_leader(prev_line)
   endif
 
