@@ -73,7 +73,7 @@
 "   UAX #11: East Asian Width
 "   http://unicode.org/reports/tr11/
 "
-"   Ward wrap - Wikipedia
+"   Word wrap - Wikipedia
 "   http://en.wikipedia.org/wiki/Word_wrap
 
 let s:cpo_save = &cpo
