@@ -2,6 +2,7 @@
 GNUFTP=http://ftp.gnu.org/pub/gnu
 LIBICONV=libiconv-1.14
 GETTEXT=gettext-0.18
+SPECSFILE=specs100
 
 all: libintl.zip
 
@@ -12,10 +13,12 @@ libintl.zip: libintl.dll
 	cp $(GETTEXT)/gettext-runtime/intl/COPYING.LIB-2.1 libintl/
 	zip -r libintl.zip libintl
 
-msvcrt:
+msvcrt: $(SPECSFILE)
+	SPECS=$$PWD/$(SPECSFILE); \
+	export CFLAGS="-specs=$$SPECS"; \
 	svn checkout http://win-iconv.googlecode.com/svn/trunk/ msvcrt; \
 	cd msvcrt; \
-	$(MAKE); \
+	$(MAKE) "SPECS_FLAGS=-specs=$$SPECS"; \
 	mkdir include; \
 	cp iconv.h include; \
 	mkdir lib; \
@@ -27,29 +30,54 @@ $(LIBICONV).tar.gz:
 $(GETTEXT).tar.gz:
 	wget $(GNUFTP)/gettext/$(GETTEXT).tar.gz
 
-libiconv.dll: $(LIBICONV).tar.gz
+libiconv.dll: $(LIBICONV).tar.gz $(SPECSFILE)
+	SPECS=$$PWD/$(SPECSFILE); \
+	export CFLAGS="-specs=$$SPECS"; \
 	tar xzvf $(LIBICONV).tar.gz; \
 	cd $(LIBICONV); \
 	./configure --enable-extra-encodings; \
 	cp lib/Makefile lib/Makefile.orig; \
-	sed "s/-version-info/-avoid-version &/" lib/Makefile.orig > lib/Makefile; \
+	sed "s@-version-info@-Xcompiler \"-specs=$$SPECS\" -avoid-version &@" lib/Makefile.orig > lib/Makefile; \
 	$(MAKE); \
 	cd ..; \
 	cp $(LIBICONV)/lib/.libs/libiconv.dll ./; \
 	strip libiconv.dll;
 
-libintl.dll: $(GETTEXT).tar.gz msvcrt
+libintl.dll: $(GETTEXT).tar.gz msvcrt $(SPECSFILE)
 	ICONVDIR=$$PWD/msvcrt; \
+	SPECS=$$PWD/$(SPECSFILE); \
+	export CFLAGS="-specs=$$SPECS"; \
 	tar xzvf $(GETTEXT).tar.gz; \
 	cd $(GETTEXT)/gettext-runtime; \
 	./configure --enable-threads=win32 --with-libiconv-prefix=$$ICONVDIR; \
 	cd intl; \
 	cp Makefile Makefile.orig; \
-	sed -e "s/-version-info/-avoid-version &/" Makefile.orig > Makefile; \
+	sed -e "s@-version-info@-Xcompiler \"-specs=$$SPECS\" -avoid-version &@" Makefile.orig > Makefile; \
 	$(MAKE); \
 	cd ../../..; \
 	cp $(GETTEXT)/gettext-runtime/intl/.libs/libintl.dll ./; \
 	strip libintl.dll;
+
+specs:
+	gcc -dumpspecs > $@
+
+# http://www.mingw.org/wiki/SpecsFileHOWTO
+
+specs100:
+	gcc -dumpspecs | sed \
+	  -e '/^*cpp:/{n;s/^/%(msvcrt_version) /}' \
+	  -e 's/-lmsvcrt/-l%(msvcrt)/g' \
+	  -e 's/-lmoldname/-l%(moldname)/g' \
+	  > $@
+	echo "*msvcrt:" >> $@
+	echo "msvcr100" >> $@
+	echo "" >> $@
+	echo "*msvcrt_version:" >> $@
+	echo "-D__MSVCRT_VERSION__=0x1000 -include `pwd -W`/stat100.h" >> $@
+	echo "" >> $@
+	echo "*moldname:" >> $@
+	echo "moldname100" >> $@
+	echo "" >> $@
 
 clean:
 	rm -rf libintl
@@ -57,4 +85,5 @@ clean:
 	rm -rf msvcrt
 	rm -rf $(LIBICONV) $(LIBICONV).tar.gz libiconv.dll
 	rm -rf $(GETTEXT) $(GETTEXT).tar.gz libintl.dll
+	rm -rf specs specs100
 
