@@ -1,7 +1,7 @@
 
 GNUFTP=http://ftp.gnu.org/pub/gnu
-LIBICONV=libiconv-1.13.1
-GETTEXT=gettext-0.17
+LIBICONV=libiconv-1.14
+GETTEXT=gettext-0.18
 
 all: libintl.zip
 
@@ -15,7 +15,11 @@ libintl.zip: libintl.dll
 msvcrt:
 	svn checkout http://win-iconv.googlecode.com/svn/trunk/ msvcrt; \
 	cd msvcrt; \
-	$(MAKE);
+	$(MAKE); \
+	mkdir include; \
+	cp iconv.h include; \
+	mkdir lib; \
+	cp libiconv.a lib;
 
 $(LIBICONV).tar.gz:
 	wget $(GNUFTP)/libiconv/$(LIBICONV).tar.gz
@@ -35,13 +39,13 @@ libiconv.dll: $(LIBICONV).tar.gz
 	strip libiconv.dll;
 
 libintl.dll: $(GETTEXT).tar.gz msvcrt
-	export C_INCLUDE_PATH=$$PWD/msvcrt LIBRARY_PATH=$$PWD/msvcrt; \
+	ICONVDIR=$$PWD/msvcrt; \
 	tar xzvf $(GETTEXT).tar.gz; \
 	cd $(GETTEXT)/gettext-runtime; \
-	./configure; \
+	./configure --enable-threads=win32 --with-libiconv-prefix=$$ICONVDIR; \
 	cd intl; \
 	cp Makefile Makefile.orig; \
-	sed -e "s/-version-info/-avoid-version &/" -e "s/-liconv/-Wl,&/" Makefile.orig > Makefile; \
+	sed -e "s/-version-info/-avoid-version &/" Makefile.orig > Makefile; \
 	$(MAKE); \
 	cd ../../..; \
 	cp $(GETTEXT)/gettext-runtime/intl/.libs/libintl.dll ./; \
