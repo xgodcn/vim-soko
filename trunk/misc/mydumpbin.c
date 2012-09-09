@@ -41,12 +41,12 @@ enum DLAttr {                   // Delay Load Attributes
 #endif
 
 static PVOID MyImageDirectoryEntryToData(LPVOID Base, BOOLEAN MappedAsImage, USHORT DirectoryEntry, PULONG Size);
-static DWORD load_module(const char *modulepath);
-static void dump_dependents(DWORD Base);
-static void dump_imports(DWORD Base);
-static void dump_bound_imports(DWORD Base);
-static void dump_delay_imports(DWORD Base);
-static void dump_exports(DWORD Base);
+static DWORD_PTR load_module(const char *modulepath);
+static void dump_dependents(DWORD_PTR Base);
+static void dump_imports(DWORD_PTR Base);
+static void dump_bound_imports(DWORD_PTR Base);
+static void dump_delay_imports(DWORD_PTR Base);
+static void dump_exports(DWORD_PTR Base);
 
 /*
  * The formal way is
@@ -72,15 +72,15 @@ MyImageDirectoryEntryToData(LPVOID Base, BOOLEAN MappedAsImage, USHORT Directory
   return (PVOID)((LPBYTE)Base + p->VirtualAddress);
 }
 
-static DWORD
+static DWORD_PTR
 load_module(const char *modulepath)
 {
-  DWORD Base;
+  DWORD_PTR Base;
 
   printf("Dump of file %s\n", modulepath);
   printf("\n");
 
-  Base = (DWORD)LoadLibrary(modulepath);
+  Base = (DWORD_PTR)LoadLibrary(modulepath);
   if (Base == 0) {
     printf("fatal error: cannot open '%s'\n", modulepath);
     exit(1);
@@ -96,7 +96,7 @@ load_module(const char *modulepath)
 }
 
 static void
-dump_dependents(DWORD Base)
+dump_dependents(DWORD_PTR Base)
 {
   ULONG Size;
   PIMAGE_IMPORT_DESCRIPTOR Imp;
@@ -117,7 +117,7 @@ dump_dependents(DWORD Base)
 }
 
 static void
-dump_imports(DWORD Base)
+dump_imports(DWORD_PTR Base)
 {
   ULONG Size;
   PIMAGE_IMPORT_DESCRIPTOR Imp;
@@ -157,7 +157,7 @@ dump_imports(DWORD Base)
 }
 
 static void
-dump_bound_imports(DWORD Base)
+dump_bound_imports(DWORD_PTR Base)
 {
   ULONG Size;
   PIMAGE_BOUND_IMPORT_DESCRIPTOR BoundBase;
@@ -192,7 +192,7 @@ dump_bound_imports(DWORD Base)
 }
 
 static void
-dump_delay_imports(DWORD Base)
+dump_delay_imports(DWORD_PTR Base)
 {
   ULONG Size;
   PImgDelayDescr Delay;
@@ -238,7 +238,7 @@ dump_delay_imports(DWORD Base)
 }
 
 static void
-dump_exports(DWORD Base)
+dump_exports(DWORD_PTR Base)
 {
   ULONG Size;
   PIMAGE_EXPORT_DIRECTORY Exp;
@@ -283,7 +283,7 @@ dump_exports(DWORD Base)
 int
 main(int argc, char **argv)
 {
-  DWORD Base;
+  DWORD_PTR Base;
   if (argc == 3 && stricmp(argv[1] + 1, "DEPENDENTS") == 0) {
     Base = load_module(argv[2]);
     dump_dependents(Base);
