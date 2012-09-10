@@ -122,13 +122,13 @@ load_library(const char *modulepath)
   DWORD i;
 
   if (read_file(modulepath, &p, &size) != 0)
-    return -1;
+    return 0;
 
   // check dos header
   pdos = TO_DOS_HEADER(p);
   if (pdos->e_magic != IMAGE_DOS_SIGNATURE || pdos->e_lfanew == 0) {
     free(p);
-    return -1; // not executable file
+    return 0; // not executable file
   }
 
   // check nt header
@@ -136,7 +136,7 @@ load_library(const char *modulepath)
   if (pnt->Signature != IMAGE_NT_SIGNATURE
       || pnt->OptionalHeader.Magic != IMAGE_NT_OPTIONAL_HDR32_MAGIC) {
     free(p);
-    return -1; // not PE file
+    return 0; // not PE file
   }
 
   // get section table
@@ -145,7 +145,7 @@ load_library(const char *modulepath)
   base = malloc(pnt->OptionalHeader.SizeOfImage);
   if (base == NULL) {
     free(p);
-    return -1;
+    return 0;
   }
 
   // copy header
