@@ -6,6 +6,7 @@
  * http://forums.belution.com/ja/vc/000/234/78s.shtml
  * http://nienie.com/~masapico/api_ImageDirectoryEntryToData.html
  * http://www.geocities.jp/i96815/windows/win09.html
+ * http://hp.vector.co.jp/authors/VA050396/index.html
  */
 
 #include <windows.h>
@@ -40,6 +41,9 @@ enum DLAttr {                   // Delay Load Attributes
     };
 #endif
 
+static size_t fgetsize(FILE *f);
+static int read_file(const char *path, char **pbuf, size_t *psize);
+static DWORD_PTR load_library(const char *modulepath);
 static PVOID MyImageDirectoryEntryToData(LPVOID Base, BOOLEAN MappedAsImage, USHORT DirectoryEntry, PULONG Size);
 static DWORD_PTR load_module(const char *modulepath);
 static void dump_dependents(DWORD_PTR Base);
@@ -47,6 +51,118 @@ static void dump_imports(DWORD_PTR Base);
 static void dump_bound_imports(DWORD_PTR Base);
 static void dump_delay_imports(DWORD_PTR Base);
 static void dump_exports(DWORD_PTR Base);
+
+static size_t
+fgetsize(FILE *f)
+{
+  fpos_t cur;
+  fpos_t end;
+
+  if (fgetpos(f, &cur) != 0)
+    return (size_t)-1;
+
+  if (fseek(f, 0L, SEEK_END) != 0)
+    return (size_t)-1;
+
+  if (fgetpos(f, &end) != 0)
+    return (size_t)-1;
+
+  if (fsetpos(f, &cur) != 0)
+    return (size_t)-1;
+
+  return (size_t)end;
+}
+
+static int
+read_file(const char *path, char **pbuf, size_t *psize)
+{
+  FILE *f;
+  size_t size;
+  char *buf;
+
+  f = fopen(path, "rb");
+  if (f == NULL)
+    return -1;
+
+  size = fgetsize(f);
+  if (size == (size_t)-1) {
+    fclose(f);
+    return -1;
+  }
+
+  buf = malloc(size);
+  if (buf == NULL) {
+    fclose(f);
+    return -1;
+  }
+
+  if (fread(buf, 1, size, f) != size) {
+    fclose(f);
+    free(buf);
+    return -1;
+  }
+
+  fclose(f);
+
+  *pbuf = buf;
+  *psize = size;
+
+  return 0;
+}
+
+static DWORD_PTR
+load_library(const char *modulepath)
+{
+  char *p;
+  char *base;
+  size_t size;
+  PIMAGE_DOS_HEADER pdos;
+  PIMAGE_NT_HEADERS pnt;
+  PIMAGE_SECTION_HEADER psec;
+  DWORD i;
+
+  if (read_file(modulepath, &p, &size) != 0)
+    return -1;
+
+  // check dos header
+  pdos = TO_DOS_HEADER(p);
+  if (pdos->e_magic != 0x5A4D || pdos->e_lfanew == 0) {
+    free(p);
+    return -1; // not executable file
+  }
+
+  // check nt header
+  pnt = TO_NT_HEADERS(p);
+  if (pnt->Signature != 0x00004550
+      || pnt->OptionalHeader.Magic != IMAGE_NT_OPTIONAL_HDR32_MAGIC) {
+    free(p);
+    return -1; // not PE file
+  }
+
+  // get section table
+  psec = (PIMAGE_SECTION_HEADER)(pnt + 1);
+
+  base = malloc(pnt->OptionalHeader.SizeOfImage);
+  if (base == NULL) {
+    free(p);
+    return -1;
+  }
+
+  // copy header
+  memcpy(base, p, pnt->OptionalHeader.SizeOfHeaders);
+  // copy section data
+  for (i = 0; i < pnt->FileHeader.NumberOfSections; i++) {
+    if (psec[i].PointerToRawData) {
+      memcpy(&base[psec[i].VirtualAddress],
+          &p[psec[i].PointerToRawData],
+          psec[i].SizeOfRawData);
+    }
+  }
+
+  free(p);
+
+  return (DWORD_PTR)base;
+}
 
 /*
  * The formal way is
@@ -80,7 +196,8 @@ load_module(const char *modulepath)
   printf("Dump of file %s\n", modulepath);
   printf("\n");
 
-  Base = (DWORD_PTR)LoadLibrary(modulepath);
+  //Base = (DWORD_PTR)LoadLibrary(modulepath);
+  Base = load_library(modulepath);
   if (Base == 0) {
     printf("fatal error: cannot open '%s'\n", modulepath);
     exit(1);
