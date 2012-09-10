@@ -126,14 +126,14 @@ load_library(const char *modulepath)
 
   // check dos header
   pdos = TO_DOS_HEADER(p);
-  if (pdos->e_magic != 0x5A4D || pdos->e_lfanew == 0) {
+  if (pdos->e_magic != IMAGE_DOS_SIGNATURE || pdos->e_lfanew == 0) {
     free(p);
     return -1; // not executable file
   }
 
   // check nt header
   pnt = TO_NT_HEADERS(p);
-  if (pnt->Signature != 0x00004550
+  if (pnt->Signature != IMAGE_NT_SIGNATURE
       || pnt->OptionalHeader.Magic != IMAGE_NT_OPTIONAL_HDR32_MAGIC) {
     free(p);
     return -1; // not PE file
