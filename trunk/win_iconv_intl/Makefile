@@ -1,7 +1,7 @@
 
 GNUFTP=http://ftp.gnu.org/pub/gnu
 LIBICONV=libiconv-1.14
-GETTEXT=gettext-0.18
+GETTEXT=gettext-0.18.1.1
 SPECSFILE=specs100
 
 all: libintl.zip
@@ -43,10 +43,13 @@ libiconv.dll: $(LIBICONV).tar.gz $(SPECSFILE)
 	cp $(LIBICONV)/lib/.libs/libiconv.dll ./; \
 	strip libiconv.dll;
 
+# When building gettext whole, -O2 is needed to enable inline function.
+# When building libintl only, it is not needed.
+
 libintl.dll: $(GETTEXT).tar.gz msvcrt $(SPECSFILE)
 	ICONVDIR=$$PWD/msvcrt; \
 	SPECS=$$PWD/$(SPECSFILE); \
-	export CFLAGS="-specs=$$SPECS"; \
+	export CFLAGS="-specs=$$SPECS -O2"; \
 	tar xzvf $(GETTEXT).tar.gz; \
 	cd $(GETTEXT)/gettext-runtime; \
 	./configure --enable-threads=win32 --with-libiconv-prefix=$$ICONVDIR; \
