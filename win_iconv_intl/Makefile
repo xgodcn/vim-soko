@@ -1,7 +1,7 @@
 
 GNUFTP=http://ftp.gnu.org/pub/gnu
 LIBICONV=libiconv-1.14
-GETTEXT=gettext-0.18.1.1
+GETTEXT=gettext-0.18.3.1
 SPECSFILE=specs100
 
 all: libintl.zip
@@ -9,8 +9,7 @@ all: libintl.zip
 libintl.zip: libintl.dll
 	svn export . libintl
 	cp libintl.dll libintl/
-	cp $(GETTEXT)/gettext-runtime/intl/COPYING.LIB-2.0 libintl/
-	cp $(GETTEXT)/gettext-runtime/intl/COPYING.LIB-2.1 libintl/
+	cp $(GETTEXT)/gettext-runtime/intl/COPYING.LIB libintl/
 	zip -r libintl.zip libintl
 
 msvcrt: $(SPECSFILE)
