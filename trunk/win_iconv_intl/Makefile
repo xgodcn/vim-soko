@@ -44,6 +44,7 @@ libiconv.dll: $(LIBICONV).tar.gz $(SPECSFILE)
 
 # When building gettext whole, -O2 is needed to enable inline function.
 # When building libintl only, it is not needed.
+# Add -static-libgcc flag to prevent libgcc_s_dw2-1.dll dependency.
 
 libintl.dll: $(GETTEXT).tar.gz msvcrt $(SPECSFILE)
 	ICONVDIR=$$PWD/msvcrt; \
@@ -52,6 +53,8 @@ libintl.dll: $(GETTEXT).tar.gz msvcrt $(SPECSFILE)
 	tar xzvf $(GETTEXT).tar.gz; \
 	cd $(GETTEXT)/gettext-runtime; \
 	./configure --enable-threads=win32 --with-libiconv-prefix=$$ICONVDIR; \
+	cp libtool libtool.orig; \
+	sed -e "s@^CC=\"gcc\"@CC=\"gcc -static-libgcc\"@" libtool.orig > libtool; \
 	cd intl; \
 	cp Makefile Makefile.orig; \
 	sed -e "s@-version-info@-Xcompiler \"-specs=$$SPECS\" -avoid-version &@" Makefile.orig > Makefile; \
