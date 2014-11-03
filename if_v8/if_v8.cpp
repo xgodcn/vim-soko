@@ -85,9 +85,10 @@ struct VimValue {
   } vval;
 };
 
+typedef Persistent<Value, CopyablePersistentTraits<Value> > CopyableValuePersistent;
+
 typedef PairTable<Handle<Value>, VimValue> V8ToVimLookup;
-// XXX: use shared_ptr
-typedef PairTable<VimValue, Persistent<Value>*> VimToV8Lookup;
+typedef PairTable<VimValue, CopyableValuePersistent> VimToV8Lookup;
 
 static void *dll_handle = NULL;
 static Isolate *isolate;
@@ -325,7 +326,7 @@ vim_to_v8(typval_T *vimobj, Handle<Value> *v8obj, int depth, VimToV8Lookup *look
     }
     VimToV8Lookup::iterator it = lookup->get(VimValue(list));
     if (it != lookup->end()) {
-      *v8obj = Local<Value>::New(isolate, *(it->second));
+      *v8obj = Local<Value>::New(isolate, it->second);
       return true;
     }
 #if 1
@@ -355,7 +356,7 @@ vim_to_v8(typval_T *vimobj, Handle<Value> *v8obj, int depth, VimToV8Lookup *look
     }
     VimToV8Lookup::iterator it = lookup->get(VimValue(dict));
     if (it != lookup->end()) {
-      *v8obj = Local<Value>::New(isolate, *(it->second));
+      *v8obj = Local<Value>::New(isolate, it->second);
       return true;
     }
 #if 1
@@ -387,7 +388,7 @@ vim_to_v8(typval_T *vimobj, Handle<Value> *v8obj, int depth, VimToV8Lookup *look
   if (vimobj->v_type == VAR_FUNC) {
     VimToV8Lookup::iterator it = lookup->get(VimValue(vimobj->vval.v_string));
     if (it != lookup->end()) {
-      *v8obj = Local<Value>::New(isolate, *(it->second));
+      *v8obj = Local<Value>::New(isolate, it->second);
       return true;
     }
     if (vimobj->vval.v_string == NULL)
@@ -737,8 +738,6 @@ VimListDestroy(const WeakCallbackData<Value, typval_T>& data)
   TRACE("VimListDestroy");
   typval_T *tv = data.GetParameter();
 
-  VimToV8Lookup::iterator it = objcache.get(VimValue(tv->vval.v_list));
-  delete it->second;
   objcache.del(VimValue(tv->vval.v_list));
 
   weak_unref(tv);
@@ -775,9 +774,9 @@ VimListCreate(const FunctionCallbackInfo<Value>& args)
   weak_ref(tv);
 
   // make weak reference
-  Persistent<Value> *p = new Persistent<Value>();
-  p->Reset(isolate, self);
-  p->SetWeak(tv, VimListDestroy);
+  CopyableValuePersistent p = CopyableValuePersistent();
+  p.Reset(isolate, self);
+  p.SetWeak(tv, VimListDestroy);
 
   objcache.set(VimValue(list), p);
 
@@ -907,8 +906,6 @@ VimDictDestroy(const WeakCallbackData<Value, typval_T>& data)
   TRACE("VimDictDestroy");
   typval_T *tv = data.GetParameter();
 
-  VimToV8Lookup::iterator it = objcache.get(VimValue(tv->vval.v_dict));
-  delete it->second;
   objcache.del(VimValue(tv->vval.v_dict));
 
   weak_unref(tv);
@@ -945,9 +942,9 @@ VimDictCreate(const FunctionCallbackInfo<Value>& args)
   weak_ref(tv);
 
   // make weak reference
-  Persistent<Value> *p = new Persistent<Value>();
-  p->Reset(isolate, self);
-  p->SetWeak(tv, VimDictDestroy);
+  CopyableValuePersistent p = CopyableValuePersistent();
+  p.Reset(isolate, self);
+  p.SetWeak(tv, VimDictDestroy);
   objcache.set(VimValue(dict), p);
 
   args.GetReturnValue().Set(self);
@@ -1113,9 +1110,9 @@ MakeVimFunc(const char *name, Handle<Object> obj)
   obj->SetInternalField(0, External::New(isolate, tv->vval.v_string));
   obj->SetInternalField(1, Undefined(isolate));
 
-  Persistent<Value> *p = new Persistent<Value>();
-  p->Reset(isolate, obj);
-  p->SetWeak(tv, VimFuncDestroy);
+  CopyableValuePersistent p = CopyableValuePersistent();
+  p.Reset(isolate, obj);
+  p.SetWeak(tv, VimFuncDestroy);
   objcache.set(VimValue(tv->vval.v_string), p);
 
   return obj;
@@ -1127,8 +1124,6 @@ VimFuncDestroy(const WeakCallbackData<Value, typval_T>& data)
   TRACE("VimFuncDestroy");
   typval_T *tv = data.GetParameter();
 
-  VimToV8Lookup::iterator it = objcache.get(VimValue(tv->vval.v_string));
-  delete it->second;
   objcache.del(VimValue(tv->vval.v_string));
 
   weak_unref(tv);
