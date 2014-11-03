@@ -153,7 +153,7 @@ static void VimDictDelete(Local<String> property, const PropertyCallbackInfo<Boo
 static void VimDictEnumerate(const PropertyCallbackInfo<Array>& info);
 
 // VimFunc
-static Handle<Value> MakeVimFunc(const char *name, Handle<Object> obj);
+static Handle<Value> MakeVimFunc(const char *name);
 static void VimFuncDestroy(const WeakCallbackData<Value, typval_T>& data);
 static void VimFuncCall(const FunctionCallbackInfo<Value>& args);
 
@@ -296,8 +296,6 @@ vim_to_v8(typval_T *vimobj, Handle<Value> *v8obj, int depth, VimToV8Lookup *look
     return false;
   }
 
-  Local<FunctionTemplate> VimFunc = Local<FunctionTemplate>::New(isolate, p_VimFunc);
-
   if (vimobj->v_type == VAR_NUMBER) {
     *v8obj = Integer::New(isolate, vimobj->vval.v_number);
     return true;
@@ -391,10 +389,7 @@ vim_to_v8(typval_T *vimobj, Handle<Value> *v8obj, int depth, VimToV8Lookup *look
       *v8obj = Local<Value>::New(isolate, it->second);
       return true;
     }
-    if (vimobj->vval.v_string == NULL)
-      *v8obj = Undefined(isolate);
-    else
-      *v8obj = MakeVimFunc((char *)vimobj->vval.v_string, VimFunc->InstanceTemplate()->NewInstance());
+    *v8obj = MakeVimFunc((char *)vimobj->vval.v_string);
     return true;
   }
 
@@ -1100,22 +1095,30 @@ VimDictEnumerate(const PropertyCallbackInfo<Array>& info)
 }
 
 static Handle<Value>
-MakeVimFunc(const char *name, Handle<Object> obj)
+MakeVimFunc(const char *name)
 {
   TRACE("MakeVimFunc");
+
+  if (name == NULL)
+      return Undefined(isolate);
+
+  Local<FunctionTemplate> VimFunc = Local<FunctionTemplate>::New(isolate, p_VimFunc);
+
   typval_T *tv = alloc_tv();
   tv_set_func(tv, (char_u*)name);
   weak_ref(tv);
 
-  obj->SetInternalField(0, External::New(isolate, tv->vval.v_string));
-  obj->SetInternalField(1, Undefined(isolate));
+  Handle<Object> self = VimFunc->InstanceTemplate()->NewInstance();
+  self->SetInternalField(0, External::New(isolate, tv->vval.v_string));
+  self->SetInternalField(1, Undefined(isolate));
 
+  // make weak reference
   CopyableValuePersistent p = CopyableValuePersistent();
-  p.Reset(isolate, obj);
+  p.Reset(isolate, self);
   p.SetWeak(tv, VimFuncDestroy);
   objcache.set(VimValue(tv->vval.v_string), p);
 
-  return obj;
+  return self;
 }
 
 static void
