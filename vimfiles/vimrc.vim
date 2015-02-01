@@ -1,4 +1,3 @@
-let &runtimepath = join(split(&rtp, ',') + split(globpath(&rtp, 'package/*/'), '\n'), ',')
 set encoding=utf-8
 set termencoding=default
 set fileencodings=ucs-bom,utf-8,euc-jp,cp932
@@ -39,6 +38,7 @@ set iminsert=0 imsearch=0     " turn off IM in default
 set mouse=nvi
 set mousemodel=popup
 set wildignorecase
+set cryptmethod=blowfish2     " keep safe method
 
 function _bomb()
   return &bomb ? '[bomb]' : ''
