@@ -1,0 +1,1 @@
+miscellaneous script and document for Vim
